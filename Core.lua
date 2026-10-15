@@ -116,7 +116,7 @@ f:SetScript("OnEvent", function(self, event, arg1)
     elseif event == "PLAYER_ENTERING_WORLD" then
         -- small delay so BBF finishes resizing portraits first
         C_Timer.After(0.5, RefreshAll)
-    elseif arg1 and portraits[arg1] ~= nil or (arg1 and db.units[arg1]) then
+    elseif arg1 and db.units[arg1] then
         Refresh(arg1)
     end
 end)
