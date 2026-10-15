@@ -30,14 +30,22 @@ animation, like the character screen, as a **companion addon** to BetterBlizzFra
 - SavedVariables: `BBFAnimatedPortraitsDB` (defaults merged on `ADDON_LOADED`).
 - Slash: `/bap`.
 
-## Blizzard / BBF frame paths (Camelot client, BBF v2.1.7 `forever/` code path)
-| Unit | Portrait | Mask |
-|---|---|---|
-| player | `PlayerFrame.PlayerFrameContainer.PlayerPortrait` | `...PlayerPortraitMask` |
-| target | `TargetFrame.TargetFrameContainer.Portrait` | `...PortraitMask` |
-| focus | `FocusFrame.TargetFrameContainer.Portrait` | `...PortraitMask` |
-| targettarget / focustarget | `TargetFrame.totFrame.Portrait` / `FocusFrame.totFrame.Portrait` | from portrait (unverified) |
-| party1–4 | `PartyFrame.MemberFrame1..4.Portrait` | from portrait (unverified) |
+## Blizzard / BBF frame paths (Camelot client 1.60.1.70374)
+
+Verified against Blizzard's UI source: `github.com/Gethe/wow-ui-source`, branch **`forever`** (same build as the client). Camelot loads the Mainline ("Family") unit-frame XML.
+Also exported locally from the client (`exportInterfaceFiles code`) to `_classic_beta_/BlizzardInterfaceCode/`. The unit-frame files match the mirror byte-for-byte (ignoring CRLF).
+
+| Unit | Portrait (layer) | Mask | Border art (layer) |
+|---|---|---|---|
+| player | `PlayerFrame.PlayerFrameContainer.PlayerPortrait` (BACKGROUND 1) | `PlayerPortraitMask` | `FrameTexture` (BACKGROUND 2) |
+| target / focus | `TargetFrame/FocusFrame.TargetFrameContainer.Portrait` (BACKGROUND 1) | `PortraitMask` (CircleMask) | `FrameTexture` (BACKGROUND 2) |
+| targettarget / focustarget | `TargetFrame/FocusFrame.totFrame.Portrait` 37×37 (BACKGROUND 1) | `PortraitMask` (CircleMask) | `FrameTexture` (BACKGROUND 2) |
+| party1–4 | `PartyFrame.MemberFrame1..4.Portrait` (BACKGROUND) | `PortraitMask` (CircleMask) | `Texture` (ARTWORK) |
+
+**Findings that affect the design:**
+- The border art sits only **one sublevel above** the portrait on player, target and ToT. Our background texture at "portrait sublevel + 1" lands on the **same sublevel as the border**, so the draw order is undefined. It may cover the ring. **Needs a fix.**
+- Blizzard changes the portrait itself: party portraits fade with `SetAlpha` when out of range (`PartyMemberFrame.lua:399`) and get `SetVertexColor` tints (`:671-677`). The target portrait is greyed when tapped (`TargetFrame.lua:329`) and reset to alpha 1 (`:156`). **Don't hide the portrait via alpha**: Blizzard will overwrite it.
+- Party member frames come from a frame pool (`PartyFrame.lua:56-59`) and are assigned as `MemberFrameN` on init.
 
 BBF code that touches portraits (read only, for compatibility):
 - `forever/BetterBlizzFrames.lua` ~5143–5164: resizes portraits and masks (player 61, target/focus 56).
