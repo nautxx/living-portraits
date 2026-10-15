@@ -12,6 +12,7 @@ local defaults = {
     enabled = true,
     zoom    = 1,     -- 0..1, 1 = head & shoulders
     inset   = 0.72,  -- model size as a fraction of the portrait (~0.70 fits inside the circle)
+    bgInset = 0.90,  -- dark backing circle as a fraction of the portrait (stays inside the border ring)
     bgR = 0.05, bgG = 0.05, bgB = 0.07,
     units = {
         player = true,
@@ -71,14 +72,7 @@ local function BBFHidesPortrait(unit)
     return BBF and BBF.HasNoPortrait and BBF.HasNoPortrait(unit)
 end
 
--- Use whichever mask Blizzard/BBF already put on the portrait.
-local function GetPortraitMask(portrait)
-    if portrait.GetNumMaskTextures and portrait:GetNumMaskTextures() > 0 then
-        return portrait:GetMaskTexture(1)
-    end
-    local parent = portrait:GetParent()
-    return parent and (parent.PortraitMask or parent.PlayerPortraitMask)
-end
+local CIRCLE_MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 
 local function UnitState(unit)
     if not UnitExists(unit) then return "none" end
@@ -90,6 +84,12 @@ end
 
 -- Layers --------------------------------------------------------------------
 
+-- Our layers live in their own "holder" frame on top of the portrait:
+--   holder (Frame, child of the portrait's parent)
+--     bg    - dark circle with its OWN mask, sized bgInset so it sits inside the border ring
+--     model - PlayerModel, sized inset, above bg
+-- Blizzard's portrait is never touched. Its border art is only one sublevel above the
+-- portrait, so drawing on the portrait's frame made the order undefined (see CLAUDE.md).
 local function CreateLayers(unit)
     local getter = PORTRAITS[unit]
     local portrait = getter and getter()
@@ -97,31 +97,39 @@ local function CreateLayers(unit)
     local container = portrait:GetParent()
     if not container then return end
 
-    local layer, sub = portrait:GetDrawLayer()
-    local bg = container:CreateTexture(nil, layer, nil, math.min((sub or 0) + 1, 7))
-    bg:SetAllPoints(portrait)
-    bg:SetColorTexture(1, 1, 1, 1)
-    local mask = GetPortraitMask(portrait)
-    if mask then bg:AddMaskTexture(mask) end
-    bg:Hide()
+    local holder = CreateFrame("Frame", nil, container)
+    holder:SetAllPoints(portrait)
+    holder:Hide()
 
-    local model = CreateFrame("PlayerModel", nil, container)
+    local bg = holder:CreateTexture(nil, "BACKGROUND")
+    bg:SetPoint("CENTER", portrait, "CENTER")
+    bg:SetColorTexture(1, 1, 1, 1)
+    local mask = holder:CreateMaskTexture()
+    mask:SetTexture(CIRCLE_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+    mask:SetAllPoints(bg)
+    bg:AddMaskTexture(mask)
+
+    local model = CreateFrame("PlayerModel", nil, holder)
     model:SetPoint("CENTER", portrait, "CENTER")
     model:SetScript("OnModelLoaded", function(self)
         self:SetPortraitZoom(db.zoom)
         self:SetCamDistanceScale(1)
         self:SetPosition(0, 0, 0)
     end)
-    model:Hide()
 
-    local p = { model = model, bg = bg, portrait = portrait }
+    -- Mirror Blizzard's portrait fading (e.g. party members out of range).
+    holder:SetAlpha(Safe(portrait:GetAlpha()) or 1)
+    hooksecurefunc(portrait, "SetAlpha", function(_, alpha)
+        holder:SetAlpha(Safe(alpha) or 1)
+    end)
+
+    local p = { holder = holder, model = model, bg = bg, portrait = portrait }
     layers[unit] = p
     return p
 end
 
 local function HideLayers(p)
-    p.model:Hide()
-    p.bg:Hide()
+    p.holder:Hide()
 end
 
 local function Refresh(unit)
@@ -144,14 +152,14 @@ local function Refresh(unit)
 
     local w, h = p.portrait:GetSize()
     p.model:SetSize(w * db.inset, h * db.inset)
+    p.bg:SetSize(w * db.bgInset, h * db.bgInset)
     p.bg:SetColorTexture(db.bgR, db.bgG, db.bgB, 1)
 
     p.model:ClearModel()
     p.model:SetUnit(unit)
     p.model:SetPortraitZoom(db.zoom)
 
-    p.bg:Show()
-    p.model:Show()
+    p.holder:Show()
     lastState[unit] = UnitState(unit)
 end
 
@@ -219,7 +227,7 @@ local function PrintStatus()
     end
     table.sort(on)
     print("|cff00c0ffBBF Animated Portraits|r  enabled=" .. tostring(db.enabled)
-        .. "  zoom=" .. db.zoom .. "  inset=" .. db.inset
+        .. "  zoom=" .. db.zoom .. "  inset=" .. db.inset .. "  bg=" .. db.bgInset
         .. "  units=" .. (#on > 0 and table.concat(on, ",") or "none"))
 end
 
@@ -233,6 +241,8 @@ SlashCmdList.BBFANIMPORTRAITS = function(msg)
         db.zoom = math.max(0, math.min(1, val))
     elseif cmd == "inset" and val then
         db.inset = math.max(0.3, math.min(1.2, val))
+    elseif cmd == "bg" and val then
+        db.bgInset = math.max(0.5, math.min(1.0, val))
     elseif cmd == "unit" and arg and GROUPS[arg] then
         local list = GROUPS[arg]
         local newValue = not db.units[list[1]]
@@ -241,7 +251,7 @@ SlashCmdList.BBFANIMPORTRAITS = function(msg)
         wipe(db); CopyDefaults(defaults, db)
     else
         PrintStatus()
-        print("  /bap toggle  |  /bap zoom 0-1  |  /bap inset 0.3-1.2  |  /bap reset")
+        print("  /bap toggle  |  /bap zoom 0-1  |  /bap inset 0.3-1.2  |  /bap bg 0.5-1  |  /bap reset")
         print("  /bap unit player|target|focus|tot|party")
         return
     end

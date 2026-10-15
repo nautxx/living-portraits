@@ -32,6 +32,7 @@ ln -s ~/GitHub/Main/bbf-animated-portraits \
 | `/bap toggle` | Turn animated portraits on/off |
 | `/bap zoom 0-1` | Camera zoom (1 = head and shoulders, lower = more body) |
 | `/bap inset 0.3-1.2` | Model size relative to the portrait (~0.72 fits inside the circle) |
+| `/bap bg 0.5-1` | Size of the dark backing circle (0.9 stays inside the border ring) |
 | `/bap unit <group>` | Toggle a frame group: `player`, `target`, `focus`, `tot`, `party` |
 | `/bap reset` | Restore defaults |
 

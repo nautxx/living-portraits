@@ -19,10 +19,11 @@ animation, like the character screen, as a **companion addon** to BetterBlizzFra
 ## Architecture (Core.lua)
 - `PORTRAITS[unit]` is a function returning that unit's portrait texture. **Add new units here.** The layers are parented to `portrait:GetParent()`.
 - `GROUPS` maps slash-command names (`player`, `target`, `focus`, `tot`, `party`) to units.
-- `GetPortraitMask(portrait)` reuses whatever mask is already on the portrait (`GetMaskTexture(1)`), falling back to `PortraitMask` / `PlayerPortraitMask`. No hard-coded mask names.
-- `CreateLayers(unit)`:
-  - `bg`: a color texture on the portrait's draw layer +1 sublevel, masked by the portrait's mask (covers the 2D portrait).
-  - `model`: a `PlayerModel` child of the container, centred on the portrait, sized `portrait * db.inset`.
+- `CreateLayers(unit)` builds a **holder** frame (child of the portrait's parent, `SetAllPoints(portrait)`) containing:
+  - `bg`: a dark color texture with its **own** circle mask (`TempPortraitAlphaMask`), sized `portrait * db.bgInset` (0.9) so it stays inside the border ring.
+  - `model`: a `PlayerModel` sized `portrait * db.inset`, above `bg`.
+  - The holder mirrors the portrait's alpha via `hooksecurefunc(portrait, "SetAlpha")` (party out-of-range fade).
+  - Blizzard's portrait is never modified.
 - `Refresh(unit)`: show or hide the layers and `SetUnit()`. It hides when disabled, when BBF's `HasNoPortrait(unit)` is true, or when the unit is missing, not visible or disconnected.
 - `Tick()` (every 0.5s) compares `UnitState(unit)` (GUID + visible + connected) with the last refresh and refreshes only on change. This covers changes with no reliable event: ToT/FoT swaps, party members entering or leaving view range.
 - `Safe(v)` drops "secret" values (`issecretvalue`) so comparisons and concatenation never error.
@@ -43,7 +44,7 @@ Also exported locally from the client (`exportInterfaceFiles code`) to `_classic
 | party1–4 | `PartyFrame.MemberFrame1..4.Portrait` (BACKGROUND) | `PortraitMask` (CircleMask) | `Texture` (ARTWORK) |
 
 **Findings that affect the design:**
-- The border art sits only **one sublevel above** the portrait on player, target and ToT. Our background texture at "portrait sublevel + 1" lands on the **same sublevel as the border**, so the draw order is undefined. It may cover the ring. **Needs a fix.**
+- The border art sits only **one sublevel above** the portrait on player, target and ToT, so a texture at "portrait sublevel + 1" shares the border's sublevel (undefined draw order). **Fixed** by moving our layers into a separate holder frame with its own mask.
 - Blizzard changes the portrait itself: party portraits fade with `SetAlpha` when out of range (`PartyMemberFrame.lua:399`) and get `SetVertexColor` tints (`:671-677`). The target portrait is greyed when tapped (`TargetFrame.lua:329`) and reset to alpha 1 (`:156`). **Don't hide the portrait via alpha**: Blizzard will overwrite it.
 - Party member frames come from a frame pool (`PartyFrame.lua:56-59`) and are assigned as `MemberFrameN` on init.
 
@@ -72,6 +73,9 @@ BBF code that touches portraits (read only, for compatibility):
 - [ ] `/bap unit tot` / `/bap unit party` toggle cleanly
 - [ ] With BBF spec icons on: note which wins on target/focus (open question)
 - [ ] No square corners poking outside the portrait ring
+- [ ] Dark backing stays inside the border ring; check for a thin ring of 2D portrait showing between them (tune with `/bap bg`)
+- [ ] Holder frame doesn't cover icons near the portrait (rest, PvP, leader, combat)
+- [ ] Party members out of range fade like Blizzard's portrait
 - [ ] Mount, shapeshift and gear changes update the model
 - [ ] Vehicle / possess: no broken portrait
 - [ ] `/bap toggle` restores the normal portrait cleanly

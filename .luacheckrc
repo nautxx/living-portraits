@@ -15,7 +15,7 @@ read_globals = {
     -- frames
     "PlayerFrame", "TargetFrame", "FocusFrame", "PartyFrame",
     -- API
-    "CreateFrame", "C_Timer",
+    "CreateFrame", "C_Timer", "hooksecurefunc",
     "UnitExists", "UnitGUID", "UnitIsVisible", "UnitIsConnected",
     "issecretvalue",
     -- WoW Lua extensions

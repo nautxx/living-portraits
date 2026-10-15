@@ -21,24 +21,32 @@ local function newTexture()
     function t:Hide() self.shown = false end
     function t:GetDrawLayer() return "ARTWORK", 1 end
     function t:GetSize() return 60, 60 end
-    function t:GetNumMaskTextures() return 1 end
-    function t:GetMaskTexture() return stubIndex({}) end
+    function t:GetAlpha() return rawget(self, "alpha") or 1 end
+    function t:SetAlpha(a) self.alpha = a end
+    function t:SetSize(w, h) self.w, self.h = w, h end
     return t
 end
 
 local eventFrame
 local models = {}
-function CreateFrame(kind)
-    local f = stubIndex({ kind = kind, shown = false })
+function CreateFrame(kind, _, parent)
+    local f = stubIndex({ kind = kind, shown = false, parent = parent })
     function f:Show() self.shown = true end
     function f:Hide() self.shown = false end
     function f:SetScript(name, fn) self[name] = fn end
     function f:SetUnit(unit) self.unit = unit end
     function f:SetSize(w, h) self.w, self.h = w, h end
     function f:CreateTexture() return newTexture() end
+    function f:CreateMaskTexture() return stubIndex({}) end
+    function f:SetAlpha(a) self.alpha = a end
     if kind == "PlayerModel" then models[#models + 1] = f end
     eventFrame = eventFrame or f
     return f
+end
+
+function hooksecurefunc(obj, method, hook)
+    local orig = obj[method]
+    obj[method] = function(...) local r = orig(...); hook(...); return r end
 end
 
 local function container(field)
@@ -85,8 +93,13 @@ chunk("BBF_AnimatedPortraits", {})
 local function fire(event, arg) eventFrame.OnEvent(eventFrame, event, arg) end
 local function slash(msg) SlashCmdList.BBFANIMPORTRAITS(msg) end
 local function shownFor(unit)
-    for _, m in ipairs(models) do if m.shown and m.unit == unit then return true end end
+    for _, m in ipairs(models) do
+        if m.unit == unit and m.parent and m.parent.shown then return true end
+    end
     return false
+end
+local function modelFor(unit)
+    for _, m in ipairs(models) do if m.unit == unit then return m end end
 end
 
 -- Tests -----------------------------------------------------------------------
@@ -104,9 +117,15 @@ check("tot model shown", shownFor("targettarget"))
 check("party1 model shown", shownFor("party1"))
 check("party2 out of range -> hidden", not shownFor("party2"))
 check("focus missing -> hidden", not shownFor("focus"))
-local w
-for _, m in ipairs(models) do if m.unit == "player" then w = rawget(m, "w") end end
+local w = rawget(modelFor("player"), "w")
 check("model sized by inset", w and math.abs(w - 60 * 0.72) < 0.01)
+check("model lives in a holder frame, not on the portrait's frame",
+    modelFor("player").parent ~= PlayerFrame.PlayerFrameContainer)
+
+-- Holder mirrors Blizzard's portrait alpha (party out-of-range fade)
+PartyFrame.MemberFrame1.Portrait:SetAlpha(0.55)
+check("holder mirrors portrait alpha", modelFor("party1").parent.alpha == 0.55)
+PartyFrame.MemberFrame1.Portrait:SetAlpha(1)
 
 -- Ticker: party2 comes into range
 world.visible.party2 = nil
@@ -151,7 +170,8 @@ check("/bap toggle restores", shownFor("player"))
 -- Settings clamp
 slash("zoom 5");  check("zoom clamped to 1", BBFAnimatedPortraitsDB.zoom == 1)
 slash("inset 0"); check("inset clamped to 0.3", BBFAnimatedPortraitsDB.inset == 0.3)
-slash("reset");   check("reset restores inset", BBFAnimatedPortraitsDB.inset == 0.72)
+slash("bg 2");    check("bg clamped to 1", BBFAnimatedPortraitsDB.bgInset == 1)
+slash("reset");   check("reset restores defaults", BBFAnimatedPortraitsDB.inset == 0.72 and BBFAnimatedPortraitsDB.bgInset == 0.9)
 
 -- BBF no-portrait mode
 BBF = { HasNoPortrait = function(u) return u == "target" end }
