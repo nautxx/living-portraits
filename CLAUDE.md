@@ -62,5 +62,33 @@ BBF code that touches portraits (read only, for compatibility):
 
 ## Conventions
 - One step per commit; test in game before starting the next step.
+- Commit messages follow the rules in **Commit messages** below.
+- **Don't commit without asking.** Leave changes uncommitted for Jason to review, then commit when he approves.
 - Never edit BBF files. A clean backup of BBF v2.1.7 is at `_classic_beta_/Interface/AddOns_backup/`.
 - Git author: Jason <jrbarnachea@gmail.com>. Remote: `github.com/nautxx/bbf-animated-portraits` (private).
+
+## Commit messages
+
+Put a Conventional Commits prefix on every commit title: `type: short imperative summary`.
+
+- `feat`: new capability or behavior (a new unit frame, a new slash command, a new option)
+- `fix`: bug fix
+- `chore`: maintenance with no user-visible behavior change (TOC bumps, config, cleanup, license)
+- `docs`: README, CLAUDE.md or comment-only changes
+- `refactor`: code restructuring with no behavior change
+- `test`: test-only changes
+- `style`: formatting or whitespace, no logic change
+- `perf`: performance improvement
+- `revert`: reverts a previous commit
+
+After the colon: lowercase, imperative mood ("add", not "added" or "adds"), no trailing period, ideally under ~70 characters. Example: `feat: add animated portraits to target and focus frames`.
+
+When a commit touches only one thing, the title alone is enough, so skip the body. When a commit bundles several distinct changes, add a blank line after the title and a short bullet per change:
+
+```
+feat: add animated portraits to target and focus frames
+
+- add target/focus entries to GetPortraitInfo()
+- refresh on PLAYER_TARGET_CHANGED and PLAYER_FOCUS_CHANGED
+- document new frame paths in CLAUDE.md
+```
