@@ -2,7 +2,7 @@
 
 Live 3D animated portraits for World of Warcraft unit frames. Your character breathes and idles like on the character screen. A companion addon for [BetterBlizzFrames](https://www.curseforge.com/wow/addons/betterblizzframes).
 
-> **Status:** early development. Player frame only (step 1, untested in game).
+> **Status:** early development, untested in game. Player, target, focus, target-of-target, focus-target and party frames.
 
 ## How it works
 
@@ -32,6 +32,7 @@ ln -s ~/GitHub/Main/bbf-animated-portraits \
 | `/bap toggle` | Turn animated portraits on/off |
 | `/bap zoom 0-1` | Camera zoom (1 = head and shoulders, lower = more body) |
 | `/bap inset 0.3-1.2` | Model size relative to the portrait (~0.72 fits inside the circle) |
+| `/bap unit <group>` | Toggle a frame group: `player`, `target`, `focus`, `tot`, `party` |
 | `/bap reset` | Restore defaults |
 
 ## Supported clients

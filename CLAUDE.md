@@ -17,12 +17,16 @@ animation, like the character screen, as a **companion addon** to BetterBlizzFra
 | Repo location | `~/GitHub/Main/bbf-animated-portraits`, symlinked into AddOns as `BBF_AnimatedPortraits` | The beta client folder is temporary. One repo can feed multiple clients. |
 
 ## Architecture (Core.lua)
-- `GetPortraitInfo(unit)` returns `(container, portraitTexture, maskTexture)` for a unit. **Add new units here.**
+- `PORTRAITS[unit]` is a function returning that unit's portrait texture. **Add new units here.** The layers are parented to `portrait:GetParent()`.
+- `GROUPS` maps slash-command names (`player`, `target`, `focus`, `tot`, `party`) to units.
+- `GetPortraitMask(portrait)` reuses whatever mask is already on the portrait (`GetMaskTexture(1)`), falling back to `PortraitMask` / `PlayerPortraitMask`. No hard-coded mask names.
 - `CreateLayers(unit)`:
-  - `bg`: a color texture on the portrait's draw layer +1 sublevel, masked by Blizzard's portrait mask (covers the 2D portrait).
+  - `bg`: a color texture on the portrait's draw layer +1 sublevel, masked by the portrait's mask (covers the 2D portrait).
   - `model`: a `PlayerModel` child of the container, centred on the portrait, sized `portrait * db.inset`.
 - `Refresh(unit)`: show or hide the layers and `SetUnit()`. It hides when disabled, when BBF's `HasNoPortrait(unit)` is true, or when the unit is missing, not visible or disconnected.
-- Events: `PLAYER_ENTERING_WORLD` (0.5s delay so BBF finishes resizing), `UNIT_MODEL_CHANGED`, `UNIT_PORTRAIT_UPDATE`, `UNIT_CONNECTION`.
+- `Tick()` (every 0.5s) compares `UnitState(unit)` (GUID + visible + connected) with the last refresh and refreshes only on change. This covers changes with no reliable event: ToT/FoT swaps, party members entering or leaving view range.
+- `Safe(v)` drops "secret" values (`issecretvalue`) so comparisons and concatenation never error.
+- Events: `PLAYER_ENTERING_WORLD` (0.5s delay so BBF finishes resizing; starts the ticker), `PLAYER_TARGET_CHANGED` (target + ToT), `PLAYER_FOCUS_CHANGED` (focus + FoT), `UNIT_TARGET` (ToT/FoT), `GROUP_ROSTER_UPDATE` (party), `UNIT_MODEL_CHANGED`, `UNIT_PORTRAIT_UPDATE`, `UNIT_CONNECTION`.
 - SavedVariables: `BBFAnimatedPortraitsDB` (defaults merged on `ADDON_LOADED`).
 - Slash: `/bap`.
 
@@ -32,7 +36,8 @@ animation, like the character screen, as a **companion addon** to BetterBlizzFra
 | player | `PlayerFrame.PlayerFrameContainer.PlayerPortrait` | `...PlayerPortraitMask` |
 | target | `TargetFrame.TargetFrameContainer.Portrait` | `...PortraitMask` |
 | focus | `FocusFrame.TargetFrameContainer.Portrait` | `...PortraitMask` |
-| ToT / FoT | `TargetFrame.totFrame.Portrait` / `FocusFrame.totFrame.Portrait` | (check) |
+| targettarget / focustarget | `TargetFrame.totFrame.Portrait` / `FocusFrame.totFrame.Portrait` | from portrait (unverified) |
+| party1–4 | `PartyFrame.MemberFrame1..4.Portrait` | from portrait (unverified) |
 
 BBF code that touches portraits (read only, for compatibility):
 - `forever/BetterBlizzFrames.lua` ~5143–5164: resizes portraits and masks (player 61, target/focus 56).
@@ -43,8 +48,9 @@ BBF code that touches portraits (read only, for compatibility):
 ## Roadmap
 - [x] Step 1: player frame, inscribed square, `/bap` tuning
 - [ ] Test step 1 in game (screenshot, then tune zoom/inset defaults)
-- [ ] Step 2: target + focus (`PLAYER_TARGET_CHANGED`, `PLAYER_FOCUS_CHANGED`)
-- [ ] Step 3: party frames, ToT/FoT
+- [x] Step 2: target + focus (`PLAYER_TARGET_CHANGED`, `PLAYER_FOCUS_CHANGED`), untested in game
+- [x] Step 3: party frames, ToT/FoT, untested in game
+- [ ] Per-group inset/zoom (small ToT/party portraits may need a larger inset)
 - [ ] Decide final circle treatment (inscribed vs cover ring vs square art)
 - [ ] Conflict rule with BBF spec/healer portraits
 - [ ] Options panel (Settings API) to replace or complement `/bap`
@@ -52,6 +58,11 @@ BBF code that touches portraits (read only, for compatibility):
 
 ## Test checklist
 - [ ] Model appears and animates on the player frame after login and `/reload`
+- [ ] Target / focus: model swaps when the target changes; NPC targets look reasonable
+- [ ] ToT / FoT: model follows when your target changes its target
+- [ ] Party: models appear; a member out of view range falls back to the 2D portrait and returns when in range
+- [ ] `/bap unit tot` / `/bap unit party` toggle cleanly
+- [ ] With BBF spec icons on: note which wins on target/focus (open question)
 - [ ] No square corners poking outside the portrait ring
 - [ ] Mount, shapeshift and gear changes update the model
 - [ ] Vehicle / possess: no broken portrait
