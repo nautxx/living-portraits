@@ -97,8 +97,8 @@ The square style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. T
 
 | Command | Effect |
 |---|---|
-| `/lp build` | Toggle talent builds (points per tree, like `2/8/0`) on the player and target |
-| `/lp tall` | Toggle tall player and target portraits (on by default): a taller rectangle with the build on its own line above the name. Off: square, build next to the level |
+| `/lp build` | Toggle talent builds (points per tree, like `2/8/0`) on the player, target and focus |
+| `/lp tall` | Toggle tall player, target and focus portraits (on by default): a taller rectangle with the build on its own line above the name. Off: square, build next to the level |
 | `/lp mirror` | Mirror the target and focus text to match the player frame: name and build next to the portrait, level on the outer edge |
 | `/lp bordercolor RRGGBB` | Color of the 1px lines around the portrait box and the bars (default `000000`, black) |
 | `/lp borderalpha 0-1` | Opacity of those lines (default 1). Below 1, the box and bars close up so no gap shows where a line was |

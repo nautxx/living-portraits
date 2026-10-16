@@ -687,9 +687,30 @@ do
     world.guid.target = "Player-1"
     fire("PLAYER_TARGET_CHANGED")
     check("a cached build shows without a new inspect", fs.shown and fs.text == "2/8/0" and #inspects == 2)
+    -- Focus: also inspected, but only one inspect at a time (Player-2's is still pending)
+    local oldHas = BBF.HasNoPortrait
+    BBF.HasNoPortrait = function(u) return oldHas(u) or u == "focus" end
+    world.players.focus, world.guid.focus = true, "Player-3"
+    fire("PLAYER_FOCUS_CHANGED")
+    check("focus waits while another inspect is pending", #inspects == 2)
+    now = now + 5 -- Player-2 never answered
+    tick()
+    check("after the timeout the focus gets its inspect", #inspects == 3 and inspects[3] == "focus")
+    fire("INSPECT_READY", "Player-3")
+    world.guid.target = "Player-2"
+    now = now + 2
+    tick()
+    check("a player who didn't answer isn't asked again right away", #inspects == 3)
+    now = now + 31
+    tick()
+    check("...but is asked again later", #inspects == 4 and inspects[4] == "target")
+    fire("INSPECT_READY", "Player-2")
+    BBF.HasNoPortrait, world.players.focus, world.guid.focus = oldHas, nil, nil
+    world.guid.target = "Player-1"
+    fire("PLAYER_TARGET_CHANGED")
     world.targetIsMe = true
     fire("PLAYER_TARGET_CHANGED")
-    check("your own build is read directly", fs.text == "5/0/0" and #inspects == 2)
+    check("your own build is read directly", fs.text == "5/0/0" and #inspects == 4)
     world.targetIsMe = nil
     slash("build")
     check("/lp build hides it", LivingPortraitsDB.showBuild == false and not fs.shown)

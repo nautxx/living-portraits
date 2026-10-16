@@ -46,8 +46,8 @@ local defaults = {
     alignMana   = true, -- square: line the mana bar's edge up with the health bar on the box side
     growBars    = true, -- new target: health and mana grow from empty to their value
     growTime    = 0.35, -- seconds the grow takes (/lp growtime)
-    showBuild   = true, -- square: talent build ("2/8/0") on the player and target (/lp build)
-    tallPortraits = true, -- square: player/target box grows upward by a line for the build (/lp tall)
+    showBuild   = true, -- square: talent build ("2/8/0") on the player, target and focus (/lp build)
+    tallPortraits = true, -- square: player/target/focus box grows upward by a line for the build (/lp tall)
     hideSurname = false, -- first names only on our frames (/lp surname)
     mirrorTarget = false, -- square: target/focus text mirrors the player's (/lp mirror)
     borderColor = "ff000000", -- square: box + bar border color, ARGB hex like the settings swatch (/lp bordercolor)
@@ -774,13 +774,13 @@ end
 
 -- Anchor the box beside the bars; height spans the health bar top to the mana bar bottom.
 -- Returns false if the bars haven't been laid out yet.
--- Tall portraits (player and target): px for the talent build's own line above the name
+-- Tall portraits (player, target and focus): px for the talent build's own line above the name
 -- row. It grows the box upward, so the box becomes a taller rectangle while the bars keep
 -- their size and spot. Reserved even with no build to show (NPC targets): bars can't be
 -- re-laid out in combat, so the layout can't change per target. Off: square box, and the
 -- build sits next to the level.
 local BUILD_LINE = 9
-local TALL_UNITS = { player = true, target = true }
+local TALL_UNITS = { player = true, target = true, focus = true }
 local function BuildLine(unit)
     if not (TALL_UNITS[unit] and db.tallPortraits) then return 0 end -- independent of showBuild
     return BUILD_LINE
@@ -1178,20 +1178,22 @@ local function HookTargetUpdate()
     end
 end
 
--- Talent build on the player and target ------------------------------------------------
+-- Talent build on the player, target and focus -------------------------------------
 -- Points per talent tree ("2/8/0") in the square style's name area: on its own line above
 -- the name with tall portraits (BuildLine), else just left of the level. Your own build is
 -- read directly (cached until your talents change); other players need an inspect
 -- (server round trip, ~30 yd range, shared throttle), so results are cached per GUID for
 -- the session and requests are spaced out. NPCs and players we can't inspect show
 -- nothing rather than a guess.
-local BUILD_UNITS = { "player", "target" }
+local BUILD_UNITS = { "player", "target", "focus" }
 local builds = {}         -- GUID -> "2/8/0"
 local ownBuild            -- your build, cleared when your talents change
 local inspectGUID         -- GUID of our pending inspect
 local inspectAt = 0       -- GetTime() of our last NotifyInspect
 local INSPECT_GAP = 1.5   -- seconds between our inspects
 local INSPECT_TIMEOUT = 4 -- give up waiting for a reply after this long
+local NO_REPLY_WAIT = 30  -- a player who didn't answer waits this long before we ask again
+local noReply = {}        -- GUID -> GetTime() of an inspect that got no answer
 
 -- Points per tree for a trait config, in the talent window's tree order. The game leaves
 -- out trees with no points spent (Blizzard's own tree headers show "0" for those).
@@ -1228,21 +1230,29 @@ local function BuildVisible(unit)
         and (db.nameRow[UNITS[unit].row] or 0) > 0 and BBFHidesPortrait(unit)
 end
 
-local function RequestInspect(guid)
+-- One inspect at a time (target and focus share it): a second request would replace the
+-- pending one and its answer would be ignored. No answer in time: that player waits
+-- NO_REPLY_WAIT so the other frame gets a turn.
+local function RequestInspect(guid, unit)
     if not (NotifyInspect and guid) or InCombatLockdown() then return end
-    if inspectGUID == guid and GetTime() - inspectAt < INSPECT_TIMEOUT then return end -- waiting
-    if GetTime() - inspectAt < INSPECT_GAP then return end -- the ticker asks again shortly
-    if CanInspect and not CanInspect("target") then return end -- out of range, enemy, ...
+    local now = GetTime()
+    if inspectGUID then
+        if now - inspectAt < INSPECT_TIMEOUT then return end -- still waiting for its reply
+        noReply[inspectGUID], inspectGUID = now, nil
+    end
+    if noReply[guid] and now - noReply[guid] < NO_REPLY_WAIT then return end
+    if now - inspectAt < INSPECT_GAP then return end -- the ticker asks again shortly
+    if CanInspect and not CanInspect(unit) then return end -- out of range, enemy, ...
     if InspectFrame and InspectFrame:IsShown() then return end -- Blizzard's inspect owns it
     inspectGUID, inspectAt = guid, GetTime()
-    NotifyInspect("target")
+    NotifyInspect(unit)
 end
 
 local function BuildFor(unit)
     if unit == "player" or Safe(UnitIsUnit(unit, "player")) then return OwnBuild() end
     if not Safe(UnitIsPlayer(unit)) then return end
     local guid = Safe(UnitGUID(unit))
-    if guid and not builds[guid] then RequestInspect(guid) end
+    if guid and not builds[guid] then RequestInspect(guid, unit) end
     return guid and builds[guid]
 end
 
@@ -1465,6 +1475,7 @@ f:SetScript("OnEvent", function(self, event, arg1)
         OnTalentsChanged() -- your own build (player frame, or targeting yourself)
     elseif event == "PLAYER_FOCUS_CHANGED" then
         QueueRefresh("focus"); QueueRefresh("focustarget")
+        UpdateBuild()
     elseif event == "GROUP_ROSTER_UPDATE" then
         for _, unit in ipairs(PARTY) do QueueRefresh(unit) end
     elseif event == "UNIT_TARGET" then
@@ -1646,9 +1657,9 @@ BuildOptions = function()
         "Color of the 1px lines around the portrait box and the health and mana bars.")
     Slider({ "borderAlpha" }, "Border Opacity", "Opacity of the 1px lines around the portrait box and the bars.", 0, 1, 0.05, FormatPercent)
     Check({ "alignMana" }, "Align mana bar", "Line the mana bar up with the health bar next to the box.")
-    Check({ "showBuild" }, "Show Talent Build", "Points per talent tree (like 2/8/0) on the player and target frames. Other players need to be within inspect range (about 30 yards); NPCs show nothing.")
+    Check({ "showBuild" }, "Show Talent Build", "Points per talent tree (like 2/8/0) on the player, target and focus frames. Other players need to be within inspect range (about 30 yards); NPCs show nothing.")
     Check({ "mirrorTarget" }, "Mirror Target Text", "Target and focus: name and talent build next to the portrait, level on the outer edge, mirroring the player frame.")
-    Check({ "tallPortraits" }, "Tall portraits", "Player and target: the portrait grows into a taller rectangle, with a line above the name for the talent build. Off: square portraits, build next to the level.")
+    Check({ "tallPortraits" }, "Tall portraits", "Player, target and focus: the portrait grows into a taller rectangle, with a line above the name for the talent build. Off: square portraits, build next to the level.")
     Slider({ "squareGap" }, "Gap to bars", "Space between the box and the bars (1 = borders share one line).", 0, 20, 1)
     Slider({ "barSpacing" }, "Bar spacing", "Space between health and mana (0 = borders share one line).", 0, 10, 1)
 
