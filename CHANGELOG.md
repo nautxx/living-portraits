@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.0 (2026-10-16)
+
+### Features
+- **Talent build:** the player and target frames show points per talent tree (like `2/8/0`). Your own build is read directly; other players are inspected when you target them (within ~30 yards). NPCs show nothing. Settings panel: *Show Talent Build*, or `/lp build`.
+- **Tall portraits** (on by default): the player and target portraits grow into a taller rectangle, with the talent build on its own line above the name. The bars keep their size. Off: square portraits with the build next to the level. `/lp tall`.
+- **Mirror Target Text:** the target and focus name and build sit next to the portrait and the level moves to the outer edge, so the target mirrors the player frame. `/lp mirror`.
+- **Hide Surnames:** first names only on the player, target, focus, target-of-target and party frames. `/lp surname`.
+- Settings panel: per-frame checkboxes are now *Player Portrait*, *Target Portrait*, and so on.
+- `/lp` status shows the new settings.
+
+### Performance
+- The background check no longer re-processes names every half second, and the talent build does no work while it's off.
+
 ## 0.3.0 (2026-10-16)
 
 **BBF Animated Portraits is now Living Portraits.**
