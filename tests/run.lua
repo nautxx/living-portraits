@@ -653,6 +653,19 @@ do
     for _, f in ipairs(rawget(PlayerFrame, "fontStrings") or {}) do pfs = f end
     check("player frame shows your own build above your name", pfs and pfs.shown and pfs.text == "5/0/0"
         and pfs.anchor[1] == "LEFT" and pfs.anchor[2] == playerHp.BBFPositionFrame and pfs.anchor[5] == 12 + 9 / 2)
+    -- Mirror target text: name and build on the portrait side (right), level on the outer edge
+    slash("mirror")
+    check("mirrored target name sits on the portrait side", targetName.points[1][1] == "RIGHT"
+        and targetName.points[1][3] == "TOPRIGHT" and targetName.justify == "RIGHT")
+    check("mirrored target level goes to the outer edge", targetLevel.points[1][1] == "LEFT" and targetLevel.points[1][3] == "TOPLEFT")
+    check("mirrored build sits above the name on the portrait side", fs.anchor[1] == "RIGHT" and fs.anchor[3] == "TOPRIGHT")
+    check("the player frame isn't mirrored", PlayerName.points[1][1] == "LEFT" and pfs.anchor[1] == "LEFT")
+    slash("tall")
+    check("mirrored, not tall: build between level and name", fs.anchor[1] == "LEFT" and fs.anchor[2] == targetLevel and fs.anchor[3] == "RIGHT")
+    slash("tall")
+    slash("mirror")
+    check("mirror off puts the target text back", targetName.points[1][1] == "LEFT" and targetLevel.points[1][1] == "RIGHT"
+        and fs.anchor[1] == "LEFT" and fs.anchor[3] == "TOPLEFT")
     world.guid.target = "Player-2"
     now = now + 0.5
     fire("PLAYER_TARGET_CHANGED")

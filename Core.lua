@@ -49,6 +49,7 @@ local defaults = {
     showBuild   = true, -- square: talent build ("2/8/0") on the player and target (/lp build)
     tallPortraits = true, -- square: player/target box grows upward by a line for the build (/lp tall)
     hideSurname = false, -- first names only on our frames (/lp surname)
+    mirrorTarget = false, -- square: target/focus text mirrors the player's (/lp mirror)
     vignette = true,
     calibrate = false, -- circle: tint the edge red to line it up with the ring (/lp calibrate)
     -- Circle: per-frame nudge (px) of the portrait inside its ring. Measured in game with
@@ -662,6 +663,12 @@ local function PinText(fs, point, rel, relPoint, x, y, justify, maxWidth)
     Apply(fs)
 end
 
+-- Mirrored text (target/focus, box on the right): name and build hug the portrait and
+-- the level goes to the outer edge, so the frame mirrors the player's.
+local function Mirrored(unit)
+    return db.mirrorTarget and UNITS[unit].side == "RIGHT"
+end
+
 local function LayoutNameRow(unit, hpPos)
     local name, level, bbfName = Lookup(unit, "texts")
     if not (name or level or bbfName) then return end
@@ -680,9 +687,15 @@ local function LayoutNameRow(unit, hpPos)
         local bw = bt and bt.bapInline and bt:IsShown() and TextWidth(bt)
         return math.max(w - 2 - (lw and lw + 4 or 0) - (bw and bw + 6 or 0), 10)
     end
-    PinText(name,    "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT", nameMax)
-    PinText(bbfName, "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT", nameMax)
-    PinText(level,   "RIGHT", hpPos, "TOPRIGHT", -1, y, "RIGHT")
+    if Mirrored(unit) then
+        PinText(name,    "RIGHT", hpPos, "TOPRIGHT", -1, y, "RIGHT", nameMax)
+        PinText(bbfName, "RIGHT", hpPos, "TOPRIGHT", -1, y, "RIGHT", nameMax)
+        PinText(level,   "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT")
+    else
+        PinText(name,    "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT", nameMax)
+        PinText(bbfName, "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT", nameMax)
+        PinText(level,   "RIGHT", hpPos, "TOPRIGHT", -1, y, "RIGHT")
+    end
 end
 
 -- Put the bars and texts back exactly as BBF/Blizzard had them.
@@ -1203,11 +1216,19 @@ local function UpdateBuildFor(unit)
     local hpPos = GetBarFrames(unit)
     local row, extra = hpPos and hpPos.bapRow or 0, BuildLine(unit)
     local above = row > 0 and extra > 0
-    if fs.bapText == text and fs.bapInline == not above and fs.bapRow == row and fs.bapExtra == extra then return end
-    fs.bapText, fs.bapInline, fs.bapRow, fs.bapExtra = text, not above, row, extra
+    local mirror = Mirrored(unit)
+    if fs.bapText == text and fs.bapInline == not above and fs.bapRow == row and fs.bapExtra == extra
+        and fs.bapMirror == mirror then return end
+    fs.bapText, fs.bapInline, fs.bapRow, fs.bapExtra, fs.bapMirror = text, not above, row, extra, mirror
     fs:ClearAllPoints()
-    if above then
+    if above and mirror then -- above the name, on the portrait side
+        fs:SetPoint("RIGHT", hpPos, "TOPRIGHT", -1, row + extra / 2)
+        fs:SetJustifyH("RIGHT")
+    elseif above then
         fs:SetPoint("LEFT", hpPos, "TOPLEFT", 1, row + extra / 2)
+        fs:SetJustifyH("LEFT")
+    elseif mirror then -- between the level (outer edge) and the name
+        fs:SetPoint("LEFT", level, "RIGHT", 4, 0)
         fs:SetJustifyH("LEFT")
     else
         fs:SetPoint("RIGHT", level, "LEFT", -4, 0)
@@ -1562,6 +1583,7 @@ BuildOptions = function()
     Slider({ "hpShare" }, "Health share", "Health bar's share of the stack; mana gets the rest.", 0.4, 0.85, 0.01, FormatPercent)
     Check({ "alignMana" }, "Align mana bar", "Line the mana bar up with the health bar next to the box.")
     Check({ "showBuild" }, "Show Talent Build", "Points per talent tree (like 2/8/0) on the player and target frames. Other players need to be within inspect range (about 30 yards); NPCs show nothing.")
+    Check({ "mirrorTarget" }, "Mirror Target Text", "Target and focus: name and talent build next to the portrait, level on the outer edge, mirroring the player frame.")
     Check({ "tallPortraits" }, "Tall portraits", "Player and target: the portrait grows into a taller rectangle, with a line above the name for the talent build. Off: square portraits, build next to the level.")
     Slider({ "squareGap" }, "Gap to bars", "Space between the box and the bars (1 = borders share one line).", 0, 20, 1)
     Slider({ "barSpacing" }, "Bar spacing", "Space between health and mana (0 = borders share one line).", 0, 10, 1)
@@ -1643,7 +1665,7 @@ local function PrintHelp()
     print("  /lp options  |  /lp bbfsetup (turn on BBF's Pixel Border mode)  |  /lp bbfundo")
     print("  /lp toggle  |  /lp vignette  |  /lp zoom 0-1  |  /lp grow  |  /lp growtime 0.1-2  |  /lp reset")
     print("  /lp style square|circle  |  /lp bg 0-1  |  /lp extend 0-30 [large|small]  |  /lp split 0.4-0.85")
-    print("  /lp namerow 0-24 [large|tot|party]  |  /lp gap 0-20  |  /lp barspacing 0-10  |  /lp alignmana  |  /lp build  |  /lp tall  |  /lp surname")
+    print("  /lp namerow 0-24 [large|tot|party]  |  /lp gap 0-20  |  /lp barspacing 0-10  |  /lp alignmana  |  /lp build  |  /lp tall  |  /lp surname  |  /lp mirror")
     print("  /lp inset 0.3-1.2 [large|small]  |  /lp cam 0.3-2 [large|small|square]")
     print("  /lp unit player|target|focus|tot|party  |  /lp refresh  |  /lp debug [unit]")
     print("  circle: /lp circlebg 0-1  |  /lp vignette  |  /lp calibrate  |  /lp offset player|target|focus|tot|party x y")
@@ -1724,7 +1746,7 @@ end
 -- On/off settings: command -> db key.
 local SLASH_TOGGLES = {
     toggle = "enabled", vignette = "vignette", grow = "growBars", alignmana = "alignMana",
-    build = "showBuild", tall = "tallPortraits", surname = "hideSurname",
+    build = "showBuild", tall = "tallPortraits", surname = "hideSurname", mirror = "mirrorTarget",
 }
 -- Number settings: command -> { db key, min, max }.
 local SLASH_NUMBERS = {
