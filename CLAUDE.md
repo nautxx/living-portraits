@@ -131,6 +131,8 @@ Put a Conventional Commits prefix on every commit title: `type: short imperative
 
 After the colon: lowercase, imperative mood ("add", not "added" or "adds"), no trailing period, ideally under ~70 characters. Example: `feat: add animated portraits to target and focus frames`.
 
+No `Co-Authored-By` or other AI attribution lines in commit messages (they made Claude show up as a repo contributor; removed from history on 2026-10-15).
+
 When a commit touches only one thing, the title alone is enough, so skip the body. When a commit bundles several distinct changes, add a blank line after the title and a short bullet per change:
 
 ```
