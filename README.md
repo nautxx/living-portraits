@@ -40,6 +40,8 @@ ln -s ~/GitHub/Main/bbf-animated-portraits \
 | `/bap cam 0.3-2 [large\|small]` | Camera distance (lower = closer, bigger face) |
 | `/bap calibrate` | Circle: tint the circle edge red to line it up with the ring; toggle again to finish |
 | `/bap offset <group> x y` | Circle: nudge the portrait inside its ring (groups: player, target, focus, tot, party) |
+| `/bap grow` | Toggle the health and mana bars growing from empty when you pick a new target (`/bap grow debug` traces it in chat) |
+| `/bap growtime 0.1-2` | How long the target bar grow takes, in seconds (default 0.35) |
 | `/bap vignette` | Toggle the crisp circle edge that hides the model's square edges |
 | `/bap style square\|circle` | Square box beside the bars (needs BBF No Portrait / Pixel Border) or round portrait |
 | `/bap bg 0-1` | Square: opacity of the dark background behind the model (default 0 = none) |

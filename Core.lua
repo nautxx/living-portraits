@@ -44,6 +44,8 @@ local defaults = {
     -- Groups: large = player/target/focus, tot = target-of-target/focus-target, party.
     nameRow     = { large = 12, tot = 9, party = 0 },
     alignMana   = true, -- square: line the mana bar's edge up with the health bar on the box side
+    growBars    = true, -- new target: health and mana grow from empty to their value
+    growTime    = 0.35, -- seconds the grow takes (/bap growtime)
     vignette = true,
     calibrate = false, -- circle: tint the edge red to line it up with the ring (/bap calibrate)
     -- Circle: per-frame nudge (px) of the portrait inside its ring. Measured in game with
@@ -891,6 +893,143 @@ local function RefreshList(list)
     for _, unit in ipairs(list) do Refresh(unit) end
 end
 
+-- New target: health and mana grow from empty to their value.
+-- Blizzard's bars can't be animated directly: Blizzard re-sets them (immediately) as it
+-- updates, which cancelled the engine's own interpolation. So for a moment we draw our
+-- own copy of each bar on top and hide Blizzard's fill (alpha only, restored after).
+-- The copy shows the bar's real value but its width grows from 0 to the bar's width,
+-- so the visible fill is value x progress. Values can be "secret" and tainted code can't
+-- do math on them (nor feed them to C_CurveUtil curves), but StatusBar:SetValue and
+-- SetMinMaxValues accept them, so the lerp happens in geometry instead.
+-- Starts from a post-hook on TargetFrame:Update(), which Blizzard calls on a target
+-- change (also login and UNIT_TARGETABLE_CHANGED) right after setting the new values;
+-- our own PLAYER_TARGET_CHANGED handler can run before Blizzard's.
+local growDebug = false
+local function GrowTrace(...) if growDebug then print("|cff00c0ffbap grow|r", ...) end end
+
+local grows = {} -- bar -> { ov, fill, alpha, t }
+local growDriver -- created on first grow
+
+local function EndGrow(bar)
+    local g = grows[bar]
+    if not g then return end
+    g.ov:Hide()
+    -- Restore Blizzard's fill unless something else set its alpha meanwhile.
+    if g.fill:GetAlpha() == 0 then g.fill:SetAlpha(g.alpha) end
+    grows[bar] = nil
+    GrowTrace("done", bar.bapGrowName)
+end
+
+-- Copy the fill's current look (BBF/Blizzard texture, class color, desaturation) onto
+-- the overlay. BBF class colors are a desaturated fill with a tint, sometimes set on the
+-- fill texture itself, so read the fill rather than the bar. Re-run every frame: BBF can
+-- recolor or retexture right after Blizzard's update.
+local function CopyBarStyle(ov, fill)
+    local asset = fill:GetAtlas() or fill:GetTexture() or "Interface\\Buttons\\WHITE8X8"
+    local ovFill = ov:GetStatusBarTexture()
+    if ov.bapAsset ~= asset or not ovFill then
+        ov:SetStatusBarTexture(asset)
+        ov.bapAsset = asset
+        if ov:GetStatusBarTexture() ~= ovFill then ov.bapMasks = nil end -- new texture, no masks yet
+        ovFill = ov:GetStatusBarTexture()
+    end
+    local layer, sub = fill:GetDrawLayer()
+    ovFill:SetDrawLayer(layer, math.min(7, (sub or 0) + 1))
+    ovFill:SetDesaturation(fill:GetDesaturation() or 0)
+    ovFill:SetBlendMode(fill:GetBlendMode() or "BLEND")
+    -- RGB only: the fill's alpha is 0 while we hide it, and copying that hid the overlay.
+    local r, g, b = fill:GetVertexColor()
+    pcall(ovFill.SetVertexColor, ovFill, r, g, b)
+    -- Same masks as the fill (Blizzard's bar shape, BBF's no-portrait mask). Unmasked, the
+    -- overlay reached past the fill's clipped end.
+    local masks = {}
+    for i = 1, (fill.GetNumMaskTextures and fill:GetNumMaskTextures() or 0) do
+        local m = fill:GetMaskTexture(i)
+        if m then masks[m] = true end
+    end
+    for m in pairs(ov.bapMasks or {}) do
+        if not masks[m] then ovFill:RemoveMaskTexture(m) end
+    end
+    for m in pairs(masks) do
+        if not (ov.bapMasks and ov.bapMasks[m]) then ovFill:AddMaskTexture(m) end
+    end
+    ov.bapMasks = masks
+end
+
+local function GrowStep(_, elapsed)
+    local duration = math.max(0.05, db.growTime)
+    for bar, g in pairs(grows) do
+        g.t = g.t + elapsed
+        local p = math.min(1, g.t / duration)
+        if p >= 1 or not bar:IsVisible() then
+            EndGrow(bar)
+        else
+            local e = 1 - (1 - p) ^ 3 -- ease-out cubic
+            -- Follow the live bar: health/power changing mid-grow shows up right away.
+            g.ov:SetMinMaxValues(bar:GetMinMaxValues())
+            g.ov:SetValue(bar:GetValue())
+            g.ov:SetWidth(math.max(0.01, bar:GetWidth() * e))
+            CopyBarStyle(g.ov, g.fill)
+        end
+    end
+    if not next(grows) then growDriver:SetScript("OnUpdate", nil) end
+end
+
+local function StartGrow(bar, name)
+    local fill = bar.GetStatusBarTexture and bar:GetStatusBarTexture()
+    if not (fill and bar:IsVisible()) or (bar.GetOrientation and bar:GetOrientation() == "VERTICAL") then
+        GrowTrace(name, "skip: fill", not not fill, "visible", bar:IsVisible())
+        return
+    end
+    local g = grows[bar]
+    if not g then
+        local ov = bar.bapGrowBar
+        if not ov then
+            ov = CreateFrame("StatusBar", nil, bar)
+            bar.bapGrowBar, bar.bapGrowName = ov, name
+        end
+        g = { ov = ov, fill = fill, alpha = fill:GetAlpha() }
+        grows[bar] = g
+    end
+    g.t = 0
+    local ov = g.ov
+    -- Same frame level and draw layer as Blizzard's fill, so the bar texts stay on top.
+    ov:SetFrameStrata(bar:GetFrameStrata())
+    ov:SetFrameLevel(bar:GetFrameLevel())
+    CopyBarStyle(ov, fill)
+    ov:SetAlpha(g.alpha)
+    local reverse = bar.GetReverseFill and bar:GetReverseFill()
+    ov:SetReverseFill(reverse and true or false)
+    local side = reverse and "RIGHT" or "LEFT"
+    ov:ClearAllPoints()
+    ov:SetPoint("TOP" .. side, bar, "TOP" .. side)
+    ov:SetPoint("BOTTOM" .. side, bar, "BOTTOM" .. side)
+    ov:SetWidth(0.01)
+    ov:SetMinMaxValues(bar:GetMinMaxValues())
+    ov:SetValue(bar:GetValue())
+    ov:Show()
+    fill:SetAlpha(0)
+    growDriver = growDriver or CreateFrame("Frame")
+    growDriver:SetScript("OnUpdate", GrowStep)
+    GrowTrace(name, "start, value", Safe(bar:GetValue()) or "secret")
+end
+
+local function GrowTargetBars()
+    if not (db and db.growBars and UnitExists("target")) then
+        GrowTrace("skip: grow", db and db.growBars, "target", UnitExists("target"))
+        return
+    end
+    local hpBar, manaBar = BARS.target()
+    if hpBar then StartGrow(hpBar, "health") end
+    if manaBar then StartGrow(manaBar, "mana") end
+end
+
+local function HookTargetUpdate()
+    if TargetFrame and type(TargetFrame.Update) == "function" then
+        hooksecurefunc(TargetFrame, "Update", GrowTargetBars)
+    end
+end
+
 -- Catches changes with no reliable event: ToT swaps, party range/visibility, and frame
 -- scale changes (Edit Mode / UI scale) that leave the 3D camera framed for the old size.
 local function ScaleChanged(unit)
@@ -935,6 +1074,7 @@ f:SetScript("OnEvent", function(self, event, arg1)
         self:RegisterEvent("UI_SCALE_CHANGED")
         self:RegisterEvent("DISPLAY_SIZE_CHANGED")
         HookBBF()
+        HookTargetUpdate()
         if EditModeManagerFrame then
             hooksecurefunc(EditModeManagerFrame, "ExitEditMode", function() C_Timer.After(0.1, RefreshAll) end)
         end
@@ -969,7 +1109,7 @@ local function PrintStatus()
     local L, S = db.sizes.large, db.sizes.small
     print("|cff00c0ffBBF Animated Portraits|r  enabled=" .. tostring(db.enabled)
         .. "  style=" .. db.style .. "  zoom=" .. db.zoom .. "  vignette=" .. tostring(db.vignette)
-        .. "  units=" .. (#on > 0 and table.concat(on, ",") or "none"))
+        .. "  grow=" .. tostring(db.growBars) .. (" (%.2fs)"):format(db.growTime) .. "  units=" .. (#on > 0 and table.concat(on, ",") or "none"))
     local Q = db.sizes.square
     print(("  circle large: inset=%.2f cam=%.2f   small: inset=%.2f cam=%.2f"):format(L.inset, L.cam, S.inset, S.cam))
     print(("  square: cam=%.2f bg=%.2f gap=%d alignmana=%s split=%.2f  extend: large=%d small=%d"):format(
@@ -978,7 +1118,7 @@ local function PrintStatus()
 end
 
 local function PrintHelp()
-    print("  /bap toggle  |  /bap vignette  |  /bap zoom 0-1  |  /bap reset")
+    print("  /bap toggle  |  /bap vignette  |  /bap zoom 0-1  |  /bap grow  |  /bap growtime 0.1-2  |  /bap reset")
     print("  /bap style square|circle  |  /bap bg 0-1  |  /bap extend 0-30 [large|small]  |  /bap split 0.4-0.85")
     print("  /bap namerow 0-24 [large|tot|party]  |  /bap gap 0-20  |  /bap barspacing 0-10  |  /bap alignmana")
     print("  /bap inset 0.3-1.2 [large|small]  |  /bap cam 0.3-2 [large|small|square]")
@@ -1076,6 +1216,14 @@ SlashCmdList.BBFANIMPORTRAITS = function(msg)
         db.enabled = not db.enabled
     elseif cmd == "vignette" then
         db.vignette = not db.vignette
+    elseif cmd == "grow" and arg == "debug" then
+        growDebug = not growDebug
+        print("  grow debug " .. (growDebug and "on: change targets and watch chat." or "off."))
+        return
+    elseif cmd == "grow" then
+        db.growBars = not db.growBars
+    elseif cmd == "growtime" and val then
+        db.growTime = math.max(0.1, math.min(2, val))
     elseif cmd == "calibrate" then
         db.calibrate = not db.calibrate
         print(db.calibrate and "  Calibrate on: nudge with /bap offset <player|target|focus|tot|party> x y, then /bap calibrate to finish."
