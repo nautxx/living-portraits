@@ -1214,7 +1214,7 @@ end
 -- Settings panel ------------------------------------------------------------
 -- Options > AddOns > Living Portraits. Proxy settings read and write db directly,
 -- so the panel and /lp always agree (slash changes call NotifyOptions).
-local PREFIX = "Living |cff00c0ffPortraits|r "
+local PREFIX = "Living|cff00c0ffPortraits|r "
 local optionVars = {} -- registered setting variables, refreshed by NotifyOptions
 local optionsCategory
 
@@ -1244,7 +1244,7 @@ BuildOptions = function()
     if optionsCategory or not (Settings and Settings.RegisterVerticalLayoutCategory and SettingsPanel) then return end
     local category = -- Styled like BBF's own entry (plain first word, cyan second). The list sorts on the raw
     -- name, so it must not start with a color code.
-    Settings.RegisterVerticalLayoutCategory("Living |cff00c0ffPortraits|r")
+    Settings.RegisterVerticalLayoutCategory("Living|cff00c0ffPortraits|r")
     local layout = SettingsPanel:GetLayout(category)
 
     local function Header(text)
@@ -1350,7 +1350,7 @@ local function PrintStatus()
     end
     table.sort(on)
     local L, S = db.sizes.large, db.sizes.small
-    print("Living |cff00c0ffPortraits|r  enabled=" .. tostring(db.enabled)
+    print("Living|cff00c0ffPortraits|r  enabled=" .. tostring(db.enabled)
         .. "  style=" .. db.style .. "  zoom=" .. db.zoom .. "  vignette=" .. tostring(db.vignette)
         .. "  grow=" .. tostring(db.growBars) .. (" (%.2fs)"):format(db.growTime) .. "  units=" .. (#on > 0 and table.concat(on, ",") or "none"))
     local Q = db.sizes.square

@@ -1,5 +1,5 @@
 ## Interface: 16001
-## Title: Living |cff00c0ffPortraits|r
+## Title: Living|cff00c0ffPortraits|r
 ## Notes: Live 3D breathing portraits for Blizzard unit frames. A companion addon for BetterBlizzFrames.
 ## Author: Jason
 ## Version: 0.2.1
