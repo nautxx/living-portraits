@@ -74,120 +74,106 @@ local defaults = {
     },
 }
 
--- Unit -> function returning the portrait texture on the Blizzard frame.
-local PORTRAITS = {
-    player       = function() local c = PlayerFrame and PlayerFrame.PlayerFrameContainer; return c and c.PlayerPortrait end,
-    target       = function() local c = TargetFrame and TargetFrame.TargetFrameContainer; return c and c.Portrait end,
-    focus        = function() local c = FocusFrame and FocusFrame.TargetFrameContainer;  return c and c.Portrait end,
-    targettarget = function() local f = TargetFrame and TargetFrame.totFrame; return f and f.Portrait end,
-    focustarget  = function() local f = FocusFrame and FocusFrame.totFrame;   return f and f.Portrait end,
-}
-for i, unit in ipairs(PARTY) do
-    PORTRAITS[unit] = function()
-        local f = PartyFrame and PartyFrame["MemberFrame" .. i]
-        return f and f.Portrait
-    end
-end
-
--- The ring art around each portrait. Layers are placed relative to the frame that owns it:
--- on the target/focus the ring (TargetFrameContainer, LOW strata, level ~501) and the
--- portrait (an unnamed child frame in the BACKGROUND strata) live in different frames.
+-- Every supported unit: its layout groups and how to find its Blizzard frames.
+-- **Add new units here.**
+--   size    "large" | "small": camera and inset sizes (db.sizes)
+--   offset  db.offsets key: circle centering nudge
+--   row     db.nameRow key: square name-row height (ToT and party share "small" but differ here)
+--   side    which side of the bars the square box goes on (where the round portrait was)
+--   frame() the unit frame. Square boxes are parented here, never via the portrait:
+--           BBF's No Portrait mode moves portraits/containers into a hidden frame.
+-- The rest take that unit frame and return nil when a part is missing:
+--   portrait(f) the 2D portrait texture
+--   ring(f)     the ring art around it. Layers are placed relative to the frame that owns
+--               it: on target/focus the ring (TargetFrameContainer, LOW strata, level ~501)
+--               and the portrait (an unnamed BACKGROUND-strata frame) live in different frames.
+--   bars(f)     health bar, mana bar (BBF frames them in No Portrait / Pixel Border mode)
+--   texts(f)    Blizzard's name, the level, BBF's replacement name (bbfName). BBF lays
+--               bbfName out on its own, so both names get pinned. Optional.
 local function RingTex(t) return type(t) == "table" and t.GetDrawLayer and t.GetParent and t or nil end
-local RING_TEXTURES = {
-    player       = function() local c = PlayerFrame and PlayerFrame.PlayerFrameContainer; return c and RingTex(c.FrameTexture) end,
-    target       = function() local c = TargetFrame and TargetFrame.TargetFrameContainer; return c and RingTex(c.FrameTexture) end,
-    focus        = function() local c = FocusFrame and FocusFrame.TargetFrameContainer;  return c and RingTex(c.FrameTexture) end,
-    targettarget = function() local f = TargetFrame and TargetFrame.totFrame; return f and RingTex(f.FrameTexture) end,
-    focustarget  = function() local f = FocusFrame and FocusFrame.totFrame;   return f and RingTex(f.FrameTexture) end,
-}
-for i, unit in ipairs(PARTY) do
-    RING_TEXTURES[unit] = function()
-        local f = PartyFrame and PartyFrame["MemberFrame" .. i]
-        return f and RingTex(f.Texture)
-    end
-end
-
-local SIZE_OF = {
-    player = "large", target = "large", focus = "large",
-    targettarget = "small", focustarget = "small",
-    party1 = "small", party2 = "small", party3 = "small", party4 = "small",
-}
-
--- Offset groups for the circle style.
-local OFFSET_GROUP = {
-    player = "player", target = "target", focus = "focus",
-    targettarget = "tot", focustarget = "tot",
-    party1 = "party", party2 = "party", party3 = "party", party4 = "party",
-}
-
--- Name-row groups (ToT and party share the "small" size but lay out names differently).
-local ROW_GROUP = {
-    player = "large", target = "large", focus = "large",
-    targettarget = "tot", focustarget = "tot",
-    party1 = "party", party2 = "party", party3 = "party", party4 = "party",
-}
-
--- Square style: the health/mana bars BBF frames in No Portrait / Pixel Border mode.
-local function TargetBars(frame)
-    local m = frame and frame.TargetFrameContent and frame.TargetFrameContent.TargetFrameContentMain
-    return m and m.HealthBarsContainer and m.HealthBarsContainer.HealthBar, m and m.ManaBar
-end
-local BARS = {
-    player = function()
-        local m = PlayerFrame and PlayerFrame.PlayerFrameContent and PlayerFrame.PlayerFrameContent.PlayerFrameContentMain
-        return m and m.HealthBarsContainer and m.HealthBarsContainer.HealthBar, m and m.ManaBarArea and m.ManaBarArea.ManaBar
-    end,
-    target       = function() return TargetBars(TargetFrame) end,
-    focus        = function() return TargetBars(FocusFrame) end,
-    targettarget = function() local f = TargetFrame and TargetFrame.totFrame; return f and f.HealthBar, f and f.ManaBar end,
-    focustarget  = function() local f = FocusFrame and FocusFrame.totFrame;   return f and f.HealthBar, f and f.ManaBar end,
-}
-for i, unit in ipairs(PARTY) do
-    BARS[unit] = function()
-        local f = PartyFrame and PartyFrame["MemberFrame" .. i]
-        return f and f.HealthBarContainer and f.HealthBarContainer.HealthBar, f and f.ManaBar
-    end
-end
--- The unit frame itself. Square boxes are parented here, never via the portrait:
--- BBF's No Portrait mode moves portraits/containers into a hidden frame.
-local UNIT_FRAMES = {
-    player       = function() return PlayerFrame end,
-    target       = function() return TargetFrame end,
-    focus        = function() return FocusFrame end,
-    targettarget = function() return TargetFrame and TargetFrame.totFrame end,
-    focustarget  = function() return FocusFrame and FocusFrame.totFrame end,
-}
-for i, unit in ipairs(PARTY) do
-    UNIT_FRAMES[unit] = function() return PartyFrame and PartyFrame["MemberFrame" .. i] end
-end
-
--- Which side of the bars the box goes on (where the round portrait used to be).
-local SQUARE_SIDE = { target = "RIGHT", focus = "RIGHT" } -- everything else: LEFT
-
--- Name and level text for the name row (large frames only).
 local function AsText(x) return type(x) == "table" and x.SetPoint and x or nil end
--- Returns Blizzard's name, the level, and BBF's replacement name (bbfName). BBF lays
--- bbfName out on its own for these frames, so both names get pinned.
-local function TargetTexts(frame)
-    local m = frame and frame.TargetFrameContent and frame.TargetFrameContent.TargetFrameContentMain
-    return AsText(m and m.Name), AsText(m and m.LevelText), AsText(frame and frame.bbfName)
+
+local function TargetMain(f)
+    local c = f.TargetFrameContent
+    return c and c.TargetFrameContentMain
 end
-local NAME_TEXTS = {
-    player = function()
-        local name = PlayerFrame and (AsText(PlayerFrame.name) or AsText(PlayerFrame.Name))
-        return name or AsText(PlayerName), AsText(PlayerLevelText), AsText(PlayerFrame and PlayerFrame.bbfName)
-    end,
-    target = function() return TargetTexts(TargetFrame) end,
-    focus  = function() return TargetTexts(FocusFrame) end,
-    targettarget = function()
-        local f = TargetFrame and TargetFrame.totFrame
-        return AsText(f and f.Name), nil, AsText(f and f.bbfName)
-    end,
-    focustarget = function()
-        local f = FocusFrame and FocusFrame.totFrame
-        return AsText(f and f.Name), nil, AsText(f and f.bbfName)
-    end,
+
+-- Target and focus share one frame design.
+local function TargetUnit(frameName, offset)
+    return {
+        size = "large", offset = offset, row = "large", side = "RIGHT",
+        frame    = function() return _G[frameName] end,
+        portrait = function(f) local c = f.TargetFrameContainer; return c and c.Portrait end,
+        ring     = function(f) local c = f.TargetFrameContainer; return c and RingTex(c.FrameTexture) end,
+        bars     = function(f)
+            local m = TargetMain(f)
+            return m and m.HealthBarsContainer and m.HealthBarsContainer.HealthBar, m and m.ManaBar
+        end,
+        texts    = function(f)
+            local m = TargetMain(f)
+            return AsText(m and m.Name), AsText(m and m.LevelText), AsText(f.bbfName)
+        end,
+    }
+end
+
+-- Target-of-target / focus-target (no level text).
+local function ToTUnit(parentName)
+    return {
+        size = "small", offset = "tot", row = "tot", side = "LEFT",
+        frame    = function() local p = _G[parentName]; return p and p.totFrame end,
+        portrait = function(f) return f.Portrait end,
+        ring     = function(f) return RingTex(f.FrameTexture) end,
+        bars     = function(f) return f.HealthBar, f.ManaBar end,
+        texts    = function(f) return AsText(f.Name), nil, AsText(f.bbfName) end,
+    }
+end
+
+local function PartyUnit(i)
+    return {
+        size = "small", offset = "party", row = "party", side = "LEFT",
+        frame    = function() return PartyFrame and PartyFrame["MemberFrame" .. i] end,
+        portrait = function(f) return f.Portrait end,
+        ring     = function(f) return RingTex(f.Texture) end,
+        bars     = function(f) return f.HealthBarContainer and f.HealthBarContainer.HealthBar, f.ManaBar end,
+    }
+end
+
+local UNITS = {
+    player = {
+        size = "large", offset = "player", row = "large", side = "LEFT",
+        frame    = function() return PlayerFrame end,
+        portrait = function(f) local c = f.PlayerFrameContainer; return c and c.PlayerPortrait end,
+        ring     = function(f) local c = f.PlayerFrameContainer; return c and RingTex(c.FrameTexture) end,
+        bars     = function(f)
+            local m = f.PlayerFrameContent and f.PlayerFrameContent.PlayerFrameContentMain
+            return m and m.HealthBarsContainer and m.HealthBarsContainer.HealthBar, m and m.ManaBarArea and m.ManaBarArea.ManaBar
+        end,
+        texts    = function(f)
+            local name = AsText(f.name) or AsText(f.Name) or AsText(PlayerName)
+            return name, AsText(PlayerLevelText), AsText(f.bbfName)
+        end,
+    },
+    target       = TargetUnit("TargetFrame", "target"),
+    focus        = TargetUnit("FocusFrame", "focus"),
+    targettarget = ToTUnit("TargetFrame"),
+    focustarget  = ToTUnit("FocusFrame"),
 }
+for i, unit in ipairs(PARTY) do UNITS[unit] = PartyUnit(i) end
+
+-- Fixed iteration order (ipairs, and no table changes mid-traversal while refreshing).
+local UNIT_LIST = { "player", "target", "targettarget", "focus", "focustarget", unpack(PARTY) }
+
+local function UnitFrameOf(unit)
+    local u = UNITS[unit]
+    return u and u.frame()
+end
+
+-- Call one of the unit's frame lookups (portrait, ring, bars, texts) on its unit frame.
+local function Lookup(unit, key)
+    local u = UNITS[unit]
+    local f = u and u[key] and u.frame()
+    if f then return u[key](f) end
+end
 
 -- Slash-command groups -> units
 local GROUPS = {
@@ -198,7 +184,8 @@ local GROUPS = {
 
 local db
 local layers = {}    -- unit -> layer record
-local lastState = {} -- unit -> state key, so the ticker only refreshes on change
+-- unit -> GUID and visible/connected code at the last refresh, so the ticker only refreshes on change
+local lastGuid, lastCode = {}, {}
 local lastScale = {} -- unit -> unit frame's effective scale at the last refresh
 
 -- Helpers -------------------------------------------------------------------
@@ -224,12 +211,25 @@ local function BBFHidesPortrait(unit)
     return BBF and BBF.HasNoPortrait and BBF.HasNoPortrait(unit)
 end
 
+local function Clamp(v, lo, hi) return math.max(lo, math.min(hi, v)) end
+
+-- GUID ("none" without a unit) and a visibility/connection code. Two plain values, so the
+-- ticker can compare them without building a string per unit every tick.
 local function UnitState(unit)
-    if not UnitExists(unit) then return "none" end
+    if not UnitExists(unit) then return "none", 0 end
     local guid = Safe(UnitGUID(unit)) or "?"
-    local visible = Safe(UnitIsVisible(unit))
-    local online = Safe(UnitIsConnected(unit))
-    return guid .. (visible == false and ":h" or ":v") .. (online == false and ":d" or ":c")
+    local hidden = Safe(UnitIsVisible(unit)) == false and 1 or 0
+    local offline = Safe(UnitIsConnected(unit)) == false and 2 or 0
+    return guid, hidden + offline
+end
+
+local function MarkState(unit)
+    lastGuid[unit], lastCode[unit] = UnitState(unit)
+end
+
+local function StateChanged(unit)
+    local guid, code = UnitState(unit)
+    return guid ~= lastGuid[unit] or code ~= lastCode[unit]
 end
 
 -- Saved settings keep old values over new defaults, so reset what changed between versions.
@@ -239,26 +239,26 @@ local function MigrateSettings()
         db.inset, db.bgInset = nil, nil -- v1 single-size settings
         db.sizes = nil                  -- v2: model fills the circle (inset 0.82 -> 1.0)
     end
-    if version < 10 then
-        db.offsets = nil                -- v10: measured centering offsets
-    end
-    if version < 9 then
-        db.sizes = nil                  -- v9: circle inset 0.84 -> 0.80 with a soft edge
-    end
-    if version < 8 then
-        db.squareGap = nil              -- v8: box and bars share a border line (3 -> 1)
-    end
-    if version < 7 then
-        db.nameRow = nil                -- v7: separate name rows for ToT and party
-    end
-    if version < 6 then
-        db.manaExtra = nil              -- v6: extra height is split between health and mana
+    if version < 4 then
+        db.sizes = nil                  -- v3/v4: crisp circle edge (inset 0.72 -> 0.84), square size added
     end
     if version < 5 then
         db.squareExtra = nil            -- v5: box no longer grows upward; mana bars grow instead
     end
-    if version < 4 then
-        db.sizes = nil                  -- v3/v4: crisp circle edge (inset 0.72 -> 0.84), square size added
+    if version < 6 then
+        db.manaExtra = nil              -- v6: extra height is split between health and mana
+    end
+    if version < 7 then
+        db.nameRow = nil                -- v7: separate name rows for ToT and party
+    end
+    if version < 8 then
+        db.squareGap = nil              -- v8: box and bars share a border line (3 -> 1)
+    end
+    if version < 9 then
+        db.sizes = nil                  -- v9: circle inset 0.84 -> 0.80 with a soft edge
+    end
+    if version < 10 then
+        db.offsets = nil                -- v10: measured centering offsets
     end
     db.version = SETTINGS_VERSION
 end
@@ -272,6 +272,28 @@ end
 -- Layers --------------------------------------------------------------------
 
 local Refresh -- forward declaration
+
+-- Coalesce refresh requests per unit into one refresh on the next frame. Every Refresh
+-- reloads the 3D model (ClearModel + SetUnit), and one target change fires several events
+-- (PLAYER_TARGET_CHANGED, UNIT_TARGET, UNIT_PORTRAIT_UPDATE) that each asked for one.
+local queued = {} -- unit -> true
+local flushQueued = false
+local function FlushRefreshes()
+    flushQueued = false
+    for _, unit in ipairs(UNIT_LIST) do
+        if queued[unit] then
+            queued[unit] = nil
+            Refresh(unit)
+        end
+    end
+end
+local function QueueRefresh(unit)
+    queued[unit] = true
+    if not flushQueued then
+        flushQueued = true
+        C_Timer.After(0, FlushRefreshes)
+    end
+end
 
 local function SetLayerAlpha(p, alpha)
     p.bgFrame:SetAlpha(alpha)
@@ -336,8 +358,9 @@ local function Activate(p)
 
     p.bgFrame:SetShown(db.circleBg > 0)
     p.model:Show()
-    p.vignette:SetShown(db.vignette and (db.circleBg > 0 or db.calibrate))
-    p.corners:SetShown(db.vignette and (db.circleBg > 0 or db.calibrate))
+    local edge = db.vignette and (db.circleBg > 0 or db.calibrate)
+    p.vignette:SetShown(edge)
+    p.corners:SetShown(edge)
     if not p.active then
         p.active = true
         p.portraitWasShown = p.portrait:IsShown()
@@ -349,9 +372,7 @@ end
 
 -- BBF's bar frames for the unit: the pixel-border position frames when present.
 local function GetBarFrames(unit)
-    local getter = BARS[unit]
-    if not getter then return end
-    local hp, mana = getter()
+    local hp, mana = Lookup(unit, "bars")
     if not hp then return end
     local manaPos = mana and (mana.BBFPositionFrame or mana)
     -- Units with no power (most NPCs): Blizzard hides the mana bar, but BBF keeps its empty
@@ -407,7 +428,7 @@ local function CreateSquare(unit, unitFrame)
     model:SetScript("OnModelLoaded", function(self) ApplyCamera(self, "square") end)
     local sq = { unit = unit, box = box, bg = bg, model = model, unitFrame = unitFrame }
     -- Mirror Blizzard's portrait fading (party out of range) even though BBF hid the portrait.
-    local portrait = PORTRAITS[unit] and PORTRAITS[unit]()
+    local portrait = Lookup(unit, "portrait")
     if portrait then
         box:SetAlpha(Safe(portrait:GetAlpha()) or 1)
         hooksecurefunc(portrait, "SetAlpha", function(_, alpha) box:SetAlpha(Safe(alpha) or 1) end)
@@ -460,8 +481,8 @@ local function LayoutBars(unit, hpPos, manaPos, manaBar, hpBar)
 
     -- Heights: grow the stack, reserve the name row at the top, and split the rest
     -- hpShare / rest (measured on BBF's frames). Without a mana row, health takes it all.
-    local size = SIZE_OF[unit]
-    local row = db.nameRow[ROW_GROUP[unit]] or 0
+    local size = UNITS[unit].size
+    local row = db.nameRow[UNITS[unit].row] or 0
     -- Keep the box size even without a mana row: use mana's remembered base height.
     local manaSlot = manaPos or (manaBar and manaBar.BBFPositionFrame)
     local manaBase = (manaSlot and manaSlot.bapBaseH) or 0
@@ -485,7 +506,7 @@ local function LayoutBars(unit, hpPos, manaPos, manaBar, hpBar)
         -- Same width as the health bar's border, edges lined up on the box side.
         if manaPos ~= manaBar then manaPos:SetWidth(hpPos:GetWidth() * toMana) end
         local a, b
-        if SQUARE_SIDE[unit] == "RIGHT" then a, b = hpPos:GetRight(), manaPos:GetRight()
+        if UNITS[unit].side == "RIGHT" then a, b = hpPos:GetRight(), manaPos:GetRight()
         else a, b = hpPos:GetLeft(), manaPos:GetLeft() end
         if a and b and math.abs(a - b) >= 0.25 then
             manaBar.bapDX = manaBar.bapDX + (a - b) * toMana
@@ -628,9 +649,8 @@ local function PinText(fs, point, rel, relPoint, x, y, justify, maxWidth)
 end
 
 local function LayoutNameRow(unit, hpPos)
-    local getter = NAME_TEXTS[unit]
-    if not getter then return end
-    local name, level, bbfName = getter()
+    local name, level, bbfName = Lookup(unit, "texts")
+    if not (name or level or bbfName) then return end
     local row = hpPos.bapRow or 0
     if row <= 0 then
         RestorePoints(name); RestorePoints(level); RestorePoints(bbfName)
@@ -660,11 +680,8 @@ local function RestoreBars(unit)
     RestoreTexts(hpBar:GetParent(), HP_TEXT_KEYS)
     RestoreTexts(manaBar, MANA_TEXT_KEYS)
     hpPos.bapRow = nil
-    local getter = NAME_TEXTS[unit]
-    if getter then
-        local name, level, bbfName = getter()
-        RestorePoints(name); RestorePoints(level); RestorePoints(bbfName)
-    end
+    local name, level, bbfName = Lookup(unit, "texts")
+    RestorePoints(name); RestorePoints(level); RestorePoints(bbfName)
 end
 
 -- Anchor the box beside the bars; height spans the health bar top to the mana bar bottom.
@@ -680,7 +697,7 @@ local function PlaceSquare(sq, hpPos, manaPos)
     if size <= 0 then return false end
 
     box:ClearAllPoints()
-    if SQUARE_SIDE[sq.unit] == "RIGHT" then
+    if UNITS[sq.unit].side == "RIGHT" then
         box:SetPoint("TOPLEFT", hpPos, "TOPRIGHT", db.squareGap, row)
     else
         box:SetPoint("TOPRIGHT", hpPos, "TOPLEFT", -db.squareGap, row)
@@ -711,22 +728,20 @@ local function ActivateSquare(unit, unitFrame, hpPos, manaPos)
 end
 
 local function CreateLayers(unit)
-    local getter = PORTRAITS[unit]
-    local portrait = getter and getter()
+    local portrait = Lookup(unit, "portrait")
     if not portrait then return end
     local container = portrait:GetParent()
     if not container then return end
     -- Parent to the unit frame itself (PlayerFrame, TargetFrame, ...). The container's
     -- direct parent isn't always the unit frame (the target's is an unnamed level-501
     -- frame), and drawing our model as part of that group put it above the ring art.
-    local uf = UNIT_FRAMES[unit] and UNIT_FRAMES[unit]()
-    local root = uf or container:GetParent() or container
+    local root = UnitFrameOf(unit) or container:GetParent() or container
 
     -- The frame that owns the ring art: our layers go just beneath it, the circle edge on it.
-    local ringTex = RING_TEXTURES[unit] and RING_TEXTURES[unit]()
+    local ringTex = Lookup(unit, "ring")
     local ringFrame = ringTex and ringTex:GetParent() or container
 
-    local p = { unit = unit, size = SIZE_OF[unit], portrait = portrait, container = container, ringFrame = ringFrame }
+    local p = { unit = unit, size = UNITS[unit].size, portrait = portrait, container = container, ringFrame = ringFrame }
 
     -- Dark circle behind the model
     local bgFrame = CreateFrame("Frame", nil, root)
@@ -781,112 +796,110 @@ local function CreateLayers(unit)
         SetLayerAlpha(p, Safe(alpha) or 1)
     end)
     -- We're no longer inside the unit frame, so follow its visibility.
-    container:HookScript("OnShow", function() Refresh(unit) end)
+    container:HookScript("OnShow", function() QueueRefresh(unit) end)
     container:HookScript("OnHide", function() Deactivate(p) end)
 
     layers[unit] = p
     return p
 end
 
-Refresh = function(unit)
-    lastState[unit] = nil
-    if not db then return end
-    local p = layers[unit]
-    -- Remember the scale: the 3D camera framing is computed for the current size, so a
-    -- scale change (Edit Mode, UI scale) needs a refresh. See Tick().
-    local uf = UNIT_FRAMES[unit] and UNIT_FRAMES[unit]()
-    lastScale[unit] = uf and uf:GetEffectiveScale()
-    local function HideAll()
-        if p then Deactivate(p) end
+-- Square style, where BBF has removed the round portrait. Returns false when the bars
+-- haven't been laid out yet (retries shortly; the ticker keeps trying meanwhile).
+local function RefreshSquare(unit, unitFrame)
+    local hpPos, manaPos, manaBar, hpBar = GetBarFrames(unit)
+    if db.style ~= "square" or not hpPos then
         DeactivateSquare(unit)
-    end
-
-    local unitFrame = UNIT_FRAMES[unit] and UNIT_FRAMES[unit]()
-    -- Turned off by the user: hand the bars, texts and names back to BBF.
-    if not db.units[unit] or not db.enabled then
-        HideAll()
         RestoreBars(unit)
-        lastState[unit] = UnitState(unit)
-        return
+        return true
     end
-    -- Transient (no target yet, frame hidden, out of range): just hide the portrait and
-    -- keep our bar/name layout pinned, so a target switch can't leave BBF's layout behind.
-    if not unitFrame or not unitFrame:IsVisible() or not UnitExists(unit)
-       or Safe(UnitIsVisible(unit)) == false or Safe(UnitIsConnected(unit)) == false then
-        HideAll()
-        lastState[unit] = UnitState(unit)
-        return
+    LayoutBars(unit, hpPos, manaPos, manaBar, hpBar)
+    if not InCombatLockdown() then LayoutNameRow(unit, hpPos) end
+    if not ActivateSquare(unit, unitFrame, hpPos, manaPos) then
+        C_Timer.After(0.5, function() Refresh(unit) end) -- bars not laid out yet
+        return false
     end
+    -- Once the resized bars have been laid out: re-measure the box, center the texts.
+    C_Timer.After(0, function()
+        PlaceSquare(squares[unit], hpPos, manaPos)
+        CenterBarTexts(hpPos, manaPos, manaBar, hpBar)
+        if not InCombatLockdown() then LayoutNameRow(unit, hpPos) end
+    end)
+    return true
+end
 
-    -- Square style: where BBF has removed the round portrait.
-    if BBFHidesPortrait(unit) then
-        if p then Deactivate(p) end
-        local hpPos, manaPos, manaBar, hpBar = GetBarFrames(unit)
-        if db.style == "square" and hpPos then
-            LayoutBars(unit, hpPos, manaPos, manaBar, hpBar)
-            if not InCombatLockdown() then LayoutNameRow(unit, hpPos) end
-            if not ActivateSquare(unit, unitFrame, hpPos, manaPos) then
-                C_Timer.After(0.5, function() Refresh(unit) end) -- bars not laid out yet
-                return
-            end
-            -- Once the resized bars have been laid out: re-measure the box, center the texts.
-            C_Timer.After(0, function()
-                PlaceSquare(squares[unit], hpPos, manaPos)
-                CenterBarTexts(hpPos, manaPos, manaBar, hpBar)
-                if not InCombatLockdown() then LayoutNameRow(unit, hpPos) end
-            end)
-        else
-            DeactivateSquare(unit)
-            RestoreBars(unit)
-        end
-        lastState[unit] = UnitState(unit)
-        return
-    end
+local NO_OFFSET = { 0, 0 }
 
-    -- Circle style
-    DeactivateSquare(unit)
-    RestoreBars(unit)
-    p = p or CreateLayers(unit)
-    if not p or not p.container:IsVisible() then
-        if p then Deactivate(p) end
-        lastState[unit] = UnitState(unit)
-        return
-    end
+local function CenterOn(region, portrait, x, y, w, h)
+    region:ClearAllPoints()
+    region:SetPoint("CENTER", portrait, "CENTER", x, y)
+    region:SetSize(w, h)
+end
+
+local function RefreshCircle(p, unit)
     local w, h = p.portrait:GetSize()
-    local s = db.sizes[p.size]
-    local off = db.offsets[OFFSET_GROUP[unit]] or { 0, 0 }
+    local inset = db.sizes[p.size].inset
+    local off = db.offsets[UNITS[unit].offset] or NO_OFFSET
     local ox, oy = off[1] or 0, off[2] or 0
     -- Model, its rounding vignette and the dark backing all share one center (+ offset).
-    p.model:ClearAllPoints()
-    p.model:SetPoint("CENTER", p.portrait, "CENTER", ox, oy)
-    p.model:SetSize(w * s.inset, h * s.inset)
-    p.vignette:ClearAllPoints()
-    p.vignette:SetPoint("CENTER", p.portrait, "CENTER", ox, oy)
-    p.vignette:SetSize(w * s.inset, h * s.inset)
-    p.bgFrame:ClearAllPoints()
-    p.bgFrame:SetPoint("CENTER", p.portrait, "CENTER", ox, oy)
-    p.bgFrame:SetSize(w, h)
+    CenterOn(p.model, p.portrait, ox, oy, w * inset, h * inset)
+    CenterOn(p.vignette, p.portrait, ox, oy, w * inset, h * inset)
+    CenterOn(p.bgFrame, p.portrait, ox, oy, w, h)
     p.bg:SetColorTexture(db.bgR, db.bgG, db.bgB, db.circleBg)
-    if db.calibrate then
-        p.vignette:SetVertexColor(1, 0.1, 0.1, 1)
-        p.corners:SetVertexColor(1, 0.1, 0.1, 1)
-    else
-        -- Both fade with the background: with a clear background, a dark edge would show
-        -- as a ring (and dark corners as a square).
-        p.vignette:SetVertexColor(db.bgR, db.bgG, db.bgB, db.circleBg)
-        p.corners:SetVertexColor(db.bgR, db.bgG, db.bgB, db.circleBg)
-    end
+    -- The edge and corners fade with the background: with a clear background, a dark edge
+    -- would show as a ring (and dark corners as a square). Calibrate tints them red.
+    local r, g, b, a = db.bgR, db.bgG, db.bgB, db.circleBg
+    if db.calibrate then r, g, b, a = 1, 0.1, 0.1, 1 end
+    p.vignette:SetVertexColor(r, g, b, a)
+    p.corners:SetVertexColor(r, g, b, a)
 
     -- Show first, then load: a model loaded while hidden sometimes never draws.
     Activate(p)
     p.model:ClearModel()
     p.model:SetUnit(unit)
     ApplyCamera(p.model, p.size)
-    lastState[unit] = UnitState(unit)
+end
+
+local function HideAll(p, unit)
+    if p then Deactivate(p) end
+    DeactivateSquare(unit)
+end
+
+Refresh = function(unit)
+    lastGuid[unit] = nil
+    if not db then return end
+    local p = layers[unit]
+    local unitFrame = UnitFrameOf(unit)
+    -- Remember the scale: the 3D camera framing is computed for the current size, so a
+    -- scale change (Edit Mode, UI scale) needs a refresh. See Tick().
+    lastScale[unit] = unitFrame and unitFrame:GetEffectiveScale()
+
+    if not db.units[unit] or not db.enabled then
+        -- Turned off by the user: hand the bars, texts and names back to BBF.
+        HideAll(p, unit)
+        RestoreBars(unit)
+    elseif not unitFrame or not unitFrame:IsVisible() or not UnitExists(unit)
+       or Safe(UnitIsVisible(unit)) == false or Safe(UnitIsConnected(unit)) == false then
+        -- Transient (no target yet, frame hidden, out of range): just hide the portrait and
+        -- keep our bar/name layout pinned, so a target switch can't leave BBF's layout behind.
+        HideAll(p, unit)
+    elseif BBFHidesPortrait(unit) then
+        if p then Deactivate(p) end
+        if not RefreshSquare(unit, unitFrame) then return end
+    else
+        DeactivateSquare(unit)
+        RestoreBars(unit)
+        p = p or CreateLayers(unit)
+        if p and p.container:IsVisible() then
+            RefreshCircle(p, unit)
+        elseif p then
+            Deactivate(p)
+        end
+    end
+    MarkState(unit)
 end
 
 local function RefreshAll()
-    for unit in pairs(PORTRAITS) do Refresh(unit) end
+    for _, unit in ipairs(UNIT_LIST) do Refresh(unit) end
 end
 
 -- Coalesce bursts of refresh requests (BBF re-layouts often call several functions).
@@ -911,10 +924,6 @@ local function HookBBF()
     for _, fn in ipairs(BBF_RELAYOUT_FUNCS) do
         if type(BBF[fn]) == "function" then hooksecurefunc(BBF, fn, QueueRefreshAll) end
     end
-end
-
-local function RefreshList(list)
-    for _, unit in ipairs(list) do Refresh(unit) end
 end
 
 -- New target: health and mana grow from empty to their value.
@@ -965,19 +974,25 @@ local function CopyBarStyle(ov, fill)
     local r, g, b = fill:GetVertexColor()
     pcall(ovFill.SetVertexColor, ovFill, r, g, b)
     -- Same masks as the fill (Blizzard's bar shape, BBF's no-portrait mask). Unmasked, the
-    -- overlay reached past the fill's clipped end.
-    local masks = {}
-    for i = 1, (fill.GetNumMaskTextures and fill:GetNumMaskTextures() or 0) do
-        local m = fill:GetMaskTexture(i)
-        if m then masks[m] = true end
+    -- overlay reached past the fill's clipped end. This runs every frame, so only rebuild
+    -- (and allocate) when the fill's masks actually changed.
+    local n = fill.GetNumMaskTextures and fill:GetNumMaskTextures() or 0
+    local have = ov.bapMasks -- array of the fill's masks (false for empty slots)
+    local same = have and #have == n
+    for i = 1, same and n or 0 do
+        if (fill:GetMaskTexture(i) or false) ~= have[i] then same = false; break end
     end
-    for m in pairs(ov.bapMasks or {}) do
-        if not masks[m] then ovFill:RemoveMaskTexture(m) end
+    if same then return end
+    if have then
+        for _, m in ipairs(have) do if m then ovFill:RemoveMaskTexture(m) end end
     end
-    for m in pairs(masks) do
-        if not (ov.bapMasks and ov.bapMasks[m]) then ovFill:AddMaskTexture(m) end
+    have = {}
+    for i = 1, n do
+        local m = fill:GetMaskTexture(i) or false
+        if m then ovFill:AddMaskTexture(m) end
+        have[i] = m
     end
-    ov.bapMasks = masks
+    ov.bapMasks = have
 end
 
 local function GrowStep(_, elapsed)
@@ -1043,7 +1058,7 @@ local function GrowTargetBars()
         GrowTrace("skip: grow", db and db.growBars, "target", UnitExists("target"))
         return
     end
-    local hpBar, manaBar = BARS.target()
+    local hpBar, manaBar = Lookup("target", "bars")
     if hpBar then StartGrow(hpBar, "health") end
     if manaBar then StartGrow(manaBar, "mana") end
 end
@@ -1057,7 +1072,7 @@ end
 -- Catches changes with no reliable event: ToT swaps, party range/visibility, and frame
 -- scale changes (Edit Mode / UI scale) that leave the 3D camera framed for the old size.
 local function ScaleChanged(unit)
-    local uf = UNIT_FRAMES[unit] and UNIT_FRAMES[unit]()
+    local uf = UnitFrameOf(unit)
     local scale = uf and uf:GetEffectiveScale()
     local last = lastScale[unit]
     return scale and last and math.abs(scale - last) > 0.001
@@ -1065,8 +1080,8 @@ end
 
 local function Tick()
     if not (db and db.enabled) then return end
-    for unit in pairs(PORTRAITS) do
-        if db.units[unit] and (lastState[unit] ~= UnitState(unit) or ScaleChanged(unit)) then
+    for _, unit in ipairs(UNIT_LIST) do
+        if db.units[unit] and (StateChanged(unit) or ScaleChanged(unit)) then
             Refresh(unit)
         end
         -- Safety net: if anything put the model above its container, fix the layering.
@@ -1109,16 +1124,16 @@ f:SetScript("OnEvent", function(self, event, arg1)
     elseif event == "UI_SCALE_CHANGED" or event == "DISPLAY_SIZE_CHANGED" then
         C_Timer.After(0.1, RefreshAll)
     elseif event == "PLAYER_TARGET_CHANGED" then
-        Refresh("target"); Refresh("targettarget")
+        QueueRefresh("target"); QueueRefresh("targettarget")
     elseif event == "PLAYER_FOCUS_CHANGED" then
-        Refresh("focus"); Refresh("focustarget")
+        QueueRefresh("focus"); QueueRefresh("focustarget")
     elseif event == "GROUP_ROSTER_UPDATE" then
-        RefreshList(PARTY)
+        for _, unit in ipairs(PARTY) do QueueRefresh(unit) end
     elseif event == "UNIT_TARGET" then
-        if arg1 == "target" then Refresh("targettarget")
-        elseif arg1 == "focus" then Refresh("focustarget") end
-    elseif arg1 and PORTRAITS[arg1] then
-        Refresh(arg1)
+        if arg1 == "target" then QueueRefresh("targettarget")
+        elseif arg1 == "focus" then QueueRefresh("focustarget") end
+    elseif arg1 and UNITS[arg1] then
+        QueueRefresh(arg1)
     end
 end)
 
@@ -1150,11 +1165,12 @@ local function PrintHelp()
     print("  circle: /bap circlebg 0-1  |  /bap vignette  |  /bap calibrate  |  /bap offset player|target|focus|tot|party x y")
 end
 
--- Set a per-size value; no size given = both.
-local function SetSized(key, value, size, lo, hi)
-    value = math.max(lo, math.min(hi, value))
-    for name, s in pairs(db.sizes) do
-        if not size or size == name then s[key] = value end
+-- Set a per-group value (tbl[group], or tbl[group][key]); no group given = all of them.
+local function SetEach(tbl, only, value, key)
+    for name in pairs(tbl) do
+        if not only or only == name then
+            if key then tbl[name][key] = value else tbl[name] = value end
+        end
     end
 end
 
@@ -1212,9 +1228,8 @@ local function DebugUnit(unit)
     if sq then
         print(("  box top=%s bottom=%s size=%s shown=%s"):format(Fmt(sq.box:GetTop()), Fmt(sq.box:GetBottom()), Fmt(sq.box:GetHeight()), tostring(sq.box:IsShown())))
     end
-    local getter = NAME_TEXTS[unit]
-    if getter then
-        local name, level, bbfName = getter()
+    if UNITS[unit] and UNITS[unit].texts then
+        local name, level, bbfName = Lookup(unit, "texts")
         print("  name " .. PointInfo(name))
         print("  bbfName " .. PointInfo(bbfName))
         print("  level " .. PointInfo(level))
@@ -1247,46 +1262,39 @@ SlashCmdList.BBFANIMPORTRAITS = function(msg)
     elseif cmd == "grow" then
         db.growBars = not db.growBars
     elseif cmd == "growtime" and val then
-        db.growTime = math.max(0.1, math.min(2, val))
+        db.growTime = Clamp(val, 0.1, 2)
     elseif cmd == "calibrate" then
         db.calibrate = not db.calibrate
         print(db.calibrate and "  Calibrate on: nudge with /bap offset <player|target|focus|tot|party> x y, then /bap calibrate to finish."
             or "  Calibrate off.")
     elseif cmd == "offset" and arg and db.offsets[arg] then
         local x, y = tonumber(args[3]), tonumber(args[4])
-        if x and y then db.offsets[arg] = { math.max(-10, math.min(10, x)), math.max(-10, math.min(10, y)) } end
+        if x and y then db.offsets[arg] = { Clamp(x, -10, 10), Clamp(y, -10, 10) } end
         print(("  offset %s = %s, %s"):format(arg, tostring(db.offsets[arg][1]), tostring(db.offsets[arg][2])))
     elseif cmd == "style" and (arg == "square" or arg == "circle") then
         db.style = arg
     elseif cmd == "extend" and val then
-        val = math.max(0, math.min(30, val))
-        for name in pairs(db.stackExtra) do
-            if not size or size == name then db.stackExtra[name] = val end
-        end
+        SetEach(db.stackExtra, size, Clamp(val, 0, 30))
     elseif cmd == "namerow" and val then
-        val = math.max(0, math.min(24, val))
-        local group = args[3]
-        for name in pairs(db.nameRow) do
-            if not group or group == name then db.nameRow[name] = val end
-        end
+        SetEach(db.nameRow, args[3], Clamp(val, 0, 24))
     elseif cmd == "split" and val then
-        db.hpShare = math.max(0.4, math.min(0.85, val))
+        db.hpShare = Clamp(val, 0.4, 0.85)
     elseif cmd == "alignmana" then
         db.alignMana = not db.alignMana
     elseif cmd == "circlebg" and val then
-        db.circleBg = math.max(0, math.min(1, val))
+        db.circleBg = Clamp(val, 0, 1)
     elseif cmd == "bg" and val then
-        db.squareBg = math.max(0, math.min(1, val))
+        db.squareBg = Clamp(val, 0, 1)
     elseif cmd == "gap" and val then
-        db.squareGap = math.max(0, math.min(20, val))
+        db.squareGap = Clamp(val, 0, 20)
     elseif cmd == "barspacing" and val then
-        db.barSpacing = math.max(0, math.min(10, val))
+        db.barSpacing = Clamp(val, 0, 10)
     elseif cmd == "zoom" and val then
-        db.zoom = math.max(0, math.min(1, val))
+        db.zoom = Clamp(val, 0, 1)
     elseif cmd == "inset" and val then
-        SetSized("inset", val, size, 0.3, 1.2)
+        SetEach(db.sizes, size, Clamp(val, 0.3, 1.2), "inset")
     elseif cmd == "cam" and val then
-        SetSized("cam", val, size, 0.3, 2)
+        SetEach(db.sizes, size, Clamp(val, 0.3, 2), "cam")
     elseif cmd == "unit" and arg and GROUPS[arg] then
         local list = GROUPS[arg]
         local newValue = not db.units[list[1]]

@@ -507,8 +507,8 @@ fire("PLAYER_TARGET_CHANGED")
 targetLevel:SetPoint("RIGHT", TargetFrame, "RIGHT", -196, 17) -- BBF's no-portrait spot
 world.exists.target = true
 fire("PLAYER_TARGET_CHANGED")
-check("level stays pinned across a target switch", #targetLevel.points == 1 and targetLevel.points[1][1] == "LEFT")
-check("name stays pinned across a target switch", targetName.points[1][1] == "RIGHT" and targetName.points[1][2] ~= TargetFrame)
+check("level stays pinned across a target switch", #targetLevel.points == 1 and targetLevel.points[1][1] == "RIGHT")
+check("name stays pinned across a target switch", targetName.points[1][1] == "LEFT" and targetName.points[1][2] ~= TargetFrame)
 check("bars keep their layout while there's no target", targetHp.h == 17)
 
 -- Square background: off by default, adjustable
