@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.0 (2026-10-16)
+
+**BBF Animated Portraits is now Living Portraits.**
+
+### Upgrading from 0.2.x
+- Install the new `LivingPortraits` folder and **delete the old `BBF_AnimatedPortraits` folder** from your AddOns. If the old one is still enabled, Living Portraits offers to disable it for you.
+- Settings start fresh under the new name (the defaults are what most people use).
+- The slash command is now `/lp` (or `/livingportraits`); `/bap` still works.
+
+### Features
+- **Settings panel:** Options → AddOns → LivingPortraits (or `/lp options`). Style, frames, camera, bar grow and all the square/circle tuning, in sync with the slash commands.
+- **One-click BBF setup:** a button in the panel (or `/lp bbfsetup`) turns on BetterBlizzFrames' No Portrait + Pixel Border mode for every frame, which the square style needs. Your other BBF settings stay as they are, and Undo (`/lp bbfundo`) puts back what you had.
+- New name, styled like BetterBlizzFrames in the AddOns list.
+
 ## 0.2.1 (2026-10-16)
 
 Public test release. Please report anything odd, especially in battlegrounds.
