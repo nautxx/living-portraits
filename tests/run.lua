@@ -45,6 +45,7 @@ end
 
 local function newTexture(shown)
     local t = region({ shown = shown or false })
+    function t:SetColorTexture(r, g, b, a) self.color = { r, g, b, a } end
     function t:GetDrawLayer() return "BACKGROUND", 1 end
     function t:GetSize() return 60, 60 end
     return t
@@ -195,6 +196,7 @@ Settings = {
     CreateCheckbox = function() end,
     CreateSlider = function() end,
     CreateDropdown = function(_, _, options) options() end,
+    CreateColorSwatch = function() end,
     CreateSliderOptions = function() return { SetLabelFormatter = function() end } end,
     CreateControlTextContainer = function()
         local c = { data = {} }
@@ -426,6 +428,13 @@ local function barWithPos(parent, pos, anchor)
     function pf:GetBottom() return self:GetTop() - self.h end
     function pf:GetCenter() return 0, self:GetTop() - self.h / 2 end
     bar.BBFPositionFrame = pf
+    -- BBF's pixel border edges (top, right, bottom, left), black like BBF makes them
+    bar.BBFBlackBorder = {}
+    for i = 1, 4 do
+        local e = newTexture(true)
+        e.color = { 0, 0, 0, 1 }
+        bar.BBFBlackBorder[i] = e
+    end
     return bar
 end
 -- A bar text whose vertical center follows its anchor's y offset.
@@ -690,7 +699,36 @@ do
     world.guid.target = nil
 end
 
+-- Border color and opacity: our box border and BBF's bar borders together
+do
+    local function same(c, r, g, b, a) return c and c[1] == r and c[2] == g and c[3] == b and c[4] == a end
+    local hpE, manaE = playerHp.BBFBlackBorder, playerMana.BBFBlackBorder
+    local boxEdges = {}
+    for i, t in ipairs(rawget(box, "textures") or {}) do if i >= 2 then boxEdges[#boxEdges + 1] = t end end
+    check("box border is black by default", same(boxEdges[1].color, 0, 0, 0, 1))
+    check("bar edge shared with the box is hidden (gap 1, player box on the left)", not hpE[4].shown and hpE[2].shown)
+    check("mana top edge shared with health is hidden (spacing 0)", not manaE[1].shown and manaE[3].shown)
+    slash("bordercolor ff0000")
+    slash("borderalpha 0.5")
+    check("/lp bordercolor + borderalpha color the box border", same(boxEdges[1].color, 1, 0, 0, 0.5))
+    check("...and BBF's bar borders", same(hpE[1].color, 1, 0, 0, 0.5) and same(manaE[3].color, 1, 0, 0, 0.5))
+    local hpPf, manaPf = playerHp.BBFPositionFrame, playerMana.BBFPositionFrame
+    check("see-through border: mana starts right where health ends (no 1px slot)", manaPf:GetTop() == hpPf:GetBottom())
+    check("see-through border: box sits flush against the bars", box.anchor[4] == 0)
+    slash("borderalpha 1")
+    check("opaque border: health and mana share one 1px line again", manaPf:GetTop() == hpPf:GetBottom() - 1)
+    check("opaque border: box and bars share one line again", box.anchor[4] == -1)
+    slash("borderalpha 0.5")
+    slash("bordercolor zz")
+    check("bad colors are ignored", LivingPortraitsDB.borderColor == "ffff0000")
+    slash("gap 3")
+    check("with a gap, every bar edge shows again", hpE[4].shown)
+    slash("gap 1")
+end
+
 slash("style circle")
+check("style circle hands BBF its black borders back", playerHp.BBFBlackBorder[1].color[1] == 0
+    and playerHp.BBFBlackBorder[1].color[4] == 1 and playerHp.BBFBlackBorder[4].shown and playerMana.BBFBlackBorder[1].shown)
 check("style circle hides the box", not box.shown)
 check("style circle restores BBF's bar heights", playerHp.h == 19 and playerMana.h == 8 and playerMana.BBFPositionFrame.h == 8)
 check("style circle restores bar positions", playerMana.anchor[5] == 0 and targetMana.anchor[4] == -8)
