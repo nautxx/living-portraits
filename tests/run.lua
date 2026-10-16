@@ -371,6 +371,9 @@ local function rowText()
     function fs:SetPoint(...) table.insert(self.points, { ... }) end
     function fs:GetJustifyH() return self.justify end
     function fs:SetJustifyH(j) self.justify = j end
+    fs.text, fs.w = "", 120 -- BBF gives names a fixed-width box
+    function fs:SetText(t) self.text = t end
+    function fs:GetUnboundedStringWidth() return #self.text * 6 end
     return fs
 end
 PlayerName, PlayerLevelText = rowText(), rowText()
@@ -445,8 +448,18 @@ local bn = PlayerFrame.bbfName
 check("BBF's name pinned left on the level's line", bn.points[1][1] == "LEFT" and bn.points[1][5] == 6 and bn.justify == "LEFT")
 bn:SetPoint("BOTTOM", PlayerFrame, "TOP", 0, 0); bn:SetJustifyH("CENTER") -- BBF re-lays it out
 check("BBF's name stays pinned and left-aligned after BBF re-layout", #bn.points == 1 and bn.points[1][1] == "LEFT" and bn.justify == "LEFT")
-check("target name pinned right (mirrored)", targetName.points[1][1] == "RIGHT" and targetName.justify == "RIGHT")
-check("target level pinned left (mirrored)", targetLevel.points[1][1] == "LEFT")
+check("target name pinned left like the player", targetName.points[1][1] == "LEFT" and targetName.justify == "LEFT")
+check("target level pinned right like the player", targetLevel.points[1][1] == "RIGHT")
+bn.shown = true
+playerHp.BBFPositionFrame.w = 123
+PlayerLevelText.shown = true
+PlayerLevelText:SetText("14")
+bn:SetText("Naut")
+check("name box shrinks to its text, so a centered justify can't indent it", bn.w == 25)
+bn:SetWidth(120) -- BBF re-sets its fixed width on SetText
+check("name box stays shrunk after BBF resets its width", bn.w == 25)
+bn:SetText(string.rep("x", 40))
+check("long name stops short of the level", bn.w == math.ceil(123 - 2 - (12 + 4)) + 1)
 check("player box sits left of the health bar", box and box.anchor[1] == "TOPRIGHT" and box.anchor[3] == "TOPLEFT")
 
 local function centered(fs, pos) local _, a = fs:GetCenter(); local _, b = pos:GetCenter(); return math.abs(a - b) < 0.5 end

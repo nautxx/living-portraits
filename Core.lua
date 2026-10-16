@@ -564,13 +564,14 @@ local function RestoreBar(bar, pos)
 end
 
 -- Name row: name and level on one line above the health bar, inside the box's height.
--- Player: name left, level right. Target/focus (box on the right): mirrored.
+-- Every frame: name left, level right.
 local function SavePoints(fs)
     if fs.bapPoints then return end
     local pts = {}
     for i = 1, fs:GetNumPoints() do pts[i] = { fs:GetPoint(i) } end
     fs.bapPoints = pts
     fs.bapJustify = fs.GetJustifyH and fs:GetJustifyH()
+    fs.bapWidth = fs.GetWidth and Safe(fs:GetWidth())
 end
 
 local function RestorePoints(fs)
@@ -579,14 +580,27 @@ local function RestorePoints(fs)
     fs:ClearAllPoints()
     for _, pt in ipairs(fs.bapPoints) do fs:SetPoint(unpack(pt)) end
     if fs.bapJustify then fs:SetJustifyH(fs.bapJustify) end
-    fs.bapPoints = nil
+    if fs.bapWidth and fs.SetWidth then fs:SetWidth(fs.bapWidth) end
+    fs.bapPoints, fs.bapWidth = nil, nil
+end
+
+-- Width of the text itself (not its box). nil when unknown or secret.
+local function TextWidth(fs)
+    if not fs then return end
+    local w = fs.GetUnboundedStringWidth and fs:GetUnboundedStringWidth()
+        or fs.GetStringWidth and fs:GetStringWidth()
+    w = Safe(w)
+    if type(w) == "number" and w > 0 then return w end
 end
 
 -- Anchor a text to the name row and keep it there if BBF/Blizzard moves it later.
-local function PinText(fs, point, rel, relPoint, x, y, justify)
+-- The text box shrinks to the text, so alignment doesn't depend on justify: BBF gives
+-- its name a fixed width, and the player's bbfName ignores later SetJustifyH calls.
+-- maxWidth (optional function) caps it so a long name stops short of the level.
+local function PinText(fs, point, rel, relPoint, x, y, justify, maxWidth)
     if not fs then return end
     SavePoints(fs)
-    fs.bapLayout = { point, rel, relPoint, x, y, justify }
+    fs.bapLayout = { point, rel, relPoint, x, y, justify, maxWidth }
     local function Apply(self)
         local l = self.bapLayout
         if not l or self.bapApplying then return end
@@ -594,12 +608,21 @@ local function PinText(fs, point, rel, relPoint, x, y, justify)
         self:ClearAllPoints()
         self:SetPoint(l[1], l[2], l[3], l[4], l[5])
         if l[6] and self.SetJustifyH then self:SetJustifyH(l[6]) end
+        local w = self.SetWidth and TextWidth(self)
+        if w then
+            local cap = l[7] and l[7]()
+            if cap and w > cap then w = cap end
+            self:SetWidth(math.ceil(w) + 1) -- +1: rounding slack, or the name gets an ellipsis
+        end
         self.bapApplying = nil
     end
     if not fs.bapPinHook then
         fs.bapPinHook = true
         hooksecurefunc(fs, "SetPoint", Apply)
         if fs.SetJustifyH then hooksecurefunc(fs, "SetJustifyH", Apply) end
+        if fs.SetWidth then hooksecurefunc(fs, "SetWidth", Apply) end
+        if fs.SetText then hooksecurefunc(fs, "SetText", Apply) end
+        if fs.SetFont then hooksecurefunc(fs, "SetFont", Apply) end
     end
     Apply(fs)
 end
@@ -614,15 +637,16 @@ local function LayoutNameRow(unit, hpPos)
         return
     end
     local y = row / 2
-    if SQUARE_SIDE[unit] == "RIGHT" then
-        PinText(name,    "RIGHT", hpPos, "TOPRIGHT", -1, y, "RIGHT")
-        PinText(bbfName, "RIGHT", hpPos, "TOPRIGHT", -1, y, "RIGHT")
-        PinText(level,   "LEFT",  hpPos, "TOPLEFT",   1, y, nil)
-    else
-        PinText(name,    "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT")
-        PinText(bbfName, "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT")
-        PinText(level,   "RIGHT", hpPos, "TOPRIGHT", -1, y, nil)
+    -- Room for the name: the row minus the level and a small gap.
+    local function nameMax()
+        local w = Safe(hpPos:GetWidth())
+        if type(w) ~= "number" then return end
+        local lw = level and level:IsShown() and TextWidth(level)
+        return math.max(w - 2 - (lw and lw + 4 or 0), 10)
     end
+    PinText(name,    "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT", nameMax)
+    PinText(bbfName, "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT", nameMax)
+    PinText(level,   "RIGHT", hpPos, "TOPRIGHT", -1, y, "RIGHT")
 end
 
 -- Put the bars and texts back exactly as BBF/Blizzard had them.
