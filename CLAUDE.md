@@ -17,7 +17,7 @@ animation, like the character screen, as a **companion addon** to BetterBlizzFra
 | Rounded corners | **No: keep square** | Matches BBF's Pixel Border style exactly. Rejected: rounded box only (3D model corners can't be clipped, would peek past the curve) and rounded box + bars (needs custom border/mask art and takes over BBF's bar styling; fragile across BBF updates). |
 | Touching Blizzard's portrait | **Hide only, never alter** | Hidden while the model shows, restored after. Never change its texture, alpha or color (Blizzard changes those itself). |
 | Name | **Living Portraits** (folder `LivingPortraits`, was BBF Animated Portraits until v0.2.1) | "Living portraits" (the Harry Potter-style moving pictures) is unused by other WoW addons and sets it apart from Animated Blizzard Portraits / AlwaysFace. The BBF link lives in the description (`## Notes`), not the name. Rejected: "BetterBlizzPortraits" (reads as an official Bodify addon). Settings category name is styled like BBF's (`Living |cff00c0ffPortraits|r`): the list sorts on the raw name, so no leading color code. Slash `/lp`, `/livingportraits`, old `/bap` kept as alias. Renaming the folder means a fresh SavedVariables file: testers' settings reset. |
-| Repo location | `~/GitHub/Main/bbf-animated-portraits`, symlinked into AddOns as `LivingPortraits` | The beta client folder is temporary. One repo can feed multiple clients. |
+| Repo location | `~/GitHub/Main/living-portraits`, symlinked into AddOns as `LivingPortraits` | The beta client folder is temporary. One repo can feed multiple clients. |
 
 ## Architecture (Core.lua)
 - `UNITS[unit]` describes each unit in one place: layout groups (`size` large/small, `offset`, `row`, `side`) and frame lookups (`frame()`, then `portrait`/`ring`/`bars`/`texts`, each taking the unit frame). **Add new units here** (and to `UNIT_LIST`, the fixed iteration order). Read lookups with `Lookup(unit, key)` / `UnitFrameOf(unit)`.
@@ -117,7 +117,7 @@ BBF code that touches portraits (read only, for compatibility):
 - **Don't commit without asking.** Leave changes uncommitted for Jason to review, then commit when he approves.
 - **Geometry limit (measured in game):** the ring opening is ~0.85 × portrait size and the ring's outer edge ~1.04 ×. A square model can't fill the opening without its corners passing the outer edge (needs inset ≤ 1.04/√2 ≈ 0.73). So the picture ends on a crisp circle at ~85% of the opening, with a dark band to the ring. Tried and rejected: inset 0.82 + wide fade (looked heavy), inset 1.0 + thin fade (corners protruded).
 - Never edit BBF files. A clean backup of BBF v2.1.7 is at `_classic_beta_/Interface/AddOns_backup/`.
-- Git author: Jason <jrbarnachea@gmail.com>. Remote: `github.com/nautxx/bbf-animated-portraits` (private).
+- Git author: Jason <jrbarnachea@gmail.com>. Remote: `github.com/nautxx/living-portraits` (public; was bbf-animated-portraits, GitHub redirects the old URL).
 
 ## Commit messages
 

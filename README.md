@@ -39,7 +39,7 @@ Or from source:
 Keep the repo elsewhere and symlink it into AddOns under the required name:
 
 ```sh
-ln -s ~/GitHub/Main/bbf-animated-portraits \
+ln -s ~/GitHub/Main/living-portraits \
   "/Applications/World of Warcraft/_classic_beta_/Interface/AddOns/LivingPortraits"
 ```
 
