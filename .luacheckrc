@@ -8,6 +8,8 @@ globals = {
     "BBFAnimatedPortraitsDB",
     "SLASH_BBFANIMPORTRAITS1",
     "SlashCmdList",
+    "StaticPopupDialogs",
+    "BetterBlizzFramesDB", -- BBF's saved settings: /bap bbfsetup writes a few switches
 }
 
 -- WoW API / frames we read
@@ -18,6 +20,8 @@ read_globals = {
     "CreateFrame", "C_Timer", "hooksecurefunc", "PixelUtil",
     "UnitExists", "UnitGUID", "UnitIsVisible", "UnitIsConnected",
     "issecretvalue", "InCombatLockdown",
+    "Settings", "SettingsPanel", "CreateSettingsListSectionHeaderInitializer", "CreateSettingsButtonInitializer",
+    "MinimalSliderWithSteppersMixin", "StaticPopup_Show", "ReloadUI", "RELOADUI", "LATER",
     -- WoW Lua extensions
     "wipe", "unpack",
     -- BetterBlizzFrames (optional)

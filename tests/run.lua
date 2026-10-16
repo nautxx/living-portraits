@@ -146,6 +146,36 @@ function wipe(t) for k in pairs(t) do t[k] = nil end return t end
 function print() end -- silence addon chat output
 SlashCmdList = {}
 
+-- Settings API (Options > AddOns): records what the addon registers
+local proxies, buttons, notified, openedCategory, popupShown = {}, {}, {}, nil, nil
+Settings = {
+    RegisterVerticalLayoutCategory = function(name) return { name = name, GetID = function() return 42 end } end,
+    RegisterProxySetting = function(_, var, _, name, default, get, set)
+        local s = { var = var, name = name, default = default, get = get, set = set }
+        proxies[var] = s
+        return s
+    end,
+    CreateCheckbox = function() end,
+    CreateSlider = function() end,
+    CreateDropdown = function(_, _, options) options() end,
+    CreateSliderOptions = function() return { SetLabelFormatter = function() end } end,
+    CreateControlTextContainer = function()
+        local c = { data = {} }
+        function c:Add(value, label) self.data[#self.data + 1] = { value, label } end
+        function c:GetData() return self.data end
+        return c
+    end,
+    RegisterAddOnCategory = function() end,
+    OpenToCategory = function(id) openedCategory = id end,
+    NotifyUpdate = function(var) notified[var] = (notified[var] or 0) + 1 end,
+}
+SettingsPanel = { GetLayout = function() return { AddInitializer = function() end } end }
+function CreateSettingsListSectionHeaderInitializer(text) return { header = text } end
+function CreateSettingsButtonInitializer(name, _, click) buttons[name] = click; return {} end
+MinimalSliderWithSteppersMixin = { Label = { Right = 2 } }
+StaticPopupDialogs = {}
+function StaticPopup_Show(which) popupShown = which end
+
 -- BBF present at load (OptionalDeps), with a function the addon should hook
 BBF = { SetCustomFonts = function() end }
 
@@ -583,6 +613,53 @@ check("scale change refreshes the player portrait", setUnitCalls == 1)
 tick()
 check("refreshes only once per scale change", setUnitCalls == 1)
 PlayerFrame.GetEffectiveScale = nil
+
+-- Settings panel: proxy settings read and write the saved settings
+do
+    local n = 0
+    for _ in pairs(proxies) do n = n + 1 end
+    check("settings panel registers its options", n >= 25)
+    local zoom = proxies.BAP_zoom
+    zoom.set(0.5)
+    check("panel slider writes the setting", BBFAnimatedPortraitsDB.zoom == 0.5 and zoom.get() == 0.5)
+    proxies.BAP_stackExtra_large.set(7.6)
+    check("whole-number sliders round", BBFAnimatedPortraitsDB.stackExtra.large == 8)
+    proxies.BAP_unit_party.set(false)
+    check("group checkbox toggles every unit in the group",
+        not BBFAnimatedPortraitsDB.units.party1 and not BBFAnimatedPortraitsDB.units.party4)
+    check("group checkbox reads the group", proxies.BAP_unit_party.get() == false)
+    proxies.BAP_unit_party.set(true)
+    check("defaults come from the addon's defaults", proxies.BAP_sizes_large_cam.default == 0.85 and proxies.BAP_style.default == "square")
+    notified.BAP_zoom = 0
+    slash("zoom 0.7")
+    check("/bap changes show in the panel", notified.BAP_zoom > 0 and zoom.get() == 0.7)
+    slash("options")
+    check("/bap options opens the panel", openedCategory == 42)
+    slash("reset")
+end
+
+-- Turning on BBF's Pixel Border mode from our panel, with Undo
+do
+    BBF = {}
+    BetterBlizzFramesDB = { noPortraitModes = false, noPortraitSkipTarget = true, unitFrameFont = 2002 }
+    local bdb = BetterBlizzFramesDB
+    buttons["Pixel Border mode"]()
+    check("BBF setup turns on No Portrait + Pixel Border", bdb.noPortraitModes == true and bdb.noPortraitPixelBorder == true)
+    check("BBF setup includes every frame", bdb.noPortraitSkipTarget == false and bdb.noPortraitPartyOnly == false)
+    check("BBF setup leaves other BBF settings alone", bdb.unitFrameFont == 2002)
+    check("BBF setup offers a reload", popupShown == "BBF_ANIMATED_PORTRAITS_RELOAD")
+    local backup = BBFAnimatedPortraitsDB.bbfBackup
+    check("BBF setup backs up the old values", backup and backup.noPortraitModes == false and backup.noPortraitSkipTarget == true)
+    buttons["Pixel Border mode"]()
+    check("applying twice keeps the original backup", BBFAnimatedPortraitsDB.bbfBackup.noPortraitModes == false)
+    slash("reset")
+    check("/bap reset keeps BBF's Undo", BBFAnimatedPortraitsDB.bbfBackup ~= nil)
+    buttons["Undo Pixel Border mode"]()
+    check("Undo restores BBF's values", bdb.noPortraitModes == false and bdb.noPortraitSkipTarget == true)
+    check("Undo removes keys BBF never had", bdb.noPortraitPixelBorder == nil and bdb.noPortraitPartyOnly == nil)
+    check("Undo clears the backup", BBFAnimatedPortraitsDB.bbfBackup == nil)
+    BBF, BetterBlizzFramesDB = nil, nil
+end
 
 -- Target bar grow in PvP: the fill's alpha can read back as a secret value. The grow must
 -- still end and give Blizzard's fill its alpha back (it errored every frame and left the

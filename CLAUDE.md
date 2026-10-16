@@ -41,6 +41,8 @@ animation, like the character screen, as a **companion addon** to BetterBlizzFra
 - Target bar grow (`StartGrow`/`GrowStep`, `/bap grow`, `/bap growtime`, trace with `/bap grow debug`): post-hooks `TargetFrame:Update()` (Blizzard calls it on target change, login and `UNIT_TARGETABLE_CHANGED`, after setting the bar values). For `growTime` seconds an overlay `StatusBar` (`bar.bapGrowBar`, same strata/level, fill one sublevel above Blizzard's so bar texts stay on top) mirrors the bar's live min/max/value and the fill's look (`CopyBarStyle`, every frame, mask list rebuilt only when the fill's masks change so nothing is allocated per frame: texture/atlas, vertex color RGB only (its alpha follows our `SetAlpha(0)` and hid the overlay), desaturation, blend, mask textures (Blizzard's `HealthBarMask`/`ManaBarMask` clip the fill's end; unmasked, the overlay grew past it), because BBF class colors are a desaturated fill + tint, sometimes set on the fill texture directly) while its **width** eases 0 → bar width; Blizzard's fill is hidden with `SetAlpha(0)` and restored after (only if still 0, or if its alpha reads back secret, which happens in battlegrounds; `EndGrow` removes the grow before touching anything so an error can't repeat every frame). Width does the lerp because values can be secret: tainted code can't do math on them and `C_CurveUtil` `AddPoint` only takes secrets when untainted, but `SetValue`/`SetMinMaxValues` accept them. Rejected: `SetValue(v, ExponentialEaseOut)` on Blizzard's bar (Blizzard's immediate re-sets cancelled it; grew only once in game) and growing from our own `PLAYER_TARGET_CHANGED` (can run before Blizzard's handler, animating to the old target's value).
 - SavedVariables: `BBFAnimatedPortraitsDB` (defaults merged on `ADDON_LOADED`).
 - Slash: `/bap`.
+- **Settings panel** (`BuildOptions`, Options → AddOns, `/bap options`): Settings API proxy settings (`Settings.RegisterProxySetting`) over `db` paths (`Path(keys)` gives get/set/default), so there's no second copy of the settings. Setters call `QueueRefreshAll()` (sliders fire continuously). Slash changes call `NotifyOptions()` so the panel shows them. Variables are prefixed `BAP_`. Built on `ADDON_LOADED`; skipped when the client has no `Settings` API.
+- **BBF setup** (`ApplyBBFSetup` / `UndoBBFSetup`, panel buttons, `/bap bbfsetup` / `bbfundo`): writes `BBF_SETUP` (No Portrait + Pixel Border on, party-only and per-frame skips off: what `BBF.HasNoPortrait` checks) into `BetterBlizzFramesDB` at runtime, never BBF's files. The first apply backs up the old values in `db.bbfBackup` (`NO_VALUE` marks keys BBF never saved); Undo restores them; `/bap reset` keeps the backup. BBF reads these on load, so both offer a Reload UI popup. Jason chose to set only the mode itself, not his own BBF look (fonts, textures, ToT placement).
 
 ## Blizzard / BBF frame paths (WoW Forever beta, internal name "Camelot", client 1.60.1.70374)
 
@@ -81,7 +83,7 @@ BBF code that touches portraits (read only, for compatibility):
 - [ ] Per-group inset/zoom (small ToT/party portraits may need a larger inset)
 - [ ] Decide final circle treatment (inscribed vs cover ring vs square art)
 - [ ] Conflict rule with BBF spec/healer portraits
-- [ ] Options panel (Settings API) to replace or complement `/bap`
+- [x] Options panel (Settings API) to complement `/bap`, untested in game
 - [ ] Retail support (`## Interface` list, verify frame paths)
 
 ## Test checklist

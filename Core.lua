@@ -183,6 +183,7 @@ local GROUPS = {
 }
 
 local db
+local BuildOptions -- the settings panel, defined with it below
 local layers = {}    -- unit -> layer record
 -- unit -> GUID and visible/connected code at the last refresh, so the ticker only refreshes on change
 local lastGuid, lastCode = {}, {}
@@ -1125,6 +1126,7 @@ f:SetScript("OnEvent", function(self, event, arg1)
         self:RegisterEvent("DISPLAY_SIZE_CHANGED")
         HookBBF()
         HookTargetUpdate()
+        BuildOptions()
         if EditModeManagerFrame then
             hooksecurefunc(EditModeManagerFrame, "ExitEditMode", function() C_Timer.After(0.1, RefreshAll) end)
         end
@@ -1148,6 +1150,195 @@ f:SetScript("OnEvent", function(self, event, arg1)
     end
 end)
 
+-- BBF setup -----------------------------------------------------------------
+-- The square style needs BBF's No Portrait + Pixel Border mode on every frame. We write
+-- those switches into BBF's saved settings (never its files) and keep a backup for Undo.
+-- BBF reads them when it loads, so a UI reload applies them. The rest of BBF stays as is.
+local BBF_SETUP = {
+    noPortraitModes = true, noPortraitPixelBorder = true,
+    noPortraitPartyOnly = false, -- otherwise only the party frames lose their portraits
+    noPortraitSkipPlayer = false, noPortraitSkipTarget = false, noPortraitSkipFocus = false,
+}
+local NO_VALUE = "<nil>" -- backup marker: BBF had never saved this key
+
+local function ShowReloadPopup()
+    if not (StaticPopupDialogs and StaticPopup_Show) then return end
+    StaticPopupDialogs.BBF_ANIMATED_PORTRAITS_RELOAD = StaticPopupDialogs.BBF_ANIMATED_PORTRAITS_RELOAD or {
+        text = "BBF Animated Portraits changed your BetterBlizzFrames settings. Reload the UI to apply them?",
+        button1 = RELOADUI or "Reload UI",
+        button2 = LATER or "Later",
+        OnAccept = function() ReloadUI() end,
+        timeout = 0, whileDead = true, hideOnEscape = true,
+    }
+    StaticPopup_Show("BBF_ANIMATED_PORTRAITS_RELOAD")
+end
+
+local function BBFSetupOn()
+    local bdb = BetterBlizzFramesDB
+    if type(bdb) ~= "table" then return false end
+    for k, v in pairs(BBF_SETUP) do
+        if (bdb[k] or false) ~= v then return false end
+    end
+    return true
+end
+
+-- Both return a line for chat.
+local function ApplyBBFSetup()
+    local bdb = BetterBlizzFramesDB
+    if not BBF or type(bdb) ~= "table" then return "BetterBlizzFrames isn't loaded." end
+    if BBFSetupOn() then return "BBF's Pixel Border mode is already on." end
+    if not db.bbfBackup then -- keep the first backup: it holds the settings from before us
+        local backup = {}
+        for k in pairs(BBF_SETUP) do
+            if bdb[k] == nil then backup[k] = NO_VALUE else backup[k] = bdb[k] end
+        end
+        db.bbfBackup = backup
+    end
+    for k, v in pairs(BBF_SETUP) do bdb[k] = v end
+    ShowReloadPopup()
+    return "Turned on BBF's No Portrait + Pixel Border mode. Reload the UI to apply it."
+end
+
+local function UndoBBFSetup()
+    local bdb, backup = BetterBlizzFramesDB, db.bbfBackup
+    if not backup then return "Nothing to undo." end
+    if type(bdb) ~= "table" then return "BetterBlizzFrames isn't loaded." end
+    for k, v in pairs(backup) do
+        if v == NO_VALUE then bdb[k] = nil else bdb[k] = v end
+    end
+    db.bbfBackup = nil
+    ShowReloadPopup()
+    return "Put back your previous BBF settings. Reload the UI to apply them."
+end
+
+-- Settings panel ------------------------------------------------------------
+-- Options > AddOns > BBF Animated Portraits. Proxy settings read and write db directly,
+-- so the panel and /bap always agree (slash changes call NotifyOptions).
+local PREFIX = "|cff00c0ffBBF Animated Portraits|r "
+local optionVars = {} -- registered setting variables, refreshed by NotifyOptions
+local optionsCategory
+
+local function NotifyOptions()
+    if not (Settings and Settings.NotifyUpdate) then return end
+    for _, var in ipairs(optionVars) do Settings.NotifyUpdate(var) end
+end
+
+local function FormatDecimal(v) return ("%.2f"):format(v) end
+local function FormatWhole(v) return ("%d"):format(math.floor(v + 0.5)) end
+local function FormatPercent(v) return ("%d%%"):format(math.floor(v * 100 + 0.5)) end
+
+-- get/set for db[k1][k2]..., and the matching default.
+local function Path(keys)
+    local last = keys[#keys]
+    local function Parent()
+        local t = db
+        for i = 1, #keys - 1 do t = t[keys[i]] end
+        return t
+    end
+    local d = defaults
+    for _, k in ipairs(keys) do d = d[k] end
+    return function() return Parent()[last] end, function(v) Parent()[last] = v end, d
+end
+
+BuildOptions = function()
+    if optionsCategory or not (Settings and Settings.RegisterVerticalLayoutCategory and SettingsPanel) then return end
+    local category = Settings.RegisterVerticalLayoutCategory("BBF Animated Portraits")
+    local layout = SettingsPanel:GetLayout(category)
+
+    local function Header(text)
+        layout:AddInitializer(CreateSettingsListSectionHeaderInitializer(text))
+    end
+    local function Register(var, name, default, get, set)
+        var = "BAP_" .. var
+        optionVars[#optionVars + 1] = var
+        return Settings.RegisterProxySetting(category, var, nil, name, default, get, function(v)
+            set(v)
+            QueueRefreshAll()
+        end)
+    end
+    local function Check(keys, name, tooltip)
+        local get, set, default = Path(keys)
+        Settings.CreateCheckbox(category, Register(table.concat(keys, "_"), name, default, get, set), tooltip)
+    end
+    -- step >= 1 means whole numbers.
+    local function Slider(keys, name, tooltip, lo, hi, step, format)
+        local get, set, default = Path(keys)
+        local whole = step >= 1
+        local setting = Register(table.concat(keys, "_"), name, default, get, function(v)
+            set(whole and math.floor(v + 0.5) or v)
+        end)
+        local options = Settings.CreateSliderOptions(lo, hi, step)
+        options:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right,
+            format or (whole and FormatWhole or FormatDecimal))
+        Settings.CreateSlider(category, setting, options, tooltip)
+    end
+
+    Header("General")
+    Check({ "enabled" }, "Enable", "Show animated portraits.")
+    local styleGet, styleSet, styleDefault = Path({ "style" })
+    Settings.CreateDropdown(category, Register("style", "Style", styleDefault, styleGet, styleSet), function()
+        local c = Settings.CreateControlTextContainer()
+        c:Add("square", "Square")
+        c:Add("circle", "Circle")
+        return c:GetData()
+    end, "Square: a box beside the bars (needs BBF's Pixel Border mode, below). Circle: inside the round portrait. Frames where BBF still shows portraits always use the circle.")
+    for _, g in ipairs({ { "player", "Player" }, { "target", "Target" }, { "focus", "Focus" },
+                         { "tot", "Target of target" }, { "party", "Party" } }) do
+        local list = GROUPS[g[1]]
+        Settings.CreateCheckbox(category, Register("unit_" .. g[1], g[2], true,
+            function() return db.units[list[1]] end,
+            function(v) for _, unit in ipairs(list) do db.units[unit] = v end end),
+            "Animated portrait on the " .. g[2]:lower() .. " frame.")
+    end
+
+    Header("Camera")
+    Slider({ "zoom" }, "Zoom", "1 = head and shoulders; lower shows more of the body.", 0, 1, 0.05)
+    Slider({ "sizes", "large", "cam" }, "Distance: large frames", "Player, target and focus. Lower = closer, bigger face.", 0.3, 2, 0.05)
+    Slider({ "sizes", "small", "cam" }, "Distance: small frames", "Target of target and party. Lower = closer, bigger face.", 0.3, 2, 0.05)
+    Slider({ "sizes", "square", "cam" }, "Distance: square style", "Lower = closer, bigger face.", 0.3, 2, 0.05)
+
+    Header("Target bars")
+    Check({ "growBars" }, "Grow on new target", "Health and mana grow from empty when you pick a new target.")
+    Slider({ "growTime" }, "Grow time", "Seconds the grow takes.", 0.1, 2, 0.05,
+        function(v) return ("%.2fs"):format(v) end)
+
+    Header("Square style")
+    Slider({ "squareBg" }, "Background", "Dark background behind the model.", 0, 1, 0.05, FormatPercent)
+    Slider({ "stackExtra", "large" }, "Extra height: large frames", "Makes the health + mana stack taller; the box grows with it.", 0, 30, 1)
+    Slider({ "stackExtra", "small" }, "Extra height: small frames", "Makes the health + mana stack taller; the box grows with it.", 0, 30, 1)
+    Slider({ "nameRow", "large" }, "Name row: large frames", "Height of the name + level row inside the box (0 = off).", 0, 24, 1)
+    Slider({ "nameRow", "tot" }, "Name row: target of target", "Height of the name row inside the box (0 = off).", 0, 24, 1)
+    Slider({ "nameRow", "party" }, "Name row: party", "Height of the name row inside the box (0 = off).", 0, 24, 1)
+    Slider({ "hpShare" }, "Health share", "Health bar's share of the stack; mana gets the rest.", 0.4, 0.85, 0.01, FormatPercent)
+    Check({ "alignMana" }, "Align mana bar", "Line the mana bar up with the health bar next to the box.")
+    Slider({ "squareGap" }, "Gap to bars", "Space between the box and the bars (1 = borders share one line).", 0, 20, 1)
+    Slider({ "barSpacing" }, "Bar spacing", "Space between health and mana (0 = borders share one line).", 0, 10, 1)
+
+    Header("Circle style")
+    Slider({ "circleBg" }, "Background", "Dark background inside the ring (0 = clear).", 0, 1, 0.05, FormatPercent)
+    Check({ "vignette" }, "Round edge", "The circle edge that hides the model's square corners.")
+    Slider({ "sizes", "large", "inset" }, "Model size: large frames", "Model size relative to the portrait.", 0.3, 1.2, 0.01)
+    Slider({ "sizes", "small", "inset" }, "Model size: small frames", "Model size relative to the portrait.", 0.3, 1.2, 0.01)
+
+    Header("BetterBlizzFrames")
+    layout:AddInitializer(CreateSettingsButtonInitializer("Pixel Border mode", "Turn on",
+        function() print(PREFIX .. ApplyBBFSetup()) end,
+        "Turns on BBF's No Portrait + Pixel Border mode on every frame, which the square style needs. Your other BBF settings stay as they are. Reloads the UI.", true))
+    layout:AddInitializer(CreateSettingsButtonInitializer("Undo Pixel Border mode", "Undo",
+        function() print(PREFIX .. UndoBBFSetup()) end,
+        "Puts back the BBF settings you had before turning it on here. Reloads the UI.", true))
+
+    Settings.RegisterAddOnCategory(category)
+    optionsCategory = category
+end
+
+local function OpenOptions()
+    if optionsCategory and Settings.OpenToCategory then
+        Settings.OpenToCategory(optionsCategory:GetID())
+        return true
+    end
+end
+
 -- Slash command: /bap -------------------------------------------------------
 
 local function PrintStatus()
@@ -1168,6 +1359,7 @@ local function PrintStatus()
 end
 
 local function PrintHelp()
+    print("  /bap options  |  /bap bbfsetup (turn on BBF's Pixel Border mode)  |  /bap bbfundo")
     print("  /bap toggle  |  /bap vignette  |  /bap zoom 0-1  |  /bap grow  |  /bap growtime 0.1-2  |  /bap reset")
     print("  /bap style square|circle  |  /bap bg 0-1  |  /bap extend 0-30 [large|small]  |  /bap split 0.4-0.85")
     print("  /bap namerow 0-24 [large|tot|party]  |  /bap gap 0-20  |  /bap barspacing 0-10  |  /bap alignmana")
@@ -1256,7 +1448,16 @@ SlashCmdList.BBFANIMPORTRAITS = function(msg)
     local val = tonumber(arg)
     if size and not db.sizes[size] then size = nil end
 
-    if cmd == "debug" then
+    if cmd == "options" or cmd == "config" then
+        if not OpenOptions() then print("  The settings panel isn't available on this client.") end
+        return
+    elseif cmd == "bbfsetup" then
+        print("  " .. ApplyBBFSetup())
+        return
+    elseif cmd == "bbfundo" then
+        print("  " .. UndoBBFSetup())
+        return
+    elseif cmd == "debug" then
         DebugUnit(arg or "target")
         return
     elseif cmd == "refresh" then
@@ -1311,12 +1512,15 @@ SlashCmdList.BBFANIMPORTRAITS = function(msg)
         local newValue = not db.units[list[1]]
         for _, unit in ipairs(list) do db.units[unit] = newValue end
     elseif cmd == "reset" then
+        local backup = db.bbfBackup -- keep BBF's Undo
         wipe(db); CopyDefaults(defaults, db); db.version = SETTINGS_VERSION
+        db.bbfBackup = backup
     else
         PrintStatus()
         PrintHelp()
         return
     end
     RefreshAll()
+    NotifyOptions()
     PrintStatus()
 end

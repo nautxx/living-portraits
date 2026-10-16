@@ -43,11 +43,19 @@ ln -s ~/GitHub/Main/bbf-animated-portraits \
 
 (The WoW Forever beta installs into the `_classic_beta_` folder.)
 
+## Settings
+
+Open **Options → AddOns → BBF Animated Portraits** (or type `/bap options`) for style, frames, camera, bar grow and the square/circle tuning.
+
+The square style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. The **Turn on** button under *BetterBlizzFrames* switches it on for every frame (your other BBF settings stay as they are) and reloads the UI; **Undo** puts back what you had.
+
 ## Commands
 
 | Command | Effect |
 |---|---|
 | `/bap` | Show current settings |
+| `/bap options` | Open the settings panel |
+| `/bap bbfsetup` / `/bap bbfundo` | Turn on BBF's No Portrait + Pixel Border mode for every frame / put back your previous BBF settings (reload to apply) |
 | `/bap toggle` | Turn animated portraits on/off |
 | `/bap zoom 0-1` | Camera zoom (1 = head and shoulders, lower = more body) |
 | `/bap inset 0.3-1.2 [large\|small]` | Model size relative to the portrait (0.72 keeps corners under the ring; the circle edge follows it) |
