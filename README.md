@@ -2,7 +2,7 @@
 
 Live 3D animated portraits for World of Warcraft unit frames. Your character breathes and idles like on the character screen. A companion addon for [BetterBlizzFrames](https://www.curseforge.com/wow/addons/betterblizzframes).
 
-> **Status:** early development, untested in game. Player, target, focus, target-of-target, focus-target and party frames.
+> **Status:** v0.1.0, early release. Tested in game on the Classic beta ("Camelot") client, with and without BetterBlizzFrames. See [CHANGELOG](CHANGELOG.md).
 
 ## How it works
 
@@ -11,6 +11,11 @@ Instead of the flat 2D portrait, a live `PlayerModel` of the unit is drawn insid
 It **does not modify BetterBlizzFrames**. BBF is an optional dependency: when installed, this addon loads after it and follows BBF's portrait sizing automatically.
 
 ## Install
+
+Download `BBF_AnimatedPortraits-<version>.zip` from the repo's Releases and unzip it into `World of Warcraft/<client>/Interface/AddOns/`.
+
+Or from source:
+
 
 1. Put this folder in `World of Warcraft/<client>/Interface/AddOns/`. **The folder must be named `BBF_AnimatedPortraits`** to match the `.toc`.
 2. `/reload` or log in.
@@ -53,8 +58,15 @@ ln -s ~/GitHub/Main/bbf-animated-portraits \
 
 | Client | Interface | Status |
 |---|---|---|
-| Classic beta ("Camelot") | 16001 | Target |
+| Classic beta ("Camelot") | 16001 | Supported |
 | Retail | 120105 | Not yet |
+
+## Releasing
+
+1. Bump `## Version` in the `.toc` and add a `CHANGELOG.md` entry.
+2. Commit, then tag: `git tag -a v<version> -m "v<version>"`.
+3. `tools/package.sh` builds `dist/BBF_AnimatedPortraits-<version>.zip` (only the files WoW needs).
+4. `git push --follow-tags`, then attach the zip to a GitHub release.
 
 ## License
 
