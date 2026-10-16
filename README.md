@@ -14,19 +14,20 @@ Living Portraits works on its own, but it's built to be used with [BetterBlizzFr
 |---|---|---|
 | Style | Circle: the model inside Blizzard's round portrait | **Square**: a pixel-bordered box beside the bars (shown below), or circle if you keep BBF's portraits |
 | Bars and names | Blizzard's default layout | Resized so the box and bars line up, name and level in one row |
+| Extras | None | Talent builds, tall portraits and mirrored target text (square style only) |
 | Setup | Nothing to do | One click: **Turn on** in the settings panel (or `/lp bbfsetup`) switches on BBF's Pixel Border mode |
 
 ## Screenshots
 
-Switching targets: the health and mana bars grow from empty, and each portrait is a live 3D model.
+Switching targets: the bars grow from empty, each player's talent build appears above their name, and every portrait is a live 3D model.
 
-![Cycling targets: bars grow from empty and the portraits animate](docs/screenshots/target-grow.gif)
+![Cycling player targets: bars grow from empty, talent builds appear, and the portraits animate](docs/screenshots/target-grow.gif)
 
-Square style with BetterBlizzFrames' Pixel Border mode:
+Tall portraits with Mirror Target Text, on BetterBlizzFrames' Pixel Border mode. The player and target frames mirror each other:
 
-| Player | Target and target-of-target |
+| Player | Target |
 |---|---|
-| ![Player frame with an animated square portrait](docs/screenshots/player-square.png) | ![Target and target-of-target frames with animated square portraits](docs/screenshots/target-square.png) |
+| ![Player frame with a tall living portrait, talent build 2/0/8 above the name](docs/screenshots/player-square.png) | ![Target frame mirrored: talent build 0/17/0 and name next to the portrait, level on the outer edge](docs/screenshots/target-square.png) |
 
 ## How it works
 
@@ -45,7 +46,6 @@ Download `LivingPortraits-<version>.zip` from the repo's Releases and unzip it i
 
 Or from source:
 
-
 1. Put this folder in `World of Warcraft/<client>/Interface/AddOns/`. **The folder must be named `LivingPortraits`** to match the `.toc`.
 2. `/reload` or log in.
 
@@ -62,42 +62,79 @@ ln -s ~/GitHub/Main/living-portraits \
 
 ## Settings
 
-Open **Options → AddOns → Living Portraits** (or type `/lp options`) for style, frames, camera, bar grow and the square/circle tuning.
+Open **Options → AddOns → LivingPortraits** (or type `/lp options`):
+
+- **General:** turn it on/off, hide surnames, square or circle style, and which frames get a living portrait.
+- **Camera:** zoom and distance (face size).
+- **Target bars:** the grow-from-empty animation and its speed.
+- **Square style:** show talent builds, mirror the target text, tall portraits, plus box and bar sizing.
+- **Circle style:** background, round edge and model size.
 
 The square style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. The **Turn on** button under *BetterBlizzFrames* switches it on for every frame (your other BBF settings stay as they are) and reloads the UI; **Undo** puts back what you had.
 
 ## Commands
 
+`/lp` (or `/livingportraits`; the old `/bap` still works). Everything here is also in the settings panel.
+
+**General**
+
 | Command | Effect |
 |---|---|
 | `/lp` | Show current settings |
 | `/lp options` | Open the settings panel |
-| `/lp bbfsetup` / `/lp bbfundo` | Turn on BBF's No Portrait + Pixel Border mode for every frame / put back your previous BBF settings (reload to apply) |
 | `/lp toggle` | Turn living portraits on/off |
-| `/lp zoom 0-1` | Camera zoom (1 = head and shoulders, lower = more body) |
-| `/lp inset 0.3-1.2 [large\|small]` | Model size relative to the portrait (0.72 keeps corners under the ring; the circle edge follows it) |
-| `/lp cam 0.3-2 [large\|small]` | Camera distance (lower = closer, bigger face) |
-| `/lp calibrate` | Circle: tint the circle edge red to line it up with the ring; toggle again to finish |
-| `/lp offset <group> x y` | Circle: nudge the portrait inside its ring (groups: player, target, focus, tot, party) |
-| `/lp grow` | Toggle the health and mana bars growing from empty when you pick a new target (`/lp grow debug` traces it in chat) |
-| `/lp growtime 0.1-2` | How long the target bar grow takes, in seconds (default 0.35) |
-| `/lp vignette` | Toggle the crisp circle edge that hides the model's square edges |
-| `/lp style square\|circle` | Square box beside the bars (needs BBF No Portrait / Pixel Border) or round portrait |
-| `/lp bg 0-1` | Square: opacity of the dark background behind the model (default 0 = none) |
-| `/lp extend 0-30 [large\|small]` | Square: make the health+mana stack taller; the box grows with it and stays aligned (default large 10, small 6) |
-| `/lp namerow 0-24 [large\|tot\|party]` | Square: height of the name + level row inside the box, above the health bar (default large 12, tot 9, party 0) |
-| `/lp split 0.4-0.85` | Square: health bar's share of the stack (default 0.66, mana gets the rest) |
-| `/lp build` | Square: toggle the talent build (points per tree, like `2/8/0`) on the player and target frames. Other players must be within inspect range (~30 yd); NPCs show nothing |
-| `/lp surname` | Toggle first names only (hide surnames) on the player, target, focus, target-of-target and party frames |
-| `/lp mirror` | Square: mirror the target and focus text so it matches the player frame (name and talent build next to the portrait, level on the outer edge) |
-| `/lp tall` | Square: toggle tall player and target portraits. On (default): the build gets its own line above the name and the portrait grows into a taller rectangle. Off: square portraits, build next to the level |
-| `/lp alignmana` | Square: toggle lining up the mana bar with the health bar next to the box (undoes live) |
-| `/lp gap 0-20` | Square: space between the box and the bars (1 = borders share one line) |
-| `/lp barspacing 0-10` | Square: space between health and mana (0 = borders share one line) |
 | `/lp unit <group>` | Toggle a frame group: `player`, `target`, `focus`, `tot`, `party` |
+| `/lp style square\|circle` | Square box beside the bars (needs BBF's No Portrait / Pixel Border) or round portrait |
+| `/lp surname` | First names only (hide surnames) on the player, target, focus, target-of-target and party frames |
+| `/lp zoom 0-1` | Camera zoom (1 = head and shoulders, lower = more body) |
+| `/lp cam 0.3-2 [large\|small\|square]` | Camera distance (lower = closer, bigger face) |
+| `/lp grow` | Toggle the target's health and mana growing from empty on a new target |
+| `/lp growtime 0.1-2` | How long the grow takes, in seconds (default 0.35) |
+| `/lp bbfsetup` / `/lp bbfundo` | Turn on BBF's No Portrait + Pixel Border mode for every frame / put back your previous BBF settings (reload to apply) |
 | `/lp reset` | Restore defaults |
+
+**Square style**
+
+| Command | Effect |
+|---|---|
+| `/lp build` | Toggle talent builds (points per tree, like `2/8/0`) on the player and target |
+| `/lp tall` | Toggle tall player and target portraits (on by default): a taller rectangle with the build on its own line above the name. Off: square, build next to the level |
+| `/lp mirror` | Mirror the target and focus text to match the player frame: name and build next to the portrait, level on the outer edge |
+| `/lp bg 0-1` | Opacity of the dark background behind the model (default 0 = none) |
+| `/lp extend 0-30 [large\|small]` | Make the health + mana stack taller; the box grows with it (default large 10, small 6) |
+| `/lp namerow 0-24 [large\|tot\|party]` | Height of the name + level row above the health bar (default large 12, tot 9, party 0) |
+| `/lp split 0.4-0.85` | Health bar's share of the stack (default 0.66; mana gets the rest) |
+| `/lp alignmana` | Toggle lining up the mana bar with the health bar next to the box |
+| `/lp gap 0-20` | Space between the box and the bars (1 = borders share one line) |
+| `/lp barspacing 0-10` | Space between health and mana (0 = borders share one line) |
+
+**Circle style**
+
+| Command | Effect |
+|---|---|
+| `/lp circlebg 0-1` | Opacity of the dark background inside the ring (0 = clear) |
+| `/lp vignette` | Toggle the round edge that hides the model's square corners |
+| `/lp inset 0.3-1.2 [large\|small]` | Model size relative to the portrait (default 0.80) |
+| `/lp calibrate` | Tint the round edge red to line it up with the ring; toggle again to finish |
+| `/lp offset <group> x y` | Nudge the portrait inside its ring (groups: player, target, focus, tot, party) |
+
+**Troubleshooting**
+
+| Command | Effect |
+|---|---|
 | `/lp refresh` | Re-apply the layout now (e.g. after changing BBF settings) |
 | `/lp debug [unit]` | Print the frame's real positions, for bug reports (default: target) |
+| `/lp grow debug` | Trace the bar grow in chat |
+
+## Known limitations
+
+- **Talent builds** only show for players within inspect range (about 30 yards), and the game may refuse to share enemy players' talents. NPCs never show one.
+- **No layout changes in combat:** WoW blocks resizing unit-frame bars mid-fight, so square-style layout changes made in combat (settings, BBF re-layouts) are skipped and apply on the next refresh, such as a target change or `/lp refresh`. That's also why the build line stays reserved on NPC targets.
+- **BBF's spec / healer icon portraits** are covered by the 3D model while it shows.
+
+## Feedback
+
+Found a bug or have an idea? Open an issue: https://github.com/nautxx/living-portraits/issues. For layout bugs, `/lp debug target` output plus a screenshot helps a lot.
 
 ## Supported clients
 
@@ -108,10 +145,13 @@ The square style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. T
 
 ## Releasing
 
-1. Bump `## Version` in the `.toc` and add a `CHANGELOG.md` entry.
-2. Commit, then tag: `git tag -a v<version> -m "v<version>"`.
-3. `tools/package.sh` builds `dist/LivingPortraits-<version>.zip` (only the files WoW needs).
-4. `git push --follow-tags`, then attach the zip to a GitHub release.
+Day-to-day work happens on `dev`; `main` holds releases.
+
+1. On `dev`: bump `## Version` in the `.toc`, add a `CHANGELOG.md` entry, update the README status, commit and push.
+2. Open a PR from `dev` into `main` and merge it with **Create a merge commit** (squash or rebase would make `dev` and `main` diverge).
+3. On `main`: tag the merge (`git tag -a v<version> -m "v<version>"`), run `tools/package.sh` to build `dist/LivingPortraits-<version>.zip` (only the files WoW needs), and push the tag.
+4. Create the GitHub release from the tag, attach that zip (not GitHub's automatic "Source code" zip, whose folder name WoW won't load), and mark it as a pre-release while testing.
+5. Fast-forward `dev` to `main` (`git merge --ff-only main`) so the next PR starts clean.
 
 ## License
 
