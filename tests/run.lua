@@ -148,6 +148,9 @@ function issecretvalue() return world.secret end
 -- 3 groups (11, 12, 13) and configs map to points per group (zero groups left out).
 world.players = {}
 function UnitIsPlayer(u) return world.players[u] or false end
+-- Camelot names: UnitName returns (first name, surname)
+world.names = { player = { "Naut", "Sfw" } }
+function UnitName(u) local n = world.names[u]; if n then return n[1], n[2] end return "Mob" end
 function UnitIsUnit(a, b) return a == b or (a == "target" and b == "player" and world.targetIsMe) or false end
 local now = 100
 function GetTime() return now end
@@ -449,6 +452,7 @@ local function rowText()
     function fs:SetJustifyH(j) self.justify = j end
     fs.text, fs.w = "", 120 -- BBF gives names a fixed-width box
     function fs:SetText(t) self.text = t end
+    function fs:GetText() return self.text end
     function fs:GetUnboundedStringWidth() return #self.text * 6 end
     return fs
 end
@@ -760,6 +764,24 @@ do
     check("Undo removes keys BBF never had", bdb.noPortraitPixelBorder == nil and bdb.noPortraitPartyOnly == nil)
     check("Undo clears the backup", LivingPortraitsDB.bbfBackup == nil)
     BBF, BetterBlizzFramesDB = nil, nil
+end
+
+-- Hide surnames on our frames
+do
+    PlayerName:SetText("Naut Sfw")
+    PlayerFrame.bbfName:SetText("|cffffffffNaut Sfw|r")
+    tick() -- hooks the name texts
+    check("surnames show by default", PlayerName.text == "Naut Sfw")
+    slash("surname")
+    check("/lp surname strips the surname", PlayerName.text == "Naut")
+    check("only the surname goes; BBF's color codes stay", PlayerFrame.bbfName.text == "|cffffffffNaut|r")
+    PlayerName:SetText("Naut Sfw") -- Blizzard updates the name
+    check("later name updates are stripped too", PlayerName.text == "Naut")
+    targetName:SetText("Wolf")
+    check("names without a surname are left alone", targetName.text == "Wolf")
+    slash("surname")
+    check("turning it off puts the full name back", PlayerName.text == "Naut Sfw"
+        and PlayerFrame.bbfName.text == "|cffffffffNaut Sfw|r")
 end
 
 -- The pre-rename addon (BBF_AnimatedPortraits) still enabled: offer to disable it

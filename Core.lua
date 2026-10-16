@@ -48,6 +48,7 @@ local defaults = {
     growTime    = 0.35, -- seconds the grow takes (/lp growtime)
     showBuild   = true, -- square: talent build ("2/8/0") on the player and target (/lp build)
     tallPortraits = true, -- square: player/target box grows upward by a line for the build (/lp tall)
+    hideSurname = false, -- first names only on our frames (/lp surname)
     vignette = true,
     calibrate = false, -- circle: tint the edge red to line it up with the ring (/lp calibrate)
     -- Circle: per-frame nudge (px) of the portrait inside its ring. Measured in game with
@@ -1234,6 +1235,67 @@ local function OnInspectReady(guid)
     UpdateBuild()
 end
 
+-- Surnames ------------------------------------------------------------------
+-- Camelot characters have a surname: UnitName returns (name, surname) and Blizzard's
+-- frames show both. With hideSurname we strip it from the name texts on our frames, in
+-- a post-hook on SetText so it follows every name update by Blizzard or BBF. Only the
+-- surname is removed, so BBF's formatting (colors, prefixes) stays; the full text is kept
+-- to put back when the setting is turned off.
+local SURNAME_UNITS = { "player", "target", "focus", "targettarget", "focustarget", unpack(PARTY) }
+
+local function NameTextsOf(unit)
+    if UNITS[unit].texts then
+        local name, _, bbfName = Lookup(unit, "texts")
+        return name, bbfName
+    end
+    local f = UnitFrameOf(unit) -- party
+    return f and AsText(f.Name)
+end
+
+local function SurnameOf(unit)
+    local _, surname = UnitName(unit)
+    surname = Safe(surname)
+    if type(surname) == "string" and surname ~= "" then return surname end
+end
+
+local function SetNameText(fs, text)
+    fs.bapNaming = true
+    fs:SetText(text)
+    fs.bapNaming = nil
+end
+
+local function StripSurname(fs)
+    if fs.bapNaming or not (db and db.hideSurname) then return end
+    local text, surname = Safe(fs:GetText()), SurnameOf(fs.bapNameUnit)
+    if type(text) ~= "string" or not surname then return end
+    local sep = Constants and Constants.CharacterNameSeparatorConsts
+        and Constants.CharacterNameSeparatorConsts.CHARACTERNAME_SURNAME_SEPARATOR or " "
+    local i, j = text:find(sep .. surname, 1, true)
+    if not i then return end
+    local short = text:sub(1, i - 1) .. text:sub(j + 1)
+    fs.bapFullName, fs.bapShortName = text, short
+    SetNameText(fs, short)
+end
+
+-- Hook new name texts (BBF creates bbfName later), strip or restore after a toggle.
+local function UpdateSurnames()
+    if not db then return end
+    for _, unit in ipairs(SURNAME_UNITS) do
+        for _, fs in ipairs({ NameTextsOf(unit) }) do
+            if fs.SetText and not fs.bapNameHook then
+                fs.bapNameHook, fs.bapNameUnit = true, unit
+                hooksecurefunc(fs, "SetText", StripSurname)
+            end
+            if db.hideSurname then
+                StripSurname(fs)
+            elseif fs.bapShortName then
+                if Safe(fs:GetText()) == fs.bapShortName then SetNameText(fs, fs.bapFullName) end
+                fs.bapFullName, fs.bapShortName = nil, nil
+            end
+        end
+    end
+end
+
 -- Catches changes with no reliable event: ToT swaps, party range/visibility, and frame
 -- scale changes (Edit Mode / UI scale) that leave the 3D camera framed for the old size.
 local function ScaleChanged(unit)
@@ -1254,6 +1316,7 @@ local function Tick()
         if p and p.active and not LayeringOK(p) then ApplyLayering(p) end
     end
     UpdateBuild() -- retries until there's a build (inspect range and throttle, talents loading)
+    UpdateSurnames() -- hooks name texts as they appear (BBF creates its own later)
 end
 
 -- Events --------------------------------------------------------------------
@@ -1439,6 +1502,7 @@ BuildOptions = function()
 
     Header("General")
     Check({ "enabled" }, "Enable", "Show animated portraits.")
+    Check({ "hideSurname" }, "Hide Surnames", "Show only first names on the player, target, focus, target-of-target and party frames.")
     local styleGet, styleSet, styleDefault = Path({ "style" })
     Settings.CreateDropdown(category, Register("style", "Style", styleDefault, styleGet, styleSet), function()
         local c = Settings.CreateControlTextContainer()
@@ -1556,7 +1620,7 @@ local function PrintHelp()
     print("  /lp options  |  /lp bbfsetup (turn on BBF's Pixel Border mode)  |  /lp bbfundo")
     print("  /lp toggle  |  /lp vignette  |  /lp zoom 0-1  |  /lp grow  |  /lp growtime 0.1-2  |  /lp reset")
     print("  /lp style square|circle  |  /lp bg 0-1  |  /lp extend 0-30 [large|small]  |  /lp split 0.4-0.85")
-    print("  /lp namerow 0-24 [large|tot|party]  |  /lp gap 0-20  |  /lp barspacing 0-10  |  /lp alignmana  |  /lp build  |  /lp tall")
+    print("  /lp namerow 0-24 [large|tot|party]  |  /lp gap 0-20  |  /lp barspacing 0-10  |  /lp alignmana  |  /lp build  |  /lp tall  |  /lp surname")
     print("  /lp inset 0.3-1.2 [large|small]  |  /lp cam 0.3-2 [large|small|square]")
     print("  /lp unit player|target|focus|tot|party  |  /lp refresh  |  /lp debug [unit]")
     print("  circle: /lp circlebg 0-1  |  /lp vignette  |  /lp calibrate  |  /lp offset player|target|focus|tot|party x y")
@@ -1693,6 +1757,8 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
         db.showBuild = not db.showBuild
     elseif cmd == "tall" then
         db.tallPortraits = not db.tallPortraits
+    elseif cmd == "surname" then
+        db.hideSurname = not db.hideSurname
     elseif cmd == "circlebg" and val then
         db.circleBg = Clamp(val, 0, 1)
     elseif cmd == "bg" and val then
@@ -1722,6 +1788,7 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
     end
     RefreshAll()
     UpdateBuild()
+    UpdateSurnames()
     NotifyOptions()
     PrintStatus()
 end
