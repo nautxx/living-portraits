@@ -19,9 +19,11 @@ local ADDON_NAME, ns = ...
 local PARTY = { "party1", "party2", "party3", "party4" }
 local CIRCLE_MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 local VIGNETTE = "Interface\\AddOns\\" .. ADDON_NAME .. "\\media\\vignette"
--- vignette.tga is an inverted disc: clear inside, soft fade over the last 12% of the radius,
--- opaque in the corners. It's sized exactly like the model, so it rounds off the model's
--- square without extending past it.
+local CORNERS  = "Interface\\AddOns\\" .. ADDON_NAME .. "\\media\\corners"
+-- vignette.tga is the soft round edge (fades in over the last 12% of the radius, clear
+-- outside the circle); corners.tga covers only what's outside the circle. Both are sized
+-- like the model. The corners follow circleBg: with a clear background, dark corners
+-- would show as a square, so they fade out with it.
 
 -- Bump when a default changes in a way saved settings should pick up (see MigrateSettings).
 local SETTINGS_VERSION = 10
@@ -30,6 +32,7 @@ local defaults = {
     enabled  = true,
     style    = "square", -- "square" (needs BBF No Portrait / Pixel Border) or "circle"
     zoom     = 1,     -- 0..1, 1 = head & shoulders
+    circleBg    = 1,  -- circle: opacity of the dark background inside the ring (0 = clear)
     squareBg    = 0,  -- square: opacity of the dark background behind the model (0 = none)
     squareGap   = 1,  -- px between the box and the bars (1 = their borders share one line)
     barSpacing  = 0,  -- px between health and mana (0 = their borders share one line)
@@ -81,6 +84,24 @@ for i, unit in ipairs(PARTY) do
     PORTRAITS[unit] = function()
         local f = PartyFrame and PartyFrame["MemberFrame" .. i]
         return f and f.Portrait
+    end
+end
+
+-- The ring art around each portrait. Layers are placed relative to the frame that owns it:
+-- on the target/focus the ring (TargetFrameContainer, LOW strata, level ~501) and the
+-- portrait (an unnamed child frame in the BACKGROUND strata) live in different frames.
+local function RingTex(t) return type(t) == "table" and t.GetDrawLayer and t.GetParent and t or nil end
+local RING_TEXTURES = {
+    player       = function() local c = PlayerFrame and PlayerFrame.PlayerFrameContainer; return c and RingTex(c.FrameTexture) end,
+    target       = function() local c = TargetFrame and TargetFrame.TargetFrameContainer; return c and RingTex(c.FrameTexture) end,
+    focus        = function() local c = FocusFrame and FocusFrame.TargetFrameContainer;  return c and RingTex(c.FrameTexture) end,
+    targettarget = function() local f = TargetFrame and TargetFrame.totFrame; return f and RingTex(f.FrameTexture) end,
+    focustarget  = function() local f = FocusFrame and FocusFrame.totFrame;   return f and RingTex(f.FrameTexture) end,
+}
+for i, unit in ipairs(PARTY) do
+    RING_TEXTURES[unit] = function()
+        local f = PartyFrame and PartyFrame["MemberFrame" .. i]
+        return f and RingTex(f.Texture)
     end
 end
 
@@ -254,15 +275,19 @@ local function SetLayerAlpha(p, alpha)
     p.bgFrame:SetAlpha(alpha)
     p.model:SetAlpha(alpha)
     p.vignette:SetAlpha(alpha)
+    if p.corners then p.corners:SetAlpha(alpha) end
 end
 
 local function Deactivate(p)
     p.bgFrame:Hide()
     p.model:Hide()
     p.vignette:Hide()
-    if p.containerLevel and not InCombatLockdown() then
-        p.container:SetFrameLevel(p.containerLevel)
-        p.containerLevel = nil
+    p.corners:Hide()
+    if p.ringLevel and not InCombatLockdown() then
+        p.applyingLayers = true -- our own restore, not an outside change
+        p.ringFrame:SetFrameLevel(p.ringLevel)
+        p.applyingLayers = nil
+        p.ringLevel = nil
     end
     if p.active then
         p.active = false
@@ -270,25 +295,47 @@ local function Deactivate(p)
     end
 end
 
-local function Activate(p)
-    -- Sit just below the Blizzard container so its border ring draws over us. That needs
-    -- the container at level 2+; some (e.g. the target's, level 0 in the BACKGROUND
-    -- strata) sit lower, so raise them within their strata and restore on deactivate.
-    local level = p.container:GetFrameLevel()
+-- Keep the model and backing just below the Blizzard container so its border ring and
+-- our circle edge draw over them. That needs the container at level 2+; some (the
+-- target's: level 0 in the BACKGROUND strata) sit lower, so raise them within their
+-- strata (restored on deactivate). BBF/Blizzard can re-set the container's level or
+-- strata later, so this re-runs from hooks and the ticker (see LayeringOK).
+local function ApplyLayering(p)
+    if p.applyingLayers then return end
+    p.applyingLayers = true
+    local ring = p.ringFrame
+    local level = ring:GetFrameLevel()
     if level < 2 and not InCombatLockdown() then
-        p.containerLevel = p.containerLevel or level
-        p.container:SetFrameLevel(2)
+        p.ringLevel = p.ringLevel or level
+        ring:SetFrameLevel(2)
         level = 2
     end
-    local strata = p.container:GetFrameStrata()
+    local strata = ring:GetFrameStrata()
     p.bgFrame:SetFrameStrata(strata)
     p.model:SetFrameStrata(strata)
     p.bgFrame:SetFrameLevel(math.max(level - 2, 0))
     p.model:SetFrameLevel(math.max(level - 1, 0))
+    p.applyingLayers = nil
+end
 
-    p.bgFrame:Show()
+local function LayeringOK(p)
+    return p.model:GetFrameStrata() == p.ringFrame:GetFrameStrata()
+        and p.model:GetFrameLevel() < p.ringFrame:GetFrameLevel()
+end
+
+local function Activate(p)
+    ApplyLayering(p)
+    if not p.layerHooks then
+        p.layerHooks = true
+        local function Reapply() if p.active then ApplyLayering(p) end end
+        hooksecurefunc(p.ringFrame, "SetFrameLevel", Reapply)
+        hooksecurefunc(p.ringFrame, "SetFrameStrata", Reapply)
+    end
+
+    p.bgFrame:SetShown(db.circleBg > 0)
     p.model:Show()
-    p.vignette:SetShown(db.vignette)
+    p.vignette:SetShown(db.vignette and (db.circleBg > 0 or db.calibrate))
+    p.corners:SetShown(db.vignette and (db.circleBg > 0 or db.calibrate))
     if not p.active then
         p.active = true
         p.portraitWasShown = p.portrait:IsShown()
@@ -630,10 +677,10 @@ local function ActivateSquare(unit, unitFrame, hpPos, manaPos)
     end
     sq.bg:SetColorTexture(db.bgR, db.bgG, db.bgB, db.squareBg)
     sq.bg:SetShown(db.squareBg > 0)
+    sq.box:Show() -- show first, then load (see circle Refresh)
     sq.model:ClearModel()
     sq.model:SetUnit(unit)
     ApplyCamera(sq.model, "square")
-    sq.box:Show()
     return true
 end
 
@@ -643,9 +690,17 @@ local function CreateLayers(unit)
     if not portrait then return end
     local container = portrait:GetParent()
     if not container then return end
-    local root = container:GetParent() or container
+    -- Parent to the unit frame itself (PlayerFrame, TargetFrame, ...). The container's
+    -- direct parent isn't always the unit frame (the target's is an unnamed level-501
+    -- frame), and drawing our model as part of that group put it above the ring art.
+    local uf = UNIT_FRAMES[unit] and UNIT_FRAMES[unit]()
+    local root = uf or container:GetParent() or container
 
-    local p = { unit = unit, size = SIZE_OF[unit], portrait = portrait, container = container }
+    -- The frame that owns the ring art: our layers go just beneath it, the circle edge on it.
+    local ringTex = RING_TEXTURES[unit] and RING_TEXTURES[unit]()
+    local ringFrame = ringTex and ringTex:GetParent() or container
+
+    local p = { unit = unit, size = SIZE_OF[unit], portrait = portrait, container = container, ringFrame = ringFrame }
 
     -- Dark circle behind the model
     local bgFrame = CreateFrame("Frame", nil, root)
@@ -662,12 +717,30 @@ local function CreateLayers(unit)
     local model = CreateFrame("PlayerModel", nil, root)
     model:SetPoint("CENTER", portrait, "CENTER")
     model:SetScript("OnModelLoaded", function(self) ApplyCamera(self, p.size) end)
+    -- Reload the unit whenever the model becomes visible (e.g. its unit frame re-shows).
+    model:SetScript("OnShow", function(self)
+        if p.active and UnitExists(unit) then
+            self:SetUnit(unit)
+            ApplyCamera(self, p.size)
+        end
+    end)
     model:Hide()
 
-    -- Vignette: on the container, same sublevel as the (hidden) portrait, under the ring
-    local layer, sub = portrait:GetDrawLayer()
-    local vignette = container:CreateTexture(nil, layer, nil, sub or 0)
+    -- Circle edge: on the ring's frame, one sublevel beneath the ring texture.
+    local layer, sub
+    if ringTex then
+        layer, sub = ringTex:GetDrawLayer()
+        sub = math.max((sub or 0) - 1, -8)
+    else
+        layer, sub = portrait:GetDrawLayer()
+    end
+    local vignette = ringFrame:CreateTexture(nil, layer, nil, sub or 0)
     vignette:SetTexture(VIGNETTE)
+    local corners = ringFrame:CreateTexture(nil, layer, nil, sub or 0)
+    corners:SetTexture(CORNERS)
+    corners:SetAllPoints(vignette)
+    corners:Hide()
+    p.corners = corners
     vignette:Hide()
 
     p.bgFrame, p.bg, p.model, p.vignette = bgFrame, bg, model, vignette
@@ -767,18 +840,22 @@ Refresh = function(unit)
     p.bgFrame:ClearAllPoints()
     p.bgFrame:SetPoint("CENTER", p.portrait, "CENTER", ox, oy)
     p.bgFrame:SetSize(w, h)
-    p.bg:SetColorTexture(db.bgR, db.bgG, db.bgB, 1)
+    p.bg:SetColorTexture(db.bgR, db.bgG, db.bgB, db.circleBg)
     if db.calibrate then
         p.vignette:SetVertexColor(1, 0.1, 0.1, 1)
+        p.corners:SetVertexColor(1, 0.1, 0.1, 1)
     else
-        p.vignette:SetVertexColor(db.bgR, db.bgG, db.bgB, 1)
+        -- Both fade with the background: with a clear background, a dark edge would show
+        -- as a ring (and dark corners as a square).
+        p.vignette:SetVertexColor(db.bgR, db.bgG, db.bgB, db.circleBg)
+        p.corners:SetVertexColor(db.bgR, db.bgG, db.bgB, db.circleBg)
     end
 
+    -- Show first, then load: a model loaded while hidden sometimes never draws.
+    Activate(p)
     p.model:ClearModel()
     p.model:SetUnit(unit)
     ApplyCamera(p.model, p.size)
-
-    Activate(p)
     lastState[unit] = UnitState(unit)
 end
 
@@ -829,6 +906,9 @@ local function Tick()
         if db.units[unit] and (lastState[unit] ~= UnitState(unit) or ScaleChanged(unit)) then
             Refresh(unit)
         end
+        -- Safety net: if anything put the model above its container, fix the layering.
+        local p = layers[unit]
+        if p and p.active and not LayeringOK(p) then ApplyLayering(p) end
     end
 end
 
@@ -903,7 +983,7 @@ local function PrintHelp()
     print("  /bap namerow 0-24 [large|tot|party]  |  /bap gap 0-20  |  /bap barspacing 0-10  |  /bap alignmana")
     print("  /bap inset 0.3-1.2 [large|small]  |  /bap cam 0.3-2 [large|small|square]")
     print("  /bap unit player|target|focus|tot|party  |  /bap refresh  |  /bap debug [unit]")
-    print("  circle: /bap calibrate  |  /bap offset player|target|focus|tot|party x y")
+    print("  circle: /bap circlebg 0-1  |  /bap vignette  |  /bap calibrate  |  /bap offset player|target|focus|tot|party x y")
 end
 
 -- Set a per-size value; no size given = both.
@@ -937,8 +1017,20 @@ local function DebugCircle(unit)
     print(("  vignette shown=%s visible=%s layer=%s/%s size=%s alpha=%s  portrait layer=%s/%s shown=%s size=%s"):format(
         T(v:IsShown()), T(v:IsVisible()), T(vl), T(vs), Fmt(v:GetWidth()), Fmt(v:GetAlpha()),
         T(pl), T(ps), T(p.portrait:IsShown()), Fmt(p.portrait:GetWidth())))
-    print(("  bg lvl=%s shown=%s  root=%s lvl=%s"):format(Fmt(p.bgFrame:GetFrameLevel()), T(p.bgFrame:IsShown()),
-        T(m:GetParent() and m:GetParent().GetName and m:GetParent():GetName()), Fmt(m:GetParent() and m:GetParent():GetFrameLevel())))
+    print(("  bg lvl=%s shown=%s"):format(Fmt(p.bgFrame:GetFrameLevel()), T(p.bgFrame:IsShown())))
+    local function Chain(label, fr)
+        local parts, n = {}, 0
+        while fr and n < 6 do
+            local flat = fr.GetFlattensRenderLayers and fr:GetFlattensRenderLayers()
+            parts[#parts + 1] = ("%s[%s %s%s]"):format(T(fr.GetName and fr:GetName() or "anon"), Fmt(fr:GetFrameLevel()),
+                T(fr:GetFrameStrata()), flat and " FLAT" or "")
+            fr = fr:GetParent(); n = n + 1
+        end
+        print("  " .. label .. ": " .. table.concat(parts, " > "))
+    end
+    Chain("model parents", m:GetParent())
+    Chain("container parents", c:GetParent())
+    Chain("ring frame", p.ringFrame)
 end
 
 local function DebugUnit(unit)
@@ -1009,6 +1101,8 @@ SlashCmdList.BBFANIMPORTRAITS = function(msg)
         db.hpShare = math.max(0.4, math.min(0.85, val))
     elseif cmd == "alignmana" then
         db.alignMana = not db.alignMana
+    elseif cmd == "circlebg" and val then
+        db.circleBg = math.max(0, math.min(1, val))
     elseif cmd == "bg" and val then
         db.squareBg = math.max(0, math.min(1, val))
     elseif cmd == "gap" and val then

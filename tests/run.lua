@@ -195,6 +195,14 @@ check("2D portrait hidden while active", not playerContainer.PlayerPortrait.show
 playerContainer.PlayerPortrait:Show()
 check("portrait stays hidden if re-shown while active", not playerContainer.PlayerPortrait.shown)
 
+-- Circle background opacity
+slash("circlebg 0")
+check("/bap circlebg 0 hides the circle background", BBFAnimatedPortraitsDB.circleBg == 0)
+local corners = rawget(playerContainer, "textures")[2]
+check("dark corners hidden with a clear background", corners and not corners.shown)
+check("soft edge hidden too with a clear background (no dark ring)", not vig.shown)
+slash("circlebg 1")
+
 -- Centering offset and calibration
 check("measured default offsets applied", BBFAnimatedPortraitsDB.offsets.tot[1] == -1.3 and BBFAnimatedPortraitsDB.offsets.tot[2] == 2.2)
 local defA = modelFor("player").anchor
@@ -219,6 +227,35 @@ slash("toggle")
 check("container level restored when turned off", targetContainer.level == 0)
 slash("toggle")
 targetContainer.level = 6; slash("toggle"); slash("toggle")
+
+-- BBF/Blizzard re-sets the container level later: our layering re-applies via the hook
+targetContainer.level = 6; slash("toggle"); slash("toggle")
+local tmod = modelFor("target")
+targetContainer:SetFrameLevel(0)
+check("container level change re-applies layering", targetContainer.level == 2 and tmod.level < targetContainer.level)
+-- ...and the ticker catches changes that bypass the hook
+targetContainer.level = 0; tmod.level = 5
+tick()
+check("ticker restores model below container", tmod.level < targetContainer.level)
+
+-- Target-style layout: ring art in its own frame (LOW strata, level 501), portrait
+-- in a separate BACKGROUND frame. Layers must go just beneath the ring's frame.
+do
+    local ringFrame = newFrame("Frame", TargetFrame, 501)
+    function ringFrame:GetFrameStrata() return "LOW" end
+    local ringTex = newTexture(true)
+    function ringTex:GetDrawLayer() return "BACKGROUND", 2 end
+    function ringTex:GetParent() return ringFrame end
+    function ringFrame:CreateTexture() local tx = newTexture(); self.made = tx; return tx end
+    local focusPortrait = FocusFrame.TargetFrameContainer.Portrait
+    FocusFrame.TargetFrameContainer.FrameTexture = ringTex
+    world.exists.focus = true
+    fire("PLAYER_FOCUS_CHANGED")
+    local fm = modelFor("focus")
+    check("model placed just beneath the ring's frame (500)", fm and fm.level == 500)
+    check("circle edge created on the ring's frame", ringFrame.made ~= nil)
+    check("focus portrait hidden", not focusPortrait.shown)
+end
 
 -- Ticker: party2 comes into range
 world.visible.party2 = nil
