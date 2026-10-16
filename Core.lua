@@ -485,6 +485,20 @@ local function SetBarLayout(bar, pos, dh, dx, dy)
     bar:SetPoint(o[1], o[2], o[3], o[4] + dx, o[5] + keepTop + dy)
 end
 
+-- Width of the border line that neighbors share (box and bars, health and mana). At full
+-- opacity it's a 1px black line between them. Below that it would show the world through
+-- a 1px slot (BBF's fills overhang their borders differently per frame, so some frames
+-- covered it and some didn't), so the pieces close up and the faint line is drawn over
+-- the bars instead.
+local function SharedLine()
+    return (db.borderAlpha or 1) >= 1 and 1 or 0
+end
+
+local function BoxGap()
+    if db.squareGap < 1 then return db.squareGap end
+    return db.squareGap - 1 + SharedLine()
+end
+
 local function LayoutBars(unit, hpPos, manaPos, manaBar, hpBar)
     if not hpBar or InCombatLockdown() then return end
     Remember(hpBar, hpPos)
@@ -534,7 +548,7 @@ local function LayoutBars(unit, hpPos, manaPos, manaBar, hpBar)
     -- BBF uses: the borders share one line (barSpacing 0). BBF's ToT leaves a gap otherwise.
     local hpBottom, manaTop = hpPos:GetBottom(), manaPos:GetTop()
     if hpBottom and manaTop then
-        local shift = ((hpBottom - 1 - db.barSpacing) - manaTop) * toMana
+        local shift = ((hpBottom - SharedLine() - db.barSpacing) - manaTop) * toMana
         if math.abs(shift) >= 0.25 then
             manaBar.bapDY = manaBar.bapDY + shift
             SetBarLayout(manaBar, manaPos, dhMana, manaBar.bapDX, dy + manaBar.bapDY)
@@ -785,9 +799,9 @@ local function PlaceSquare(sq, hpPos, manaPos)
 
     box:ClearAllPoints()
     if UNITS[sq.unit].side == "RIGHT" then
-        box:SetPoint("TOPLEFT", hpPos, "TOPRIGHT", db.squareGap, row + extra)
+        box:SetPoint("TOPLEFT", hpPos, "TOPRIGHT", BoxGap(), row + extra)
     else
-        box:SetPoint("TOPRIGHT", hpPos, "TOPLEFT", -db.squareGap, row + extra)
+        box:SetPoint("TOPRIGHT", hpPos, "TOPLEFT", -BoxGap(), row + extra)
     end
     box:SetSize(size, size + extra * scale)
     box:SetFrameStrata(hpPos:GetFrameStrata())

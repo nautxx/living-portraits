@@ -712,6 +712,13 @@ do
     slash("borderalpha 0.5")
     check("/lp bordercolor + borderalpha color the box border", same(boxEdges[1].color, 1, 0, 0, 0.5))
     check("...and BBF's bar borders", same(hpE[1].color, 1, 0, 0, 0.5) and same(manaE[3].color, 1, 0, 0, 0.5))
+    local hpPf, manaPf = playerHp.BBFPositionFrame, playerMana.BBFPositionFrame
+    check("see-through border: mana starts right where health ends (no 1px slot)", manaPf:GetTop() == hpPf:GetBottom())
+    check("see-through border: box sits flush against the bars", box.anchor[4] == 0)
+    slash("borderalpha 1")
+    check("opaque border: health and mana share one 1px line again", manaPf:GetTop() == hpPf:GetBottom() - 1)
+    check("opaque border: box and bars share one line again", box.anchor[4] == -1)
+    slash("borderalpha 0.5")
     slash("bordercolor zz")
     check("bad colors are ignored", LivingPortraitsDB.borderColor == "ffff0000")
     slash("gap 3")

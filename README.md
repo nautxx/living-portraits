@@ -101,7 +101,7 @@ The square style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. T
 | `/lp tall` | Toggle tall player and target portraits (on by default): a taller rectangle with the build on its own line above the name. Off: square, build next to the level |
 | `/lp mirror` | Mirror the target and focus text to match the player frame: name and build next to the portrait, level on the outer edge |
 | `/lp bordercolor RRGGBB` | Color of the 1px lines around the portrait box and the bars (default `000000`, black) |
-| `/lp borderalpha 0-1` | Opacity of those lines (default 1) |
+| `/lp borderalpha 0-1` | Opacity of those lines (default 1). Below 1, the box and bars close up so no gap shows where a line was |
 | `/lp bg 0-1` | Opacity of the dark background behind the model (default 0 = none) |
 | `/lp extend 0-30 [large\|small]` | Make the health + mana stack taller; the box grows with it (default large 10, small 6) |
 | `/lp namerow 0-24 [large\|tot\|party]` | Height of the name + level row above the health bar (default large 12, tot 9, party 0) |
