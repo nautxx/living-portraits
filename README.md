@@ -4,7 +4,7 @@ Live 3D animated portraits for World of Warcraft unit frames. Your character bre
 
 > Formerly **BBF Animated Portraits**. Upgrading? Delete the old `BBF_AnimatedPortraits` folder from AddOns (if it's still enabled, Living Portraits offers to disable it for you); settings start fresh under the new name. `/bap` still works as an alias for `/lp`.
 
-> **Status:** v0.5.0, public test release. Tested in game on the **WoW Forever beta**, with and without BetterBlizzFrames. See [CHANGELOG](CHANGELOG.md).
+> **Status:** v0.6.0, public test release. Tested in game on the **WoW Forever beta**, with and without BetterBlizzFrames. See [CHANGELOG](CHANGELOG.md).
 
 ## Best with BetterBlizzFrames
 
@@ -66,8 +66,8 @@ Open **Options → AddOns → LivingPortraits** (or type `/lp options`):
 
 - **General:** turn it on/off, hide surnames, square or circle style, and which frames get a living portrait.
 - **Camera:** zoom and distance (face size).
-- **Target bars:** the grow-from-empty animation and its speed.
-- **Square style:** show talent builds, mirror the target text, tall portraits, border color and opacity, plus box and bar sizing.
+- **Target bars:** the grow-from-empty animation (target and focus) and its speed.
+- **Square style:** show talent builds, mirror the target text, tall portraits, border color, thickness and opacity, plus box and bar sizing.
 - **Circle style:** background, round edge and model size.
 
 The square style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. The **Turn on** button under *BetterBlizzFrames* switches it on for every frame (your other BBF settings stay as they are) and reloads the UI; **Undo** puts back what you had.
@@ -88,7 +88,7 @@ The square style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. T
 | `/lp surname` | First names only (hide surnames) on the player, target, focus, target-of-target and party frames |
 | `/lp zoom 0-1` | Camera zoom (1 = head and shoulders, lower = more body) |
 | `/lp cam 0.3-2 [large\|small\|square]` | Camera distance (lower = closer, bigger face) |
-| `/lp grow` | Toggle the target's health and mana growing from empty on a new target |
+| `/lp grow` | Toggle the target's and focus's health and mana growing from empty when they change |
 | `/lp growtime 0.1-2` | How long the grow takes, in seconds (default 0.35) |
 | `/lp bbfsetup` / `/lp bbfundo` | Turn on BBF's No Portrait + Pixel Border mode for every frame / put back your previous BBF settings (reload to apply) |
 | `/lp reset` | Restore defaults |
@@ -97,10 +97,11 @@ The square style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. T
 
 | Command | Effect |
 |---|---|
-| `/lp build` | Toggle talent builds (points per tree, like `2/8/0`) on the player and target |
-| `/lp tall` | Toggle tall player and target portraits (on by default): a taller rectangle with the build on its own line above the name. Off: square, build next to the level |
+| `/lp build` | Toggle talent builds (points per tree, like `2/8/0`) on the player, target and focus |
+| `/lp tall` | Toggle tall player, target and focus portraits (on by default): a taller rectangle with the build on its own line above the name. Off: square, build next to the level |
 | `/lp mirror` | Mirror the target and focus text to match the player frame: name and build next to the portrait, level on the outer edge |
 | `/lp bordercolor RRGGBB` | Color of the 1px lines around the portrait box and the bars (default `000000`, black) |
+| `/lp bordersize thin\|medium\|heavy` | Thickness of those lines: 1, 2 or 3px (default thin) |
 | `/lp borderalpha 0-1` | Opacity of those lines (default 1). Below 1, the box and bars close up so no gap shows where a line was |
 | `/lp bg 0-1` | Opacity of the dark background behind the model (default 0 = none) |
 | `/lp extend 0-30 [large\|small]` | Make the health + mana stack taller; the box grows with it (default large 10, small 6) |
@@ -131,6 +132,7 @@ The square style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. T
 ## Known limitations
 
 - **Talent builds** only show for players within inspect range (about 30 yards), and the game may refuse to share enemy players' talents. NPCs never show one.
+- **Target-of-target placement:** when the target or focus layout would run into its target-of-target (for example with Edit Mode's small focus frame), the ToT frame is moved down just enough to clear it, and put back when you switch to circle style or turn the addon off.
 - **No layout changes in combat:** WoW blocks resizing unit-frame bars mid-fight, so square-style layout changes made in combat (settings, BBF re-layouts) are skipped and apply on the next refresh, such as a target change or `/lp refresh`. That's also why the build line stays reserved on NPC targets.
 - **BBF's spec / healer icon portraits** are covered by the 3D model while it shows.
 

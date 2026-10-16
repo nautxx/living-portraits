@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.6.0 (2026-10-16)
+
+### Features
+- **Focus frame catches up with the target:** tall portrait, talent build above the name, and health and mana growing from empty when you set a new focus.
+- **Border Thickness:** Thin, Medium or Heavy (1, 2 or 3px) for the lines around the portrait box and BetterBlizzFrames' bars (Settings → Square style, or `/lp bordersize thin|medium|heavy`). Shared lines stay single and corners are drawn once at every thickness.
+
+### Fixes
+- **Target-of-target overlap:** with Edit Mode's small focus frame, the focus-target ran into the focus box. The target-of-target is now moved down just enough to clear the target or focus layout, and put back when you switch to circle style or turn the addon off.
+- **Talent builds for target and focus together:** inspecting both no longer cancels one of them; a player who doesn't answer an inspect is retried after 30 seconds.
+
 ## 0.5.0 (2026-10-16)
 
 ### Features

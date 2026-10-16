@@ -687,9 +687,30 @@ do
     world.guid.target = "Player-1"
     fire("PLAYER_TARGET_CHANGED")
     check("a cached build shows without a new inspect", fs.shown and fs.text == "2/8/0" and #inspects == 2)
+    -- Focus: also inspected, but only one inspect at a time (Player-2's is still pending)
+    local oldHas = BBF.HasNoPortrait
+    BBF.HasNoPortrait = function(u) return oldHas(u) or u == "focus" end
+    world.players.focus, world.guid.focus = true, "Player-3"
+    fire("PLAYER_FOCUS_CHANGED")
+    check("focus waits while another inspect is pending", #inspects == 2)
+    now = now + 5 -- Player-2 never answered
+    tick()
+    check("after the timeout the focus gets its inspect", #inspects == 3 and inspects[3] == "focus")
+    fire("INSPECT_READY", "Player-3")
+    world.guid.target = "Player-2"
+    now = now + 2
+    tick()
+    check("a player who didn't answer isn't asked again right away", #inspects == 3)
+    now = now + 31
+    tick()
+    check("...but is asked again later", #inspects == 4 and inspects[4] == "target")
+    fire("INSPECT_READY", "Player-2")
+    BBF.HasNoPortrait, world.players.focus, world.guid.focus = oldHas, nil, nil
+    world.guid.target = "Player-1"
+    fire("PLAYER_TARGET_CHANGED")
     world.targetIsMe = true
     fire("PLAYER_TARGET_CHANGED")
-    check("your own build is read directly", fs.text == "5/0/0" and #inspects == 2)
+    check("your own build is read directly", fs.text == "5/0/0" and #inspects == 4)
     world.targetIsMe = nil
     slash("build")
     check("/lp build hides it", LivingPortraitsDB.showBuild == false and not fs.shown)
@@ -697,6 +718,29 @@ do
     slash("build")
     world.players.target = nil
     world.guid.target = nil
+end
+
+-- Target-of-target clearance: nudge the ToT down when our stack runs into it
+do
+    local manaPf = targetMana.BBFPositionFrame
+    local oldTop = totContainer.GetTop
+    totContainer.anchor = { "TOPRIGHT", TargetFrame, "BOTTOMRIGHT", 12, 10 }
+    local base = manaPf:GetBottom() + 5 -- overlapping the target's mana bar by 5
+    function totContainer:GetTop() return base + (self.anchor[5] - 10) end
+    fire("PLAYER_TARGET_CHANGED")
+    check("ToT nudged down to clear the target's bars and bottom border (2 + 1px)",
+        math.abs(totContainer:GetTop() - (manaPf:GetBottom() - 3)) < 0.001 and totContainer.anchor[5] == 10 - 8)
+    base = manaPf:GetBottom() - 20 -- already clear
+    fire("PLAYER_TARGET_CHANGED")
+    check("no nudge when the ToT is already clear", totContainer.anchor[5] == 10)
+    totContainer:SetPoint("TOPRIGHT", TargetFrame, "BOTTOMRIGHT", 12, 30) -- BBF/Blizzard re-anchor it
+    -- (base unchanged: 20 higher puts its top exactly at our bottom, so it only needs the clearance)
+    fire("PLAYER_TARGET_CHANGED")
+    check("a new anchor from Blizzard/BBF becomes the base", totContainer.anchor[5] == 30 - 3)
+    slash("style circle")
+    check("handing back puts the ToT exactly where it was", totContainer.anchor[5] == 30)
+    slash("style square")
+    totContainer.GetTop, totContainer.anchor = oldTop, nil
 end
 
 -- Border color and opacity: our box border and BBF's bar borders together
@@ -718,6 +762,17 @@ do
     slash("borderalpha 1")
     check("opaque border: health and mana share one 1px line again", manaPf:GetTop() == hpPf:GetBottom() - 1)
     check("opaque border: box and bars share one line again", box.anchor[4] == -1)
+    slash("bordersize 3")
+    check("/lp bordersize thickens the box border", boxEdges[1].h == 3 and boxEdges[2].w == 3)
+    check("...and BBF's bar borders", hpE[1].h == 3 and manaE[4].w == 3)
+    check("corners grow with the thickness", hpE[1].anchor[4] == 3)
+    check("health and mana still share one (3px) line", manaPf:GetTop() == hpPf:GetBottom() - 3)
+    check("box and bars still share one (3px) line", box.anchor[4] == -3)
+    slash("bordersize 9")
+    check("thickness is capped at heavy (3)", LivingPortraitsDB.borderSize == 3)
+    slash("bordersize medium")
+    check("/lp bordersize takes thin, medium or heavy", LivingPortraitsDB.borderSize == 2 and boxEdges[1].h == 2)
+    slash("bordersize 1")
     slash("borderalpha 0.5")
     slash("bordercolor zz")
     check("bad colors are ignored", LivingPortraitsDB.borderColor == "ffff0000")
@@ -727,7 +782,7 @@ do
 end
 
 slash("style circle")
-check("style circle hands BBF its black borders back", playerHp.BBFBlackBorder[1].color[1] == 0
+check("style circle hands BBF its black 1px borders back", playerHp.BBFBlackBorder[1].h == 1 and playerHp.BBFBlackBorder[1].color[1] == 0
     and playerHp.BBFBlackBorder[1].color[4] == 1 and playerHp.BBFBlackBorder[4].shown and playerMana.BBFBlackBorder[1].shown)
 check("style circle hides the box", not box.shown)
 check("style circle restores BBF's bar heights", playerHp.h == 19 and playerMana.h == 8 and playerMana.BBFPositionFrame.h == 8)
@@ -879,6 +934,26 @@ do
     world.secret = false
     check("grow restores the fill when its alpha is secret", rawget(hpFill, "alpha") == 1)
     check("grow stops running after it ends", rawget(driver, "OnUpdate") == nil)
+end
+
+-- The focus frame's update grows the focus's bars (traced with /lp grow debug)
+do
+    local traced = {}
+    print = function(...)
+        local parts = {}
+        for i = 1, select("#", ...) do parts[i] = tostring((select(i, ...))) end
+        traced[#traced + 1] = table.concat(parts, " ")
+    end
+    slash("grow debug")
+    local hadFocus = world.exists.focus
+    world.exists.focus = false
+    FocusFrame:Update()
+    world.exists.focus = hadFocus
+    slash("grow debug")
+    print = function() end
+    local hit = false
+    for _, line in ipairs(traced) do if line:find("skip: grow", 1, true) and line:find("focus", 1, true) then hit = true end end
+    check("a new focus runs the bar grow for the focus frame", hit)
 end
 
 -- Secret values must not error

@@ -46,12 +46,13 @@ local defaults = {
     alignMana   = true, -- square: line the mana bar's edge up with the health bar on the box side
     growBars    = true, -- new target: health and mana grow from empty to their value
     growTime    = 0.35, -- seconds the grow takes (/lp growtime)
-    showBuild   = true, -- square: talent build ("2/8/0") on the player and target (/lp build)
-    tallPortraits = true, -- square: player/target box grows upward by a line for the build (/lp tall)
+    showBuild   = true, -- square: talent build ("2/8/0") on the player, target and focus (/lp build)
+    tallPortraits = true, -- square: player/target/focus box grows upward by a line for the build (/lp tall)
     hideSurname = false, -- first names only on our frames (/lp surname)
     mirrorTarget = false, -- square: target/focus text mirrors the player's (/lp mirror)
     borderColor = "ff000000", -- square: box + bar border color, ARGB hex like the settings swatch (/lp bordercolor)
     borderAlpha = 1,      -- square: border opacity (/lp borderalpha)
+    borderSize  = 1,      -- square: border thickness: 1 thin, 2 medium, 3 heavy (/lp bordersize)
     vignette = true,
     calibrate = false, -- circle: tint the edge red to line it up with the ring (/lp calibrate)
     -- Circle: per-frame nudge (px) of the portrait inside its ring. Measured in game with
@@ -406,25 +407,45 @@ local function SetPixelPoint(region, point, rel, relPoint, x, y)
 end
 
 -- Same recipe as BBF's pixel border: four 1px black edges just outside the frame.
+-- Border thickness in UI units: thin 1, medium 2, heavy 3 (/lp bordersize).
+local BORDER_SIZES = { thin = 1, medium = 2, heavy = 3 }
+local function BorderSize()
+    return Clamp(math.floor((db and db.borderSize or 1) + 0.5), 1, 3)
+end
+
+-- Size and anchor a border's four edges (top, right, bottom, left) just outside frame.
+-- Top and bottom span the corners and the sides fit between them, so each corner is drawn
+-- once (drawn twice, corners looked darker at partial opacity). `bbf` reproduces BBF's
+-- own geometry (1px, sides spanning the corners too), for handing its bars back.
+local function LayoutEdges(edges, frame, size, bbf)
+    if type(edges) ~= "table" or not frame then return end
+    local top, right, bottom, left = edges[1], edges[2], edges[3], edges[4]
+    if not (top and right and bottom and left) then return end
+    for i, t in ipairs(edges) do
+        if PixelUtil and PixelUtil.SetHeight then
+            if i % 2 == 1 then PixelUtil.SetHeight(t, size, size) else PixelUtil.SetWidth(t, size, size) end
+        elseif i % 2 == 1 then t:SetHeight(size) else t:SetWidth(size) end
+        t:ClearAllPoints()
+    end
+    local side = bbf and size or 0
+    SetPixelPoint(top,    "BOTTOMLEFT",  frame, "TOPLEFT",     -size, 0)
+    SetPixelPoint(top,    "BOTTOMRIGHT", frame, "TOPRIGHT",     size, 0)
+    SetPixelPoint(bottom, "TOPLEFT",     frame, "BOTTOMLEFT",  -size, 0)
+    SetPixelPoint(bottom, "TOPRIGHT",    frame, "BOTTOMRIGHT",  size, 0)
+    SetPixelPoint(left,   "TOPRIGHT",    frame, "TOPLEFT",      0, side)
+    SetPixelPoint(left,   "BOTTOMRIGHT", frame, "BOTTOMLEFT",   0, -side)
+    SetPixelPoint(right,  "TOPLEFT",     frame, "TOPRIGHT",     0, side)
+    SetPixelPoint(right,  "BOTTOMLEFT",  frame, "BOTTOMRIGHT",  0, -side)
+end
+
 local function CreatePixelBorder(frame)
     local edges = {}
     for i = 1, 4 do
         local t = frame:CreateTexture(nil, "BORDER", nil, 4)
         t:SetColorTexture(0, 0, 0, 1)
-        if PixelUtil and PixelUtil.SetHeight then
-            if i % 2 == 1 then PixelUtil.SetHeight(t, 1, 1) else PixelUtil.SetWidth(t, 1, 1) end
-        elseif i % 2 == 1 then t:SetHeight(1) else t:SetWidth(1) end
         edges[i] = t
     end
-    local top, right, bottom, left = edges[1], edges[2], edges[3], edges[4]
-    SetPixelPoint(top,    "BOTTOMLEFT",  frame, "TOPLEFT",     -1, 0)
-    SetPixelPoint(top,    "BOTTOMRIGHT", frame, "TOPRIGHT",     1, 0)
-    SetPixelPoint(bottom, "TOPLEFT",     frame, "BOTTOMLEFT",  -1, 0)
-    SetPixelPoint(bottom, "TOPRIGHT",    frame, "BOTTOMRIGHT",  1, 0)
-    SetPixelPoint(left,   "TOPRIGHT",    frame, "TOPLEFT",      0, 1)
-    SetPixelPoint(left,   "BOTTOMRIGHT", frame, "BOTTOMLEFT",   0, -1)
-    SetPixelPoint(right,  "TOPLEFT",     frame, "TOPRIGHT",     0, 1)
-    SetPixelPoint(right,  "BOTTOMLEFT",  frame, "BOTTOMRIGHT",  0, -1)
+    LayoutEdges(edges, frame, BorderSize())
     return edges
 end
 
@@ -491,7 +512,7 @@ end
 -- covered it and some didn't), so the pieces close up and the faint line is drawn over
 -- the bars instead.
 local function SharedLine()
-    return (db.borderAlpha or 1) >= 1 and 1 or 0
+    return (db.borderAlpha or 1) >= 1 and BorderSize() or 0
 end
 
 local function BoxGap()
@@ -742,8 +763,14 @@ end
 
 local function ApplyBorders(unit, manaBar, hpBar)
     local r, g, b, a = BorderRGBA()
+    local size = BorderSize()
     local sq = squares[unit]
-    if sq then ColorEdges(sq.edges, r, g, b, a) end
+    if sq then
+        LayoutEdges(sq.edges, sq.box, size)
+        ColorEdges(sq.edges, r, g, b, a)
+    end
+    LayoutEdges(hpBar and hpBar.BBFBlackBorder, hpBar and hpBar.BBFPositionFrame, size)
+    LayoutEdges(manaBar and manaBar.BBFBlackBorder, manaBar and manaBar.BBFPositionFrame, size)
     -- The bars' edge on the box side is the same line as the box's edge (gap 1).
     local boxSide = db.squareGap == 1 and (UNITS[unit].side == "RIGHT" and EDGE_RIGHT or EDGE_LEFT) or nil
     ColorEdges(hpBar and hpBar.BBFBlackBorder, r, g, b, a, boxSide)
@@ -751,16 +778,88 @@ local function ApplyBorders(unit, manaBar, hpBar)
     ColorEdges(manaBar and manaBar.BBFBlackBorder, r, g, b, a, boxSide, db.barSpacing == 0 and EDGE_TOP or nil)
 end
 
--- BBF's look: black, every edge shown.
+-- BBF's look: black, 1px, every edge shown.
 local function RestoreBorders(manaBar, hpBar)
+    LayoutEdges(hpBar and hpBar.BBFBlackBorder, hpBar and hpBar.BBFPositionFrame, 1, true)
+    LayoutEdges(manaBar and manaBar.BBFBlackBorder, manaBar and manaBar.BBFPositionFrame, 1, true)
     ColorEdges(hpBar and hpBar.BBFBlackBorder, 0, 0, 0, 1)
     ColorEdges(manaBar and manaBar.BBFBlackBorder, 0, 0, 0, 1)
+end
+
+-- Target-of-target clearance ------------------------------------------------
+-- Our layout makes the target/focus stack taller. Blizzard's small focus frame (Edit Mode)
+-- shrinks the focus to 75% but scales its focus-target back up and tucks it closer, so it
+-- ran into our box and bars. After layout, the ToT frame is nudged down just enough to
+-- clear them, measured from the anchor Blizzard/BBF gave it (re-read whenever they move
+-- it) and put back on hand-back. Out of combat only: the ToT is a secure unit button.
+local TOT_OF = { target = "targettarget", focus = "focustarget" }
+local PARENT_OF = { targettarget = "target", focustarget = "focus" }
+local TOT_CLEARANCE = 2 -- UI units between our stack and the ToT
+
+local function TotFrameOf(unit)
+    local f = TOT_OF[unit] and UnitFrameOf(unit)
+    return f and f.totFrame
+end
+
+-- Screen-space edges (frame coords x effective scale), nil when unknown or secret.
+local function ScreenEdge(frame, method)
+    local v = frame and Safe(frame[method](frame))
+    if type(v) ~= "number" then return end
+    return v * frame:GetEffectiveScale()
+end
+
+local function RestoreTot(unit)
+    local tot = TotFrameOf(unit)
+    local o = tot and tot.bapOrig
+    if not o or InCombatLockdown() then return end
+    tot:SetPoint(o[1], o[2], o[3], o[4], o[5])
+    tot.bapOrig, tot.bapShift = nil, nil
+end
+
+local function ClearTot(unit)
+    local tot = TotFrameOf(unit)
+    local sq = squares[unit]
+    if not (tot and sq and sq.box:IsShown()) or InCombatLockdown() then return end
+    local point, rel, relPoint, x, y = tot:GetPoint(1)
+    if not point or IsSecret(x) or IsSecret(y) then return end
+    -- The anchor before our nudge; take a new one if Blizzard/BBF re-anchored it since.
+    local o, shift = tot.bapOrig, tot.bapShift or 0
+    if not (o and o[1] == point and o[2] == rel and o[4] == x and o[5] - shift == y) then
+        o, shift = { point, rel, relPoint, x or 0, y or 0 }, 0
+        tot.bapOrig = o
+    end
+    if shift ~= 0 then tot:SetPoint(o[1], o[2], o[3], o[4], o[5]) end -- measure from the original spot
+    -- Our stack's bottom (box or bars, whichever is lower) and the ToT's top (its frame
+    -- or its own box, whichever is higher), in screen space.
+    local hpPos, manaPos = GetBarFrames(unit)
+    local ours, totTop
+    for _, v in ipairs({ ScreenEdge(sq.box, "GetBottom") or false, ScreenEdge(manaPos or hpPos, "GetBottom") or false }) do
+        if v and (not ours or v < ours) then ours = v end
+    end
+    local totSq = squares[TOT_OF[unit]]
+    for _, v in ipairs({ ScreenEdge(tot, "GetTop") or false, totSq and totSq.box:IsShown() and ScreenEdge(totSq.box, "GetTop") or false }) do
+        if v and (not totTop or v > totTop) then totTop = v end
+    end
+    -- Side by side (no horizontal overlap) needs no nudge.
+    local l1, r1 = ScreenEdge(hpPos, "GetLeft"), ScreenEdge(sq.box, "GetRight")
+    local l2, r2 = ScreenEdge(tot, "GetLeft"), ScreenEdge(tot, "GetRight")
+    local apart = l1 and r1 and l2 and r2 and (r2 < math.min(l1, ScreenEdge(sq.box, "GetLeft") or l1)
+        or l2 > math.max(r1, ScreenEdge(hpPos, "GetRight") or r1))
+    shift = 0
+    if ours and totTop and not apart then
+        local totScale = tot:GetEffectiveScale()
+        local need = (totTop - ours) / totScale + TOT_CLEARANCE + BorderSize() -- clear the bottom border too
+        if need > 0 then shift = need end
+    end
+    tot.bapShift = shift
+    if shift ~= 0 then tot:SetPoint(o[1], o[2], o[3], o[4], o[5] - shift) end
 end
 
 local function RestoreBars(unit)
     if InCombatLockdown() then return end
     local hpPos, manaPos, manaBar, hpBar = GetBarFrames(unit)
     if not hpBar then return end
+    RestoreTot(unit)
     RestoreBorders(manaBar, hpBar)
     RestoreBar(hpBar, hpPos)
     RestoreBar(manaBar, manaPos)
@@ -774,13 +873,13 @@ end
 
 -- Anchor the box beside the bars; height spans the health bar top to the mana bar bottom.
 -- Returns false if the bars haven't been laid out yet.
--- Tall portraits (player and target): px for the talent build's own line above the name
+-- Tall portraits (player, target and focus): px for the talent build's own line above the name
 -- row. It grows the box upward, so the box becomes a taller rectangle while the bars keep
 -- their size and spot. Reserved even with no build to show (NPC targets): bars can't be
 -- re-laid out in combat, so the layout can't change per target. Off: square box, and the
 -- build sits next to the level.
 local BUILD_LINE = 9
-local TALL_UNITS = { player = true, target = true }
+local TALL_UNITS = { player = true, target = true, focus = true }
 local function BuildLine(unit)
     if not (TALL_UNITS[unit] and db.tallPortraits) then return 0 end -- independent of showBuild
     return BUILD_LINE
@@ -925,6 +1024,8 @@ local function RefreshSquare(unit, unitFrame)
         PlaceSquare(squares[unit], hpPos, manaPos)
         CenterBarTexts(hpPos, manaPos, manaBar, hpBar)
         if not InCombatLockdown() then LayoutNameRow(unit, hpPos) end
+        -- Keep the ToT clear of this stack (also when the ToT itself was re-laid out).
+        ClearTot(PARENT_OF[unit] or unit)
     end)
     return true
 end
@@ -1162,36 +1263,44 @@ local function StartGrow(bar, name)
     GrowTrace(name, "start, value", Safe(bar:GetValue()) or "secret")
 end
 
-local function GrowTargetBars()
-    if not (db and db.growBars and UnitExists("target")) then
-        GrowTrace("skip: grow", db and db.growBars, "target", UnitExists("target"))
+local function GrowBars(unit)
+    if not (db and db.growBars and UnitExists(unit)) then
+        GrowTrace("skip: grow", db and db.growBars, unit, UnitExists(unit))
         return
     end
-    local hpBar, manaBar = Lookup("target", "bars")
-    if hpBar then StartGrow(hpBar, "health") end
-    if manaBar then StartGrow(manaBar, "mana") end
+    local hpBar, manaBar = Lookup(unit, "bars")
+    if hpBar then StartGrow(hpBar, unit .. " health") end
+    if manaBar then StartGrow(manaBar, unit .. " mana") end
 end
 
-local function HookTargetUpdate()
-    if TargetFrame and type(TargetFrame.Update) == "function" then
-        hooksecurefunc(TargetFrame, "Update", GrowTargetBars)
+-- Target and focus share Blizzard's frame code: Update() runs on a new target (target
+-- frame) or a new focus (focus frame), after the new values are set. Target-of-target is
+-- left out on purpose: it changes many times a second in fights, so a grow would flicker.
+local function HookGrowUpdates()
+    for _, f in ipairs({ { TargetFrame, "target" }, { FocusFrame, "focus" } }) do
+        local frame, unit = f[1], f[2]
+        if frame and type(frame.Update) == "function" then
+            hooksecurefunc(frame, "Update", function() GrowBars(unit) end)
+        end
     end
 end
 
--- Talent build on the player and target ------------------------------------------------
+-- Talent build on the player, target and focus -------------------------------------
 -- Points per talent tree ("2/8/0") in the square style's name area: on its own line above
 -- the name with tall portraits (BuildLine), else just left of the level. Your own build is
 -- read directly (cached until your talents change); other players need an inspect
 -- (server round trip, ~30 yd range, shared throttle), so results are cached per GUID for
 -- the session and requests are spaced out. NPCs and players we can't inspect show
 -- nothing rather than a guess.
-local BUILD_UNITS = { "player", "target" }
+local BUILD_UNITS = { "player", "target", "focus" }
 local builds = {}         -- GUID -> "2/8/0"
 local ownBuild            -- your build, cleared when your talents change
 local inspectGUID         -- GUID of our pending inspect
 local inspectAt = 0       -- GetTime() of our last NotifyInspect
 local INSPECT_GAP = 1.5   -- seconds between our inspects
 local INSPECT_TIMEOUT = 4 -- give up waiting for a reply after this long
+local NO_REPLY_WAIT = 30  -- a player who didn't answer waits this long before we ask again
+local noReply = {}        -- GUID -> GetTime() of an inspect that got no answer
 
 -- Points per tree for a trait config, in the talent window's tree order. The game leaves
 -- out trees with no points spent (Blizzard's own tree headers show "0" for those).
@@ -1228,21 +1337,29 @@ local function BuildVisible(unit)
         and (db.nameRow[UNITS[unit].row] or 0) > 0 and BBFHidesPortrait(unit)
 end
 
-local function RequestInspect(guid)
+-- One inspect at a time (target and focus share it): a second request would replace the
+-- pending one and its answer would be ignored. No answer in time: that player waits
+-- NO_REPLY_WAIT so the other frame gets a turn.
+local function RequestInspect(guid, unit)
     if not (NotifyInspect and guid) or InCombatLockdown() then return end
-    if inspectGUID == guid and GetTime() - inspectAt < INSPECT_TIMEOUT then return end -- waiting
-    if GetTime() - inspectAt < INSPECT_GAP then return end -- the ticker asks again shortly
-    if CanInspect and not CanInspect("target") then return end -- out of range, enemy, ...
+    local now = GetTime()
+    if inspectGUID then
+        if now - inspectAt < INSPECT_TIMEOUT then return end -- still waiting for its reply
+        noReply[inspectGUID], inspectGUID = now, nil
+    end
+    if noReply[guid] and now - noReply[guid] < NO_REPLY_WAIT then return end
+    if now - inspectAt < INSPECT_GAP then return end -- the ticker asks again shortly
+    if CanInspect and not CanInspect(unit) then return end -- out of range, enemy, ...
     if InspectFrame and InspectFrame:IsShown() then return end -- Blizzard's inspect owns it
     inspectGUID, inspectAt = guid, GetTime()
-    NotifyInspect("target")
+    NotifyInspect(unit)
 end
 
 local function BuildFor(unit)
     if unit == "player" or Safe(UnitIsUnit(unit, "player")) then return OwnBuild() end
     if not Safe(UnitIsPlayer(unit)) then return end
     local guid = Safe(UnitGUID(unit))
-    if guid and not builds[guid] then RequestInspect(guid) end
+    if guid and not builds[guid] then RequestInspect(guid, unit) end
     return guid and builds[guid]
 end
 
@@ -1444,7 +1561,11 @@ f:SetScript("OnEvent", function(self, event, arg1)
         self:RegisterEvent("INSPECT_READY")
         self:RegisterEvent("TRAIT_CONFIG_UPDATED")
         HookBBF()
-        HookTargetUpdate()
+        HookGrowUpdates()
+        -- Edit Mode's small/large focus frame re-anchors the focus-target (see ClearTot).
+        if FocusFrame and type(FocusFrame.SetSmallSize) == "function" then
+            hooksecurefunc(FocusFrame, "SetSmallSize", QueueRefreshAll)
+        end
         BuildOptions()
         if EditModeManagerFrame then
             hooksecurefunc(EditModeManagerFrame, "ExitEditMode", function() C_Timer.After(0.1, RefreshAll) end)
@@ -1465,6 +1586,7 @@ f:SetScript("OnEvent", function(self, event, arg1)
         OnTalentsChanged() -- your own build (player frame, or targeting yourself)
     elseif event == "PLAYER_FOCUS_CHANGED" then
         QueueRefresh("focus"); QueueRefresh("focustarget")
+        UpdateBuild()
     elseif event == "GROUP_ROSTER_UPDATE" then
         for _, unit in ipairs(PARTY) do QueueRefresh(unit) end
     elseif event == "UNIT_TARGET" then
@@ -1629,7 +1751,7 @@ BuildOptions = function()
     Slider({ "sizes", "square", "cam" }, "Distance: square style", "Lower = closer, bigger face.", 0.3, 2, 0.05)
 
     Header("Target bars")
-    Check({ "growBars" }, "Grow on new target", "Health and mana grow from empty when you pick a new target.")
+    Check({ "growBars" }, "Grow on new target", "Health and mana grow from empty when you pick a new target or focus.")
     Slider({ "growTime" }, "Grow time", "Seconds the grow takes.", 0.1, 2, 0.05,
         function(v) return ("%.2fs"):format(v) end)
 
@@ -1644,11 +1766,19 @@ BuildOptions = function()
     local colorGet, colorSet, colorDefault = Path({ "borderColor" })
     Settings.CreateColorSwatch(category, Register("borderColor", "Border Color", colorDefault, colorGet, colorSet),
         "Color of the 1px lines around the portrait box and the health and mana bars.")
+    local sizeGet, sizeSet, sizeDefault = Path({ "borderSize" })
+    Settings.CreateDropdown(category, Register("borderSize", "Border Thickness", sizeDefault, sizeGet, sizeSet), function()
+        local c = Settings.CreateControlTextContainer()
+        c:Add(1, "Thin")
+        c:Add(2, "Medium")
+        c:Add(3, "Heavy")
+        return c:GetData()
+    end, "Thickness of the lines around the portrait box and the bars.")
     Slider({ "borderAlpha" }, "Border Opacity", "Opacity of the 1px lines around the portrait box and the bars.", 0, 1, 0.05, FormatPercent)
     Check({ "alignMana" }, "Align mana bar", "Line the mana bar up with the health bar next to the box.")
-    Check({ "showBuild" }, "Show Talent Build", "Points per talent tree (like 2/8/0) on the player and target frames. Other players need to be within inspect range (about 30 yards); NPCs show nothing.")
+    Check({ "showBuild" }, "Show Talent Build", "Points per talent tree (like 2/8/0) on the player, target and focus frames. Other players need to be within inspect range (about 30 yards); NPCs show nothing.")
     Check({ "mirrorTarget" }, "Mirror Target Text", "Target and focus: name and talent build next to the portrait, level on the outer edge, mirroring the player frame.")
-    Check({ "tallPortraits" }, "Tall portraits", "Player and target: the portrait grows into a taller rectangle, with a line above the name for the talent build. Off: square portraits, build next to the level.")
+    Check({ "tallPortraits" }, "Tall portraits", "Player, target and focus: the portrait grows into a taller rectangle, with a line above the name for the talent build. Off: square portraits, build next to the level.")
     Slider({ "squareGap" }, "Gap to bars", "Space between the box and the bars (1 = borders share one line).", 0, 20, 1)
     Slider({ "barSpacing" }, "Bar spacing", "Space between health and mana (0 = borders share one line).", 0, 10, 1)
 
@@ -1730,7 +1860,7 @@ local function PrintHelp()
     print("  /lp toggle  |  /lp vignette  |  /lp zoom 0-1  |  /lp grow  |  /lp growtime 0.1-2  |  /lp reset")
     print("  /lp style square|circle  |  /lp bg 0-1  |  /lp extend 0-30 [large|small]  |  /lp split 0.4-0.85")
     print("  /lp namerow 0-24 [large|tot|party]  |  /lp gap 0-20  |  /lp barspacing 0-10  |  /lp alignmana  |  /lp build  |  /lp tall  |  /lp surname  |  /lp mirror")
-    print("  /lp bordercolor RRGGBB  |  /lp borderalpha 0-1")
+    print("  /lp bordercolor RRGGBB  |  /lp borderalpha 0-1  |  /lp bordersize thin|medium|heavy")
     print("  /lp inset 0.3-1.2 [large|small]  |  /lp cam 0.3-2 [large|small|square]")
     print("  /lp unit player|target|focus|tot|party  |  /lp refresh  |  /lp debug [unit]")
     print("  circle: /lp circlebg 0-1  |  /lp vignette  |  /lp calibrate  |  /lp offset player|target|focus|tot|party x y")
@@ -1818,6 +1948,7 @@ local SLASH_NUMBERS = {
     growtime = { "growTime", 0.1, 2 }, split = { "hpShare", 0.4, 0.85 }, zoom = { "zoom", 0, 1 },
     circlebg = { "circleBg", 0, 1 }, bg = { "squareBg", 0, 1 },
     gap = { "squareGap", 0, 20 }, barspacing = { "barSpacing", 0, 10 }, borderalpha = { "borderAlpha", 0, 1 },
+    bordersize = { "borderSize", 1, 3 },
 }
 
 SLASH_LIVINGPORTRAITS1 = "/lp"
@@ -1869,6 +2000,8 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
         SetEach(db.stackExtra, size, Clamp(val, 0, 30))
     elseif cmd == "namerow" and val then
         SetEach(db.nameRow, args[3], Clamp(val, 0, 24))
+    elseif cmd == "bordersize" and BORDER_SIZES[arg] then
+        db.borderSize = BORDER_SIZES[arg]
     elseif cmd == "bordercolor" and arg and arg:match("^%x%x%x%x%x%x$") then
         db.borderColor = "ff" .. arg
     elseif cmd == "inset" and val then
