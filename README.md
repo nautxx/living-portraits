@@ -33,6 +33,8 @@ ln -s ~/GitHub/Main/bbf-animated-portraits \
 | `/bap zoom 0-1` | Camera zoom (1 = head and shoulders, lower = more body) |
 | `/bap inset 0.3-1.2 [large\|small]` | Model size relative to the portrait (0.72 keeps corners under the ring; the circle edge follows it) |
 | `/bap cam 0.3-2 [large\|small]` | Camera distance (lower = closer, bigger face) |
+| `/bap calibrate` | Circle: tint the circle edge red to line it up with the ring; toggle again to finish |
+| `/bap offset <group> x y` | Circle: nudge the portrait inside its ring (groups: player, target, focus, tot, party) |
 | `/bap vignette` | Toggle the crisp circle edge that hides the model's square edges |
 | `/bap style square\|circle` | Square box beside the bars (needs BBF No Portrait / Pixel Border) or round portrait |
 | `/bap bg 0-1` | Square: opacity of the dark background behind the model (default 0 = none) |

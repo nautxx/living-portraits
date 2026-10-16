@@ -19,10 +19,12 @@ local ADDON_NAME, ns = ...
 local PARTY = { "party1", "party2", "party3", "party4" }
 local CIRCLE_MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 local VIGNETTE = "Interface\\AddOns\\" .. ADDON_NAME .. "\\media\\vignette"
-local VIGNETTE_EDGE = 0.72 -- radius of the crisp circle edge baked into vignette.tga (fraction of the texture)
+-- vignette.tga is an inverted disc: clear inside, soft fade over the last 12% of the radius,
+-- opaque in the corners. It's sized exactly like the model, so it rounds off the model's
+-- square without extending past it.
 
 -- Bump when a default changes in a way saved settings should pick up (see MigrateSettings).
-local SETTINGS_VERSION = 8
+local SETTINGS_VERSION = 10
 
 local defaults = {
     enabled  = true,
@@ -40,13 +42,23 @@ local defaults = {
     nameRow     = { large = 12, tot = 9, party = 0 },
     alignMana   = true, -- square: line the mana bar's edge up with the health bar on the box side
     vignette = true,
+    calibrate = false, -- circle: tint the edge red to line it up with the ring (/bap calibrate)
+    -- Circle: per-frame nudge (px) of the portrait inside its ring. Measured in game with
+    -- /bap calibrate (Blizzard's portrait textures aren't exactly centered on their rings).
+    offsets = {
+        player = { -0.5, 0.6 },
+        target = { 0.6, 0.3 },
+        focus  = { 0.6, 0.3 }, -- same frame design as target
+        tot    = { -1.3, 2.2 },
+        party  = { 0, 0 },     -- not measured yet
+    },
     bgR = 0.05, bgG = 0.05, bgB = 0.07,
     -- inset (circle style): model square as a fraction of the portrait. 0.84 keeps the
     --        square's corners under the ring's outer edge; the crisp circle edge follows it.
     -- cam:   camera distance (lower = closer = bigger face)
     sizes = {
-        large  = { inset = 0.84, cam = 0.85 },
-        small  = { inset = 0.84, cam = 0.85 },
+        large  = { inset = 0.80, cam = 0.85 },
+        small  = { inset = 0.80, cam = 0.85 },
         square = { inset = 1,    cam = 0.9 },
     },
     units = {
@@ -76,6 +88,13 @@ local SIZE_OF = {
     player = "large", target = "large", focus = "large",
     targettarget = "small", focustarget = "small",
     party1 = "small", party2 = "small", party3 = "small", party4 = "small",
+}
+
+-- Offset groups for the circle style.
+local OFFSET_GROUP = {
+    player = "player", target = "target", focus = "focus",
+    targettarget = "tot", focustarget = "tot",
+    party1 = "party", party2 = "party", party3 = "party", party4 = "party",
 }
 
 -- Name-row groups (ToT and party share the "small" size but lay out names differently).
@@ -197,6 +216,12 @@ local function MigrateSettings()
         db.inset, db.bgInset = nil, nil -- v1 single-size settings
         db.sizes = nil                  -- v2: model fills the circle (inset 0.82 -> 1.0)
     end
+    if version < 10 then
+        db.offsets = nil                -- v10: measured centering offsets
+    end
+    if version < 9 then
+        db.sizes = nil                  -- v9: circle inset 0.84 -> 0.80 with a soft edge
+    end
     if version < 8 then
         db.squareGap = nil              -- v8: box and bars share a border line (3 -> 1)
     end
@@ -235,6 +260,10 @@ local function Deactivate(p)
     p.bgFrame:Hide()
     p.model:Hide()
     p.vignette:Hide()
+    if p.containerLevel and not InCombatLockdown() then
+        p.container:SetFrameLevel(p.containerLevel)
+        p.containerLevel = nil
+    end
     if p.active then
         p.active = false
         if p.portraitWasShown then p.portrait:Show() end
@@ -242,8 +271,15 @@ local function Deactivate(p)
 end
 
 local function Activate(p)
-    -- Sit just below the Blizzard container so its border ring draws over us.
+    -- Sit just below the Blizzard container so its border ring draws over us. That needs
+    -- the container at level 2+; some (e.g. the target's, level 0 in the BACKGROUND
+    -- strata) sit lower, so raise them within their strata and restore on deactivate.
     local level = p.container:GetFrameLevel()
+    if level < 2 and not InCombatLockdown() then
+        p.containerLevel = p.containerLevel or level
+        p.container:SetFrameLevel(2)
+        level = 2
+    end
     local strata = p.container:GetFrameStrata()
     p.bgFrame:SetFrameStrata(strata)
     p.model:SetFrameStrata(strata)
@@ -613,7 +649,7 @@ local function CreateLayers(unit)
 
     -- Dark circle behind the model
     local bgFrame = CreateFrame("Frame", nil, root)
-    bgFrame:SetAllPoints(portrait)
+    bgFrame:SetPoint("CENTER", portrait, "CENTER")
     local bg = bgFrame:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints(bgFrame)
     local mask = bgFrame:CreateMaskTexture()
@@ -632,7 +668,6 @@ local function CreateLayers(unit)
     local layer, sub = portrait:GetDrawLayer()
     local vignette = container:CreateTexture(nil, layer, nil, sub or 0)
     vignette:SetTexture(VIGNETTE)
-    vignette:SetPoint("CENTER", portrait, "CENTER")
     vignette:Hide()
 
     p.bgFrame, p.bg, p.model, p.vignette = bgFrame, bg, model, vignette
@@ -720,13 +755,24 @@ Refresh = function(unit)
     end
     local w, h = p.portrait:GetSize()
     local s = db.sizes[p.size]
+    local off = db.offsets[OFFSET_GROUP[unit]] or { 0, 0 }
+    local ox, oy = off[1] or 0, off[2] or 0
+    -- Model, its rounding vignette and the dark backing all share one center (+ offset).
+    p.model:ClearAllPoints()
+    p.model:SetPoint("CENTER", p.portrait, "CENTER", ox, oy)
     p.model:SetSize(w * s.inset, h * s.inset)
-    -- Scale the vignette so its circle edge lands on the model's straight edges.
-    -- Capped at the portrait size so its dark band never spills past the ring.
-    local vscale = math.min(s.inset / VIGNETTE_EDGE, 1)
-    p.vignette:SetSize(w * vscale, h * vscale)
+    p.vignette:ClearAllPoints()
+    p.vignette:SetPoint("CENTER", p.portrait, "CENTER", ox, oy)
+    p.vignette:SetSize(w * s.inset, h * s.inset)
+    p.bgFrame:ClearAllPoints()
+    p.bgFrame:SetPoint("CENTER", p.portrait, "CENTER", ox, oy)
+    p.bgFrame:SetSize(w, h)
     p.bg:SetColorTexture(db.bgR, db.bgG, db.bgB, 1)
-    p.vignette:SetVertexColor(db.bgR, db.bgG, db.bgB, 1)
+    if db.calibrate then
+        p.vignette:SetVertexColor(1, 0.1, 0.1, 1)
+    else
+        p.vignette:SetVertexColor(db.bgR, db.bgG, db.bgB, 1)
+    end
 
     p.model:ClearModel()
     p.model:SetUnit(unit)
@@ -857,6 +903,7 @@ local function PrintHelp()
     print("  /bap namerow 0-24 [large|tot|party]  |  /bap gap 0-20  |  /bap barspacing 0-10  |  /bap alignmana")
     print("  /bap inset 0.3-1.2 [large|small]  |  /bap cam 0.3-2 [large|small|square]")
     print("  /bap unit player|target|focus|tot|party  |  /bap refresh  |  /bap debug [unit]")
+    print("  circle: /bap calibrate  |  /bap offset player|target|focus|tot|party x y")
 end
 
 -- Set a per-size value; no size given = both.
@@ -876,9 +923,28 @@ local function PointInfo(r)
     return ("%s>%s.%s (%s,%s) n=%d shown=%s"):format(tostring(point), relName, tostring(relPoint),
         Fmt(x), Fmt(y), r:GetNumPoints() or 0, tostring(r:IsShown()))
 end
+local function T(...) return tostring((...)) end -- tolerates calls that return nothing
+
+local function DebugCircle(unit)
+    local p = layers[unit]
+    if not p then print("  circle: not created"); return end
+    local c, m, v = p.container, p.model, p.vignette
+    local vl, vs = v:GetDrawLayer()
+    local pl, ps = p.portrait:GetDrawLayer()
+    print(("  circle: active=%s  container lvl=%s %s  model lvl=%s %s shown=%s size=%s"):format(
+        T(p.active), Fmt(c:GetFrameLevel()), T(c:GetFrameStrata()),
+        Fmt(m:GetFrameLevel()), T(m:GetFrameStrata()), T(m:IsShown()), Fmt(m:GetWidth())))
+    print(("  vignette shown=%s visible=%s layer=%s/%s size=%s alpha=%s  portrait layer=%s/%s shown=%s size=%s"):format(
+        T(v:IsShown()), T(v:IsVisible()), T(vl), T(vs), Fmt(v:GetWidth()), Fmt(v:GetAlpha()),
+        T(pl), T(ps), T(p.portrait:IsShown()), Fmt(p.portrait:GetWidth())))
+    print(("  bg lvl=%s shown=%s  root=%s lvl=%s"):format(Fmt(p.bgFrame:GetFrameLevel()), T(p.bgFrame:IsShown()),
+        T(m:GetParent() and m:GetParent().GetName and m:GetParent():GetName()), Fmt(m:GetParent() and m:GetParent():GetFrameLevel())))
+end
+
 local function DebugUnit(unit)
     local hpPos, manaPos, manaBar, hpBar = GetBarFrames(unit)
     print(("|cff00c0ffBAP debug|r %s  style=%s  bbfNoPortrait=%s"):format(unit, db.style, tostring(BBFHidesPortrait(unit))))
+    DebugCircle(unit)
     if not hpPos then print("  no bars found"); return end
     print(("  hpPos top=%s bottom=%s h=%s row=%s"):format(Fmt(hpPos:GetTop()), Fmt(hpPos:GetBottom()), Fmt(hpPos:GetHeight()), Fmt(hpPos.bapRow)))
     print("  hpBar " .. PointInfo(hpBar) .. "  h=" .. Fmt(hpBar:GetHeight()) .. " base=" .. Fmt(hpBar.bapBaseH))
@@ -918,6 +984,14 @@ SlashCmdList.BBFANIMPORTRAITS = function(msg)
         db.enabled = not db.enabled
     elseif cmd == "vignette" then
         db.vignette = not db.vignette
+    elseif cmd == "calibrate" then
+        db.calibrate = not db.calibrate
+        print(db.calibrate and "  Calibrate on: nudge with /bap offset <player|target|focus|tot|party> x y, then /bap calibrate to finish."
+            or "  Calibrate off.")
+    elseif cmd == "offset" and arg and db.offsets[arg] then
+        local x, y = tonumber(args[3]), tonumber(args[4])
+        if x and y then db.offsets[arg] = { math.max(-10, math.min(10, x)), math.max(-10, math.min(10, y)) } end
+        print(("  offset %s = %s, %s"):format(arg, tostring(db.offsets[arg][1]), tostring(db.offsets[arg][2])))
     elseif cmd == "style" and (arg == "square" or arg == "circle") then
         db.style = arg
     elseif cmd == "extend" and val then

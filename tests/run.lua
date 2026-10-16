@@ -35,6 +35,7 @@ local function region(t)
     function t:SetAlpha(a) self.alpha = a end
     function t:GetAlpha() return rawget(self, "alpha") or 1 end
     function t:SetSize(w, h) self.w, self.h = w, h end
+    function t:SetPoint(point, rel, relPoint, x, y) self.anchor = { point, rel, relPoint, x, y } end
     function t:SetHeight(h) self.h = h end
     function t:GetHeight() return rawget(self, "h") or 0 end
     function t:SetWidth(w) self.w = w end
@@ -169,9 +170,9 @@ BBFAnimatedPortraitsDB = { enabled = true, sizes = { large = { inset = 0.82, cam
 fire("ADDON_LOADED", "BBF_AnimatedPortraits")
 local bbfHooked = BBF.SetCustomFonts
 BBF = nil
-check("old saved inset migrated to new default", BBFAnimatedPortraitsDB.sizes.small.inset == 0.84)
-check("settings version recorded", BBFAnimatedPortraitsDB.version == 8)
-check("defaults applied", BBFAnimatedPortraitsDB.enabled == true and BBFAnimatedPortraitsDB.sizes.large.inset == 0.84)
+check("old saved inset migrated to new default", BBFAnimatedPortraitsDB.sizes.small.inset == 0.80)
+check("settings version recorded", BBFAnimatedPortraitsDB.version == 10)
+check("defaults applied", BBFAnimatedPortraitsDB.enabled == true and BBFAnimatedPortraitsDB.sizes.large.inset == 0.80)
 
 fire("PLAYER_ENTERING_WORLD")
 check("models created lazily, only for units on screen (4 of 9)", #models == 4)
@@ -183,9 +184,9 @@ check("party2 out of range -> hidden", not shownFor("party2"))
 check("focus missing -> hidden", not shownFor("focus"))
 
 local pm = modelFor("player")
-check("model sized by large inset", pm.w and math.abs(pm.w - 60 * 0.84) < 0.01)
+check("model sized by large inset", pm.w and math.abs(pm.w - 60 * 0.80) < 0.01)
 local vig = rawget(playerContainer, "textures")[1]
-check("vignette edge matches model edge at default inset", math.abs(vig.w - 60) < 0.01) -- capped at portrait
+check("circle edge is exactly the model's size (48)", math.abs(vig.w - 48) < 0.01)
 check("model sits below the Blizzard container (ring on top)", pm.level < playerContainer.level)
 check("model parented to the unit frame root", pm.parent == PlayerFrame)
 check("2D portrait hidden while active", not playerContainer.PlayerPortrait.shown)
@@ -193,6 +194,31 @@ check("2D portrait hidden while active", not playerContainer.PlayerPortrait.show
 -- Blizzard/BBF re-showing the portrait while active gets re-hidden
 playerContainer.PlayerPortrait:Show()
 check("portrait stays hidden if re-shown while active", not playerContainer.PlayerPortrait.shown)
+
+-- Centering offset and calibration
+check("measured default offsets applied", BBFAnimatedPortraitsDB.offsets.tot[1] == -1.3 and BBFAnimatedPortraitsDB.offsets.tot[2] == 2.2)
+local defA = modelFor("player").anchor
+check("player portrait uses its measured offset", defA and defA[4] == -0.5 and defA[5] == 0.6)
+slash("offset player 2 -1")
+check("/bap offset stores the nudge", BBFAnimatedPortraitsDB.offsets.player[1] == 2 and BBFAnimatedPortraitsDB.offsets.player[2] == -1)
+local pmA = modelFor("player").anchor
+check("offset moves the model off the portrait center", pmA and pmA[4] == 2 and pmA[5] == -1)
+check("offset moves the circle edge with it", vig.anchor and vig.anchor[4] == 2 and vig.anchor[5] == -1)
+slash("offset player 0 0")
+slash("calibrate")
+check("/bap calibrate turns calibration on", BBFAnimatedPortraitsDB.calibrate == true)
+slash("calibrate")
+
+-- A container at level 0 (the target's) is raised so the model can sit beneath it
+targetContainer.level = 0
+slash("toggle"); slash("toggle")
+check("low container raised to level 2", targetContainer.level == 2)
+local tm = modelFor("target")
+check("model sits below the raised container", tm.level < targetContainer.level)
+slash("toggle")
+check("container level restored when turned off", targetContainer.level == 0)
+slash("toggle")
+targetContainer.level = 6; slash("toggle"); slash("toggle")
 
 -- Ticker: party2 comes into range
 world.visible.party2 = nil
@@ -250,12 +276,12 @@ check("/bap toggle restores", shownFor("player"))
 
 -- Sized settings
 slash("inset 0.9 small")
-check("inset small only", BBFAnimatedPortraitsDB.sizes.small.inset == 0.9 and BBFAnimatedPortraitsDB.sizes.large.inset == 0.84)
+check("inset small only", BBFAnimatedPortraitsDB.sizes.small.inset == 0.9 and BBFAnimatedPortraitsDB.sizes.large.inset == 0.80)
 slash("inset 0.5 large")
-check("vignette edge follows a smaller inset", math.abs(vig.w - 60 * 0.5 / 0.72) < 0.01)
+check("circle edge follows a smaller inset", math.abs(vig.w - 30) < 0.01)
 slash("inset 0.9 large")
-check("vignette capped at portrait size", math.abs(vig.w - 60) < 0.01)
-slash("inset 0.84 large")
+check("circle edge follows a larger inset", math.abs(vig.w - 54) < 0.01)
+slash("inset 0.80 large")
 slash("cam 0.7")
 check("cam without size sets both", BBFAnimatedPortraitsDB.sizes.small.cam == 0.7 and BBFAnimatedPortraitsDB.sizes.large.cam == 0.7)
 slash("cam 9 large"); check("cam clamped to 2", BBFAnimatedPortraitsDB.sizes.large.cam == 2)
