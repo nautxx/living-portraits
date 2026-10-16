@@ -42,7 +42,7 @@ animation, like the character screen, as a **companion addon** to BetterBlizzFra
 - SavedVariables: `BBFAnimatedPortraitsDB` (defaults merged on `ADDON_LOADED`).
 - Slash: `/bap`.
 
-## Blizzard / BBF frame paths (Camelot client 1.60.1.70374)
+## Blizzard / BBF frame paths (WoW Forever beta, internal name "Camelot", client 1.60.1.70374)
 
 Verified against Blizzard's UI source: `github.com/Gethe/wow-ui-source`, branch **`forever`** (same build as the client). Camelot loads the Mainline ("Family") unit-frame XML.
 Also exported locally from the client (`exportInterfaceFiles code`) to `_classic_beta_/BlizzardInterfaceCode/`. The unit-frame files match the mirror byte-for-byte (ignoring CRLF).

@@ -2,7 +2,7 @@
 
 Live 3D animated portraits for World of Warcraft unit frames. Your character breathes and idles like on the character screen. A companion addon for [BetterBlizzFrames](https://www.curseforge.com/wow/addons/betterblizzframes).
 
-> **Status:** v0.2.0, early release. Tested in game on the Classic beta ("Camelot") client, with and without BetterBlizzFrames. See [CHANGELOG](CHANGELOG.md).
+> **Status:** v0.2.0, early release. Tested in game on the **WoW Forever beta**, with and without BetterBlizzFrames. See [CHANGELOG](CHANGELOG.md).
 
 ## Screenshots
 
@@ -41,6 +41,8 @@ ln -s ~/GitHub/Main/bbf-animated-portraits \
   "/Applications/World of Warcraft/_classic_beta_/Interface/AddOns/BBF_AnimatedPortraits"
 ```
 
+(The WoW Forever beta installs into the `_classic_beta_` folder.)
+
 ## Commands
 
 | Command | Effect |
@@ -72,7 +74,7 @@ ln -s ~/GitHub/Main/bbf-animated-portraits \
 
 | Client | Interface | Status |
 |---|---|---|
-| Classic beta ("Camelot") | 16001 | Supported |
+| WoW Forever beta | 16001 | Supported |
 | Retail | 120105 | Not yet |
 
 ## Releasing
