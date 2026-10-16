@@ -50,6 +50,8 @@ local defaults = {
     tallPortraits = true, -- square: player/target box grows upward by a line for the build (/lp tall)
     hideSurname = false, -- first names only on our frames (/lp surname)
     mirrorTarget = false, -- square: target/focus text mirrors the player's (/lp mirror)
+    borderColor = "ff000000", -- square: box + bar border color, ARGB hex like the settings swatch (/lp bordercolor)
+    borderAlpha = 1,      -- square: border opacity (/lp borderalpha)
     vignette = true,
     calibrate = false, -- circle: tint the edge red to line it up with the ring (/lp calibrate)
     -- Circle: per-frame nudge (px) of the portrait inside its ring. Measured in game with
@@ -433,11 +435,11 @@ local function CreateSquare(unit, unitFrame)
     box:Hide()
     local bg = box:CreateTexture(nil, "BACKGROUND")
     bg:SetAllPoints(box)
-    CreatePixelBorder(box)
+    local edges = CreatePixelBorder(box)
     local model = CreateFrame("PlayerModel", nil, box)
     model:SetAllPoints(box)
     model:SetScript("OnModelLoaded", function(self) ApplyCamera(self, "square") end)
-    local sq = { unit = unit, box = box, bg = bg, model = model, unitFrame = unitFrame }
+    local sq = { unit = unit, box = box, bg = bg, model = model, unitFrame = unitFrame, edges = edges }
     -- Mirror Blizzard's portrait fading (party out of range) even though BBF hid the portrait.
     local portrait = Lookup(unit, "portrait")
     if portrait then
@@ -699,10 +701,53 @@ local function LayoutNameRow(unit, hpPos)
 end
 
 -- Put the bars and texts back exactly as BBF/Blizzard had them.
+-- Border color (square style): our box border and BBF's health/mana borders get the
+-- same color and opacity. BBF colors its edges once (black, when it creates them) and
+-- keeps them on the bar (bar.BBFBlackBorder), so recoloring them at runtime sticks.
+-- Edges are top, right, bottom, left. With the defaults, borders share pixel lines (box
+-- and bars at squareGap 1, health and mana at barSpacing 0); below full opacity a shared
+-- line would draw twice and show darker, so the duplicate edge is hidden.
+local EDGE_RIGHT, EDGE_LEFT, EDGE_TOP = 2, 4, 1
+
+local function BorderRGBA()
+    local hex = db.borderColor
+    if type(hex) ~= "string" or #hex ~= 8 then hex = "ff000000" end
+    local function c(i) return (tonumber(hex:sub(i, i + 1), 16) or 0) / 255 end
+    return c(3), c(5), c(7), db.borderAlpha or 1
+end
+
+local function ColorEdges(edges, r, g, b, a, hideA, hideB)
+    if type(edges) ~= "table" then return end
+    for i, t in ipairs(edges) do
+        if t.SetColorTexture then
+            t:SetColorTexture(r, g, b, a)
+            t:SetShown(i ~= hideA and i ~= hideB)
+        end
+    end
+end
+
+local function ApplyBorders(unit, manaBar, hpBar)
+    local r, g, b, a = BorderRGBA()
+    local sq = squares[unit]
+    if sq then ColorEdges(sq.edges, r, g, b, a) end
+    -- The bars' edge on the box side is the same line as the box's edge (gap 1).
+    local boxSide = db.squareGap == 1 and (UNITS[unit].side == "RIGHT" and EDGE_RIGHT or EDGE_LEFT) or nil
+    ColorEdges(hpBar and hpBar.BBFBlackBorder, r, g, b, a, boxSide)
+    -- Mana's top edge is the same line as health's bottom edge (spacing 0).
+    ColorEdges(manaBar and manaBar.BBFBlackBorder, r, g, b, a, boxSide, db.barSpacing == 0 and EDGE_TOP or nil)
+end
+
+-- BBF's look: black, every edge shown.
+local function RestoreBorders(manaBar, hpBar)
+    ColorEdges(hpBar and hpBar.BBFBlackBorder, 0, 0, 0, 1)
+    ColorEdges(manaBar and manaBar.BBFBlackBorder, 0, 0, 0, 1)
+end
+
 local function RestoreBars(unit)
     if InCombatLockdown() then return end
     local hpPos, manaPos, manaBar, hpBar = GetBarFrames(unit)
     if not hpBar then return end
+    RestoreBorders(manaBar, hpBar)
     RestoreBar(hpBar, hpPos)
     RestoreBar(manaBar, manaPos)
     RestoreTexts(hpBar, HP_TEXT_KEYS)
@@ -860,6 +905,7 @@ local function RefreshSquare(unit, unitFrame)
         C_Timer.After(0.5, function() Refresh(unit) end) -- bars not laid out yet
         return false
     end
+    ApplyBorders(unit, manaBar, hpBar)
     -- Once the resized bars have been laid out: re-measure the box, center the texts.
     C_Timer.After(0, function()
         PlaceSquare(squares[unit], hpPos, manaPos)
@@ -1581,6 +1627,10 @@ BuildOptions = function()
     Slider({ "nameRow", "tot" }, "Name row: target of target", "Height of the name row inside the box (0 = off).", 0, 24, 1)
     Slider({ "nameRow", "party" }, "Name row: party", "Height of the name row inside the box (0 = off).", 0, 24, 1)
     Slider({ "hpShare" }, "Health share", "Health bar's share of the stack; mana gets the rest.", 0.4, 0.85, 0.01, FormatPercent)
+    local colorGet, colorSet, colorDefault = Path({ "borderColor" })
+    Settings.CreateColorSwatch(category, Register("borderColor", "Border Color", colorDefault, colorGet, colorSet),
+        "Color of the 1px lines around the portrait box and the health and mana bars.")
+    Slider({ "borderAlpha" }, "Border Opacity", "Opacity of the 1px lines around the portrait box and the bars.", 0, 1, 0.05, FormatPercent)
     Check({ "alignMana" }, "Align mana bar", "Line the mana bar up with the health bar next to the box.")
     Check({ "showBuild" }, "Show Talent Build", "Points per talent tree (like 2/8/0) on the player and target frames. Other players need to be within inspect range (about 30 yards); NPCs show nothing.")
     Check({ "mirrorTarget" }, "Mirror Target Text", "Target and focus: name and talent build next to the portrait, level on the outer edge, mirroring the player frame.")
@@ -1666,6 +1716,7 @@ local function PrintHelp()
     print("  /lp toggle  |  /lp vignette  |  /lp zoom 0-1  |  /lp grow  |  /lp growtime 0.1-2  |  /lp reset")
     print("  /lp style square|circle  |  /lp bg 0-1  |  /lp extend 0-30 [large|small]  |  /lp split 0.4-0.85")
     print("  /lp namerow 0-24 [large|tot|party]  |  /lp gap 0-20  |  /lp barspacing 0-10  |  /lp alignmana  |  /lp build  |  /lp tall  |  /lp surname  |  /lp mirror")
+    print("  /lp bordercolor RRGGBB  |  /lp borderalpha 0-1")
     print("  /lp inset 0.3-1.2 [large|small]  |  /lp cam 0.3-2 [large|small|square]")
     print("  /lp unit player|target|focus|tot|party  |  /lp refresh  |  /lp debug [unit]")
     print("  circle: /lp circlebg 0-1  |  /lp vignette  |  /lp calibrate  |  /lp offset player|target|focus|tot|party x y")
@@ -1752,7 +1803,7 @@ local SLASH_TOGGLES = {
 local SLASH_NUMBERS = {
     growtime = { "growTime", 0.1, 2 }, split = { "hpShare", 0.4, 0.85 }, zoom = { "zoom", 0, 1 },
     circlebg = { "circleBg", 0, 1 }, bg = { "squareBg", 0, 1 },
-    gap = { "squareGap", 0, 20 }, barspacing = { "barSpacing", 0, 10 },
+    gap = { "squareGap", 0, 20 }, barspacing = { "barSpacing", 0, 10 }, borderalpha = { "borderAlpha", 0, 1 },
 }
 
 SLASH_LIVINGPORTRAITS1 = "/lp"
@@ -1804,6 +1855,8 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
         SetEach(db.stackExtra, size, Clamp(val, 0, 30))
     elseif cmd == "namerow" and val then
         SetEach(db.nameRow, args[3], Clamp(val, 0, 24))
+    elseif cmd == "bordercolor" and arg and arg:match("^%x%x%x%x%x%x$") then
+        db.borderColor = "ff" .. arg
     elseif cmd == "inset" and val then
         SetEach(db.sizes, size, Clamp(val, 0.3, 1.2), "inset")
     elseif cmd == "cam" and val then
