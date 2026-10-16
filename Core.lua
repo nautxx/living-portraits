@@ -21,11 +21,12 @@ local defaults = {
     zoom     = 1,     -- 0..1, 1 = head & shoulders
     vignette = true,
     bgR = 0.05, bgG = 0.05, bgB = 0.07,
-    -- inset: model square as a fraction of the portrait (corners should stay under the ring)
+    -- inset: model square as a fraction of the portrait (1.0 = edges under the ring;
+    --        lower it if the square's corners poke past the ring's outer edge)
     -- cam:   camera distance (lower = closer = bigger face)
     sizes = {
-        large = { inset = 0.82, cam = 0.85 },
-        small = { inset = 0.82, cam = 0.85 },
+        large = { inset = 1.0, cam = 0.85 },
+        small = { inset = 1.0, cam = 0.85 },
     },
     units = {
         player = true,

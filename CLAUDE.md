@@ -21,8 +21,8 @@ animation, like the character screen, as a **companion addon** to BetterBlizzFra
 - `GROUPS` maps slash-command names (`player`, `target`, `focus`, `tot`, `party`) to units.
 - **Layering (bottom to top)**, all created by `CreateLayers(unit)`:
   1. `bgFrame` (child of the unit frame root, level = container − 2): dark circle with its own mask (`TempPortraitAlphaMask`).
-  2. `model` (child of root, level = container − 1): `PlayerModel` square sized `portrait × sizes[large|small].inset` (0.82). Its corners sit under the ring.
-  3. Blizzard's container: the 2D portrait (hidden while active), our `vignette` texture (same sublevel as the portrait, `media/vignette.tga`) and the border ring art (one sublevel up). The ring covers the model's corners; the vignette fades the circle's edge so the model's straight edges don't show.
+  2. `model` (child of root, level = container − 1): `PlayerModel` square sized `portrait × sizes[large|small].inset` (1.0). Its edges sit under the ring; its corners can poke a few px past the ring's outer edge if geometry reaches them.
+  3. Blizzard's container: the 2D portrait (hidden while active), our `vignette` texture (same sublevel as the portrait, `media/vignette.tga`) and the border ring art (one sublevel up). The ring covers the model's corners; the vignette is a thin soft edge (clear to ~87% radius) blending the model into the ring.
 - While active, Blizzard's portrait is hidden (`Hide()`), and a `hooksecurefunc(portrait, "Show")` re-hides it if anything re-shows it. It's restored on deactivate only if it was shown before. Neither Blizzard nor BBF shows or hides these portraits (Blizzard only does for boss frames), so the risk of fighting them is low. **Side effect:** BBF spec/class icon portraits are covered while the model shows (model wins).
 - The layers are no longer inside the unit frame, so they follow it via `container:HookScript("OnShow"/"OnHide")`, and `Refresh` checks `container:IsVisible()`.
 - Alpha mirrors `portrait:SetAlpha` (party out-of-range fade) onto bg, model and vignette.

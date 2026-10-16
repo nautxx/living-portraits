@@ -125,7 +125,7 @@ world.exists = { player = true, target = true, targettarget = true, party1 = tru
 world.visible.party2 = false
 
 fire("ADDON_LOADED", "BBF_AnimatedPortraits")
-check("defaults applied", BBFAnimatedPortraitsDB.enabled == true and BBFAnimatedPortraitsDB.sizes.large.inset == 0.82)
+check("defaults applied", BBFAnimatedPortraitsDB.enabled == true and BBFAnimatedPortraitsDB.sizes.large.inset == 1.0)
 
 fire("PLAYER_ENTERING_WORLD")
 check("one model per supported unit (9)", #models == 9)
@@ -137,7 +137,7 @@ check("party2 out of range -> hidden", not shownFor("party2"))
 check("focus missing -> hidden", not shownFor("focus"))
 
 local pm = modelFor("player")
-check("model sized by large inset", pm.w and math.abs(pm.w - 60 * 0.82) < 0.01)
+check("model sized by large inset", pm.w and math.abs(pm.w - 60 * 1.0) < 0.01)
 check("model sits below the Blizzard container (ring on top)", pm.level < playerContainer.level)
 check("model parented to the unit frame root", pm.parent == PlayerFrame)
 check("2D portrait hidden while active", not playerContainer.PlayerPortrait.shown)
@@ -202,7 +202,7 @@ check("/bap toggle restores", shownFor("player"))
 
 -- Sized settings
 slash("inset 0.9 small")
-check("inset small only", BBFAnimatedPortraitsDB.sizes.small.inset == 0.9 and BBFAnimatedPortraitsDB.sizes.large.inset == 0.82)
+check("inset small only", BBFAnimatedPortraitsDB.sizes.small.inset == 0.9 and BBFAnimatedPortraitsDB.sizes.large.inset == 1.0)
 slash("cam 0.7")
 check("cam without size sets both", BBFAnimatedPortraitsDB.sizes.small.cam == 0.7 and BBFAnimatedPortraitsDB.sizes.large.cam == 0.7)
 slash("cam 9 large"); check("cam clamped to 2", BBFAnimatedPortraitsDB.sizes.large.cam == 2)
