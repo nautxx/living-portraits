@@ -6,7 +6,7 @@ Live 3D animated portraits for World of Warcraft unit frames. Your character bre
 
 ## How it works
 
-Instead of the flat 2D portrait, a live `PlayerModel` of the unit is drawn over the portrait circle on a dark, circle-masked background. If the model can't load (unit out of range, offline, or a BBF "no portrait" mode is on), the addon steps aside and the normal portrait shows.
+Instead of the flat 2D portrait, a live `PlayerModel` of the unit is drawn inside the portrait circle, behind the frame's border ring, with a soft vignette so the model's square edges don't show. If the model can't load (unit out of range, offline, or a BBF "no portrait" mode is on), the addon steps aside and the normal portrait shows.
 
 It **does not modify BetterBlizzFrames**. BBF is an optional dependency: when installed, this addon loads after it and follows BBF's portrait sizing automatically.
 
@@ -31,8 +31,9 @@ ln -s ~/GitHub/Main/bbf-animated-portraits \
 | `/bap` | Show current settings |
 | `/bap toggle` | Turn animated portraits on/off |
 | `/bap zoom 0-1` | Camera zoom (1 = head and shoulders, lower = more body) |
-| `/bap inset 0.3-1.2` | Model size relative to the portrait (~0.72 fits inside the circle) |
-| `/bap bg 0.5-1` | Size of the dark backing circle (0.9 stays inside the border ring) |
+| `/bap inset 0.3-1.2 [large\|small]` | Model size relative to the portrait (0.82: corners stay under the ring) |
+| `/bap cam 0.3-2 [large\|small]` | Camera distance (lower = closer, bigger face) |
+| `/bap vignette` | Toggle the soft dark edge that hides the model's square edges |
 | `/bap unit <group>` | Toggle a frame group: `player`, `target`, `focus`, `tot`, `party` |
 | `/bap reset` | Restore defaults |
 

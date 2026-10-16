@@ -19,7 +19,7 @@ read_globals = {
     "UnitExists", "UnitGUID", "UnitIsVisible", "UnitIsConnected",
     "issecretvalue",
     -- WoW Lua extensions
-    "strsplit", "wipe",
+    "wipe",
     -- BetterBlizzFrames (optional)
     "BBF",
 }

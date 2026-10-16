@@ -1,19 +1,32 @@
 -- BBF Animated Portraits
 -- Replaces the flat 2D unit-frame portrait with a live 3D model (idle "breathing"
--- animation, like the character screen). Does not modify BetterBlizzFrames itself:
--- we layer a circle-masked background + a PlayerModel on top of the existing portrait,
--- and hide our layers to fall back to the normal portrait whenever the model can't load.
+-- animation, like the character screen). Companion to BetterBlizzFrames; never edits BBF.
+--
+-- Layering (bottom to top), see CLAUDE.md for why:
+--   bgFrame   (root child, level container-2)  dark circle behind the model
+--   model     (root child, level container-1)  PlayerModel, a square we can't mask
+--   container (Blizzard)                       hidden 2D portrait (sublevel 1),
+--                                              our vignette (sublevel 1),
+--                                              border ring art (sublevel 2) covers the model's corners
+-- The vignette fades the circle's edge to dark so the model's straight edges don't show.
 
 local ADDON_NAME, ns = ...
 
 local PARTY = { "party1", "party2", "party3", "party4" }
+local CIRCLE_MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
+local VIGNETTE = "Interface\\AddOns\\" .. ADDON_NAME .. "\\media\\vignette"
 
 local defaults = {
-    enabled = true,
-    zoom    = 1,     -- 0..1, 1 = head & shoulders
-    inset   = 0.72,  -- model size as a fraction of the portrait (~0.70 fits inside the circle)
-    bgInset = 0.90,  -- dark backing circle as a fraction of the portrait (stays inside the border ring)
+    enabled  = true,
+    zoom     = 1,     -- 0..1, 1 = head & shoulders
+    vignette = true,
     bgR = 0.05, bgG = 0.05, bgB = 0.07,
+    -- inset: model square as a fraction of the portrait (corners should stay under the ring)
+    -- cam:   camera distance (lower = closer = bigger face)
+    sizes = {
+        large = { inset = 0.82, cam = 0.85 },
+        small = { inset = 0.82, cam = 0.85 },
+    },
     units = {
         player = true,
         target = true, focus = true,
@@ -23,7 +36,6 @@ local defaults = {
 }
 
 -- Unit -> function returning the portrait texture on the Blizzard frame.
--- The model/background are parented to the portrait's own parent frame.
 local PORTRAITS = {
     player       = function() local c = PlayerFrame and PlayerFrame.PlayerFrameContainer; return c and c.PlayerPortrait end,
     target       = function() local c = TargetFrame and TargetFrame.TargetFrameContainer; return c and c.Portrait end,
@@ -38,6 +50,12 @@ for i, unit in ipairs(PARTY) do
     end
 end
 
+local SIZE_OF = {
+    player = "large", target = "large", focus = "large",
+    targettarget = "small", focustarget = "small",
+    party1 = "small", party2 = "small", party3 = "small", party4 = "small",
+}
+
 -- Slash-command groups -> units
 local GROUPS = {
     player = { "player" }, target = { "target" }, focus = { "focus" },
@@ -46,7 +64,7 @@ local GROUPS = {
 }
 
 local db
-local layers = {}   -- unit -> { model, bg, portrait }
+local layers = {}    -- unit -> layer record
 local lastState = {} -- unit -> state key, so the ticker only refreshes on change
 
 -- Helpers -------------------------------------------------------------------
@@ -72,8 +90,6 @@ local function BBFHidesPortrait(unit)
     return BBF and BBF.HasNoPortrait and BBF.HasNoPortrait(unit)
 end
 
-local CIRCLE_MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
-
 local function UnitState(unit)
     if not UnitExists(unit) then return "none" end
     local guid = Safe(UnitGUID(unit)) or "?"
@@ -82,84 +98,134 @@ local function UnitState(unit)
     return guid .. (visible == false and ":h" or ":v") .. (online == false and ":d" or ":c")
 end
 
+local function ApplyCamera(model, size)
+    model:SetPortraitZoom(db.zoom)
+    model:SetCamDistanceScale(db.sizes[size].cam)
+    model:SetPosition(0, 0, 0)
+end
+
 -- Layers --------------------------------------------------------------------
 
--- Our layers live in their own "holder" frame on top of the portrait:
---   holder (Frame, child of the portrait's parent)
---     bg    - dark circle with its OWN mask, sized bgInset so it sits inside the border ring
---     model - PlayerModel, sized inset, above bg
--- Blizzard's portrait is never touched. Its border art is only one sublevel above the
--- portrait, so drawing on the portrait's frame made the order undefined (see CLAUDE.md).
+local Refresh -- forward declaration
+
+local function SetLayerAlpha(p, alpha)
+    p.bgFrame:SetAlpha(alpha)
+    p.model:SetAlpha(alpha)
+    p.vignette:SetAlpha(alpha)
+end
+
+local function Deactivate(p)
+    p.bgFrame:Hide()
+    p.model:Hide()
+    p.vignette:Hide()
+    if p.active then
+        p.active = false
+        if p.portraitWasShown then p.portrait:Show() end
+    end
+end
+
+local function Activate(p)
+    -- Sit just below the Blizzard container so its border ring draws over us.
+    local level = p.container:GetFrameLevel()
+    local strata = p.container:GetFrameStrata()
+    p.bgFrame:SetFrameStrata(strata)
+    p.model:SetFrameStrata(strata)
+    p.bgFrame:SetFrameLevel(math.max(level - 2, 0))
+    p.model:SetFrameLevel(math.max(level - 1, 0))
+
+    p.bgFrame:Show()
+    p.model:Show()
+    p.vignette:SetShown(db.vignette)
+    if not p.active then
+        p.active = true
+        p.portraitWasShown = p.portrait:IsShown()
+        p.portrait:Hide()
+    end
+end
+
 local function CreateLayers(unit)
     local getter = PORTRAITS[unit]
     local portrait = getter and getter()
     if not portrait then return end
     local container = portrait:GetParent()
     if not container then return end
+    local root = container:GetParent() or container
 
-    local holder = CreateFrame("Frame", nil, container)
-    holder:SetAllPoints(portrait)
-    holder:Hide()
+    local p = { unit = unit, size = SIZE_OF[unit], portrait = portrait, container = container }
 
-    local bg = holder:CreateTexture(nil, "BACKGROUND")
-    bg:SetPoint("CENTER", portrait, "CENTER")
-    bg:SetColorTexture(1, 1, 1, 1)
-    local mask = holder:CreateMaskTexture()
+    -- Dark circle behind the model
+    local bgFrame = CreateFrame("Frame", nil, root)
+    bgFrame:SetAllPoints(portrait)
+    local bg = bgFrame:CreateTexture(nil, "BACKGROUND")
+    bg:SetAllPoints(bgFrame)
+    local mask = bgFrame:CreateMaskTexture()
     mask:SetTexture(CIRCLE_MASK, "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
     mask:SetAllPoints(bg)
     bg:AddMaskTexture(mask)
+    bgFrame:Hide()
 
-    local model = CreateFrame("PlayerModel", nil, holder)
+    -- The 3D model
+    local model = CreateFrame("PlayerModel", nil, root)
     model:SetPoint("CENTER", portrait, "CENTER")
-    model:SetScript("OnModelLoaded", function(self)
-        self:SetPortraitZoom(db.zoom)
-        self:SetCamDistanceScale(1)
-        self:SetPosition(0, 0, 0)
-    end)
+    model:SetScript("OnModelLoaded", function(self) ApplyCamera(self, p.size) end)
+    model:Hide()
 
+    -- Vignette: on the container, same sublevel as the (hidden) portrait, under the ring
+    local layer, sub = portrait:GetDrawLayer()
+    local vignette = container:CreateTexture(nil, layer, nil, sub or 0)
+    vignette:SetTexture(VIGNETTE)
+    vignette:SetAllPoints(portrait)
+    vignette:Hide()
+
+    p.bgFrame, p.bg, p.model, p.vignette = bgFrame, bg, model, vignette
+
+    -- Keep Blizzard's portrait hidden while we're active.
+    hooksecurefunc(portrait, "Show", function(self)
+        if p.active then self:Hide() end
+    end)
     -- Mirror Blizzard's portrait fading (e.g. party members out of range).
-    holder:SetAlpha(Safe(portrait:GetAlpha()) or 1)
+    SetLayerAlpha(p, Safe(portrait:GetAlpha()) or 1)
     hooksecurefunc(portrait, "SetAlpha", function(_, alpha)
-        holder:SetAlpha(Safe(alpha) or 1)
+        SetLayerAlpha(p, Safe(alpha) or 1)
     end)
+    -- We're no longer inside the unit frame, so follow its visibility.
+    container:HookScript("OnShow", function() Refresh(unit) end)
+    container:HookScript("OnHide", function() Deactivate(p) end)
 
-    local p = { holder = holder, model = model, bg = bg, portrait = portrait }
     layers[unit] = p
     return p
 end
 
-local function HideLayers(p)
-    p.holder:Hide()
-end
-
-local function Refresh(unit)
+Refresh = function(unit)
     lastState[unit] = nil
     if not db then return end
     local p = layers[unit]
     if not db.units[unit] then
-        if p then HideLayers(p) end
+        if p then Deactivate(p) end
         return
     end
     p = p or CreateLayers(unit)
     if not p then return end
 
-    if not db.enabled or BBFHidesPortrait(unit) or not UnitExists(unit)
+    if not db.enabled or BBFHidesPortrait(unit) or not p.container:IsVisible()
+       or not UnitExists(unit)
        or Safe(UnitIsVisible(unit)) == false or Safe(UnitIsConnected(unit)) == false then
-        HideLayers(p)
+        Deactivate(p)
         lastState[unit] = UnitState(unit)
         return
     end
 
     local w, h = p.portrait:GetSize()
-    p.model:SetSize(w * db.inset, h * db.inset)
-    p.bg:SetSize(w * db.bgInset, h * db.bgInset)
+    local s = db.sizes[p.size]
+    p.model:SetSize(w * s.inset, h * s.inset)
     p.bg:SetColorTexture(db.bgR, db.bgG, db.bgB, 1)
+    p.vignette:SetVertexColor(db.bgR, db.bgG, db.bgB, 1)
 
     p.model:ClearModel()
     p.model:SetUnit(unit)
-    p.model:SetPortraitZoom(db.zoom)
+    ApplyCamera(p.model, p.size)
 
-    p.holder:Show()
+    Activate(p)
     lastState[unit] = UnitState(unit)
 end
 
@@ -190,6 +256,7 @@ f:SetScript("OnEvent", function(self, event, arg1)
         if arg1 ~= ADDON_NAME then return end
         BBFAnimatedPortraitsDB = BBFAnimatedPortraitsDB or {}
         db = BBFAnimatedPortraitsDB
+        db.inset, db.bgInset = nil, nil -- settings from earlier versions
         CopyDefaults(defaults, db)
         self:UnregisterEvent("ADDON_LOADED")
         self:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -226,23 +293,45 @@ local function PrintStatus()
         if db.units[list[1]] then on[#on + 1] = name end
     end
     table.sort(on)
+    local L, S = db.sizes.large, db.sizes.small
     print("|cff00c0ffBBF Animated Portraits|r  enabled=" .. tostring(db.enabled)
-        .. "  zoom=" .. db.zoom .. "  inset=" .. db.inset .. "  bg=" .. db.bgInset
+        .. "  zoom=" .. db.zoom .. "  vignette=" .. tostring(db.vignette)
         .. "  units=" .. (#on > 0 and table.concat(on, ",") or "none"))
+    print(("  large: inset=%.2f cam=%.2f   small: inset=%.2f cam=%.2f"):format(L.inset, L.cam, S.inset, S.cam))
+end
+
+local function PrintHelp()
+    print("  /bap toggle  |  /bap vignette  |  /bap zoom 0-1  |  /bap reset")
+    print("  /bap inset 0.3-1.2 [large|small]  |  /bap cam 0.3-2 [large|small]")
+    print("  /bap unit player|target|focus|tot|party")
+end
+
+-- Set a per-size value; no size given = both.
+local function SetSized(key, value, size, lo, hi)
+    value = math.max(lo, math.min(hi, value))
+    for name, s in pairs(db.sizes) do
+        if not size or size == name then s[key] = value end
+    end
 end
 
 SLASH_BBFANIMPORTRAITS1 = "/bap"
 SlashCmdList.BBFANIMPORTRAITS = function(msg)
-    local cmd, arg = strsplit(" ", (msg or ""):lower(), 2)
+    local args = {}
+    for word in (msg or ""):lower():gmatch("%S+") do args[#args + 1] = word end
+    local cmd, arg, size = args[1], args[2], args[3]
     local val = tonumber(arg)
+    if size and not db.sizes[size] then size = nil end
+
     if cmd == "toggle" then
         db.enabled = not db.enabled
+    elseif cmd == "vignette" then
+        db.vignette = not db.vignette
     elseif cmd == "zoom" and val then
         db.zoom = math.max(0, math.min(1, val))
     elseif cmd == "inset" and val then
-        db.inset = math.max(0.3, math.min(1.2, val))
-    elseif cmd == "bg" and val then
-        db.bgInset = math.max(0.5, math.min(1.0, val))
+        SetSized("inset", val, size, 0.3, 1.2)
+    elseif cmd == "cam" and val then
+        SetSized("cam", val, size, 0.3, 2)
     elseif cmd == "unit" and arg and GROUPS[arg] then
         local list = GROUPS[arg]
         local newValue = not db.units[list[1]]
@@ -251,8 +340,7 @@ SlashCmdList.BBFANIMPORTRAITS = function(msg)
         wipe(db); CopyDefaults(defaults, db)
     else
         PrintStatus()
-        print("  /bap toggle  |  /bap zoom 0-1  |  /bap inset 0.3-1.2  |  /bap bg 0.5-1  |  /bap reset")
-        print("  /bap unit player|target|focus|tot|party")
+        PrintHelp()
         return
     end
     RefreshAll()

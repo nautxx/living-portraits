@@ -15,31 +15,49 @@ local function stubIndex(t)
     return setmetatable(t, { __index = function() return function() end end })
 end
 
-local function newTexture()
-    local t = stubIndex({ shown = false })
+local function region(t)
+    t = stubIndex(t or {})
+    t.shown = t.shown or false
     function t:Show() self.shown = true end
     function t:Hide() self.shown = false end
-    function t:GetDrawLayer() return "ARTWORK", 1 end
-    function t:GetSize() return 60, 60 end
-    function t:GetAlpha() return rawget(self, "alpha") or 1 end
+    function t:SetShown(v) self.shown = not not v end
+    function t:IsShown() return self.shown end
     function t:SetAlpha(a) self.alpha = a end
+    function t:GetAlpha() return rawget(self, "alpha") or 1 end
     function t:SetSize(w, h) self.w, self.h = w, h end
     return t
 end
 
+local function newTexture(shown)
+    local t = region({ shown = shown or false })
+    function t:GetDrawLayer() return "BACKGROUND", 1 end
+    function t:GetSize() return 60, 60 end
+    return t
+end
+
 local eventFrame
-local models = {}
-function CreateFrame(kind, _, parent)
-    local f = stubIndex({ kind = kind, shown = false, parent = parent })
-    function f:Show() self.shown = true end
-    function f:Hide() self.shown = false end
+local models, frames = {}, {}
+local function newFrame(kind, parent, level)
+    local f = region({ kind = kind, parent = parent, shown = true, level = level or 1, scripts = {} })
     function f:SetScript(name, fn) self[name] = fn end
+    function f:HookScript(name, fn) self.scripts[name] = fn end
     function f:SetUnit(unit) self.unit = unit end
-    function f:SetSize(w, h) self.w, self.h = w, h end
     function f:CreateTexture() return newTexture() end
     function f:CreateMaskTexture() return stubIndex({}) end
-    function f:SetAlpha(a) self.alpha = a end
+    function f:GetFrameLevel() return self.level end
+    function f:SetFrameLevel(l) self.level = l end
+    function f:GetFrameStrata() return "MEDIUM" end
+    function f:IsVisible()
+        local up = rawget(self, "parent")
+        return self.shown and (not up or up:IsVisible())
+    end
+    return f
+end
+
+function CreateFrame(kind, _, parent)
+    local f = newFrame(kind, parent, parent and parent.level + 1)
     if kind == "PlayerModel" then models[#models + 1] = f end
+    frames[#frames + 1] = f
     eventFrame = eventFrame or f
     return f
 end
@@ -49,20 +67,27 @@ function hooksecurefunc(obj, method, hook)
     obj[method] = function(...) local r = orig(...); hook(...); return r end
 end
 
-local function container(field)
-    local c = stubIndex({})
-    function c:CreateTexture() return newTexture() end
-    local p = newTexture()
+-- Blizzard frame tree: root (level 5) > container (level 6) > portrait texture
+local function unitFrame(field)
+    local root = newFrame("Frame", nil, 5)
+    local c = newFrame("Frame", root, 6)
+    local p = newTexture(true)
     function p:GetParent() return c end
+    function c:GetParent() return root end
     c[field] = p
-    return c
+    return root, c
 end
 
-PlayerFrame = { PlayerFrameContainer = container("PlayerPortrait") }
-TargetFrame = { TargetFrameContainer = container("Portrait"), totFrame = container("Portrait") }
-FocusFrame  = { TargetFrameContainer = container("Portrait"), totFrame = container("Portrait") }
-PartyFrame  = {}
-for i = 1, 4 do PartyFrame["MemberFrame" .. i] = container("Portrait") end
+local playerRoot, playerContainer = unitFrame("PlayerPortrait")
+PlayerFrame = playerRoot;  PlayerFrame.PlayerFrameContainer = playerContainer
+local targetRoot, targetContainer = unitFrame("Portrait")
+TargetFrame = targetRoot;  TargetFrame.TargetFrameContainer = targetContainer
+local _, totContainer = unitFrame("Portrait"); TargetFrame.totFrame = totContainer
+local focusRoot, focusContainer = unitFrame("Portrait")
+FocusFrame = focusRoot;    FocusFrame.TargetFrameContainer = focusContainer
+local _, fotContainer = unitFrame("Portrait"); FocusFrame.totFrame = fotContainer
+PartyFrame = newFrame("Frame", nil, 5)
+for i = 1, 4 do local _, c = unitFrame("Portrait"); PartyFrame["MemberFrame" .. i] = c end
 
 -- World state the tests control
 local world = { exists = {}, visible = {}, connected = {}, guid = {}, secret = false }
@@ -77,11 +102,6 @@ C_Timer = {
     After = function(_, fn) fn() end,
     NewTicker = function(_, fn) tick = fn; return {} end,
 }
-function strsplit(_, s)
-    local a, b = s:match("^(%S*)%s*(.-)$")
-    if b == "" then b = nil end
-    return a, b
-end
 function wipe(t) for k in pairs(t) do t[k] = nil end return t end
 function print() end -- silence addon chat output
 SlashCmdList = {}
@@ -92,14 +112,12 @@ chunk("BBF_AnimatedPortraits", {})
 
 local function fire(event, arg) eventFrame.OnEvent(eventFrame, event, arg) end
 local function slash(msg) SlashCmdList.BBFANIMPORTRAITS(msg) end
-local function shownFor(unit)
-    for _, m in ipairs(models) do
-        if m.unit == unit and m.parent and m.parent.shown then return true end
-    end
-    return false
-end
 local function modelFor(unit)
     for _, m in ipairs(models) do if m.unit == unit then return m end end
+end
+local function shownFor(unit)
+    local m = modelFor(unit)
+    return m ~= nil and m.shown
 end
 
 -- Tests -----------------------------------------------------------------------
@@ -107,7 +125,7 @@ world.exists = { player = true, target = true, targettarget = true, party1 = tru
 world.visible.party2 = false
 
 fire("ADDON_LOADED", "BBF_AnimatedPortraits")
-check("defaults applied", BBFAnimatedPortraitsDB.enabled == true and BBFAnimatedPortraitsDB.inset == 0.72)
+check("defaults applied", BBFAnimatedPortraitsDB.enabled == true and BBFAnimatedPortraitsDB.sizes.large.inset == 0.82)
 
 fire("PLAYER_ENTERING_WORLD")
 check("one model per supported unit (9)", #models == 9)
@@ -117,15 +135,16 @@ check("tot model shown", shownFor("targettarget"))
 check("party1 model shown", shownFor("party1"))
 check("party2 out of range -> hidden", not shownFor("party2"))
 check("focus missing -> hidden", not shownFor("focus"))
-local w = rawget(modelFor("player"), "w")
-check("model sized by inset", w and math.abs(w - 60 * 0.72) < 0.01)
-check("model lives in a holder frame, not on the portrait's frame",
-    modelFor("player").parent ~= PlayerFrame.PlayerFrameContainer)
 
--- Holder mirrors Blizzard's portrait alpha (party out-of-range fade)
-PartyFrame.MemberFrame1.Portrait:SetAlpha(0.55)
-check("holder mirrors portrait alpha", modelFor("party1").parent.alpha == 0.55)
-PartyFrame.MemberFrame1.Portrait:SetAlpha(1)
+local pm = modelFor("player")
+check("model sized by large inset", pm.w and math.abs(pm.w - 60 * 0.82) < 0.01)
+check("model sits below the Blizzard container (ring on top)", pm.level < playerContainer.level)
+check("model parented to the unit frame root", pm.parent == PlayerFrame)
+check("2D portrait hidden while active", not playerContainer.PlayerPortrait.shown)
+
+-- Blizzard/BBF re-showing the portrait while active gets re-hidden
+playerContainer.PlayerPortrait:Show()
+check("portrait stays hidden if re-shown while active", not playerContainer.PlayerPortrait.shown)
 
 -- Ticker: party2 comes into range
 world.visible.party2 = nil
@@ -140,6 +159,19 @@ for _, m in ipairs(models) do
 end
 tick()
 check("ticker idle when nothing changed", setCount == 0)
+
+-- Alpha mirrors Blizzard's portrait (party out-of-range fade)
+PartyFrame.MemberFrame1.Portrait:SetAlpha(0.55)
+check("model mirrors portrait alpha", modelFor("party1").alpha == 0.55)
+PartyFrame.MemberFrame1.Portrait:SetAlpha(1)
+
+-- Unit frame hides (e.g. raid-style party frames) -> our layers hide
+local member1 = PartyFrame.MemberFrame1
+member1.shown = false; member1.scripts.OnHide()
+check("container OnHide hides model", not shownFor("party1"))
+check("container OnHide restores 2D portrait", member1.Portrait.shown)
+member1.shown = true; member1.scripts.OnShow()
+check("container OnShow brings model back", shownFor("party1"))
 
 -- Focus set
 world.exists.focus = true
@@ -161,17 +193,23 @@ slash("unit tot")
 check("/bap unit tot hides tot", not shownFor("targettarget"))
 slash("unit tot")
 
--- Global toggle
+-- Global toggle restores the 2D portrait
 slash("toggle")
 check("/bap toggle hides everything", not shownFor("player") and not shownFor("target"))
+check("/bap toggle restores 2D portrait", playerContainer.PlayerPortrait.shown)
 slash("toggle")
 check("/bap toggle restores", shownFor("player"))
 
--- Settings clamp
-slash("zoom 5");  check("zoom clamped to 1", BBFAnimatedPortraitsDB.zoom == 1)
-slash("inset 0"); check("inset clamped to 0.3", BBFAnimatedPortraitsDB.inset == 0.3)
-slash("bg 2");    check("bg clamped to 1", BBFAnimatedPortraitsDB.bgInset == 1)
-slash("reset");   check("reset restores defaults", BBFAnimatedPortraitsDB.inset == 0.72 and BBFAnimatedPortraitsDB.bgInset == 0.9)
+-- Sized settings
+slash("inset 0.9 small")
+check("inset small only", BBFAnimatedPortraitsDB.sizes.small.inset == 0.9 and BBFAnimatedPortraitsDB.sizes.large.inset == 0.82)
+slash("cam 0.7")
+check("cam without size sets both", BBFAnimatedPortraitsDB.sizes.small.cam == 0.7 and BBFAnimatedPortraitsDB.sizes.large.cam == 0.7)
+slash("cam 9 large"); check("cam clamped to 2", BBFAnimatedPortraitsDB.sizes.large.cam == 2)
+slash("zoom 5");      check("zoom clamped to 1", BBFAnimatedPortraitsDB.zoom == 1)
+slash("vignette");    check("vignette toggles off", BBFAnimatedPortraitsDB.vignette == false)
+slash("reset")
+check("reset restores defaults", BBFAnimatedPortraitsDB.sizes.large.cam == 0.85 and BBFAnimatedPortraitsDB.vignette == true)
 
 -- BBF no-portrait mode
 BBF = { HasNoPortrait = function(u) return u == "target" end }
