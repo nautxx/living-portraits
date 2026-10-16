@@ -124,7 +124,11 @@ end
 world.exists = { player = true, target = true, targettarget = true, party1 = true, party2 = true }
 world.visible.party2 = false
 
+-- Saved settings from an older version (inset 0.82) must be upgraded
+BBFAnimatedPortraitsDB = { enabled = true, sizes = { large = { inset = 0.82, cam = 0.85 }, small = { inset = 0.82, cam = 0.85 } } }
 fire("ADDON_LOADED", "BBF_AnimatedPortraits")
+check("old saved inset migrated to new default", BBFAnimatedPortraitsDB.sizes.small.inset == 1.0)
+check("settings version recorded", BBFAnimatedPortraitsDB.version == 2)
 check("defaults applied", BBFAnimatedPortraitsDB.enabled == true and BBFAnimatedPortraitsDB.sizes.large.inset == 1.0)
 
 fire("PLAYER_ENTERING_WORLD")

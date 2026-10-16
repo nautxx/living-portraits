@@ -16,6 +16,9 @@ local PARTY = { "party1", "party2", "party3", "party4" }
 local CIRCLE_MASK = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 local VIGNETTE = "Interface\\AddOns\\" .. ADDON_NAME .. "\\media\\vignette"
 
+-- Bump when a default changes in a way saved settings should pick up (see MigrateSettings).
+local SETTINGS_VERSION = 2
+
 local defaults = {
     enabled  = true,
     zoom     = 1,     -- 0..1, 1 = head & shoulders
@@ -97,6 +100,16 @@ local function UnitState(unit)
     local visible = Safe(UnitIsVisible(unit))
     local online = Safe(UnitIsConnected(unit))
     return guid .. (visible == false and ":h" or ":v") .. (online == false and ":d" or ":c")
+end
+
+-- Saved settings keep old values over new defaults, so reset what changed between versions.
+local function MigrateSettings()
+    local version = db.version or 1
+    if version < 2 then
+        db.inset, db.bgInset = nil, nil -- v1 single-size settings
+        db.sizes = nil                  -- v2: model fills the circle (inset 0.82 -> 1.0)
+    end
+    db.version = SETTINGS_VERSION
 end
 
 local function ApplyCamera(model, size)
@@ -257,7 +270,7 @@ f:SetScript("OnEvent", function(self, event, arg1)
         if arg1 ~= ADDON_NAME then return end
         BBFAnimatedPortraitsDB = BBFAnimatedPortraitsDB or {}
         db = BBFAnimatedPortraitsDB
-        db.inset, db.bgInset = nil, nil -- settings from earlier versions
+        MigrateSettings()
         CopyDefaults(defaults, db)
         self:UnregisterEvent("ADDON_LOADED")
         self:RegisterEvent("PLAYER_ENTERING_WORLD")
@@ -338,7 +351,7 @@ SlashCmdList.BBFANIMPORTRAITS = function(msg)
         local newValue = not db.units[list[1]]
         for _, unit in ipairs(list) do db.units[unit] = newValue end
     elseif cmd == "reset" then
-        wipe(db); CopyDefaults(defaults, db)
+        wipe(db); CopyDefaults(defaults, db); db.version = SETTINGS_VERSION
     else
         PrintStatus()
         PrintHelp()

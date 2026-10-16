@@ -26,6 +26,7 @@ animation, like the character screen, as a **companion addon** to BetterBlizzFra
 - While active, Blizzard's portrait is hidden (`Hide()`), and a `hooksecurefunc(portrait, "Show")` re-hides it if anything re-shows it. It's restored on deactivate only if it was shown before. Neither Blizzard nor BBF shows or hides these portraits (Blizzard only does for boss frames), so the risk of fighting them is low. **Side effect:** BBF spec/class icon portraits are covered while the model shows (model wins).
 - The layers are no longer inside the unit frame, so they follow it via `container:HookScript("OnShow"/"OnHide")`, and `Refresh` checks `container:IsVisible()`.
 - Alpha mirrors `portrait:SetAlpha` (party out-of-range fade) onto bg, model and vignette.
+- **Settings migration:** saved settings win over new defaults, so when a default must change for existing installs, bump `SETTINGS_VERSION` and reset those keys in `MigrateSettings()`.
 - Camera: `SetPortraitZoom(db.zoom)` + `SetCamDistanceScale(sizes[size].cam)` (0.85, lower = bigger face). `SIZE_OF` maps units to `large` (player/target/focus) or `small` (ToT/party).
 - `Refresh(unit)`: show or hide the layers and `SetUnit()`. It hides when disabled, when BBF's `HasNoPortrait(unit)` is true, or when the unit is missing, not visible or disconnected.
 - `Tick()` (every 0.5s) compares `UnitState(unit)` (GUID + visible + connected) with the last refresh and refreshes only on change. This covers changes with no reliable event: ToT/FoT swaps, party members entering or leaving view range.
