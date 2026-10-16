@@ -1,4 +1,4 @@
-# Project notes: BBF Animated Portraits
+# Project notes: Living Portraits
 
 Context for anyone (human or AI) picking up this project.
 
@@ -16,7 +16,8 @@ animation, like the character screen, as a **companion addon** to BetterBlizzFra
 | Square style | **Default when BBF No Portrait / Pixel Border is on** | A square box can't have masking problems: the model fills it exactly. Box = BBF's 1px black pixel border recipe, anchored beside the bars (`UNITS[unit].bars` / `.side`), height = health top to mana bottom. Bigger box = taller bar stack (`stackExtra` large 10 / small 6, split `hpShare` 0.66 health / rest mana), so box and bars always align. A name row (`nameRow` large 12 / tot 9 / party 0, grouped by `UNITS[unit].row`) sits inside the box above the health bar: name + level on one line (every frame: name left, level right; ToT: no level), pinned via a `SetPoint` hook. Each pinned text's box shrinks to its text width (re-fit on `SetText`/`SetFont`/`SetWidth`, name capped short of the level): BBF gives names a fixed-width box and the player's `bbfName` ignores later `SetJustifyH` (stays centered), which indented the name with Blizzard's default font so BBF re-positioning doesn't move them (BBF's `bbfName` follows the real name automatically). Bar texts are re-centered vertically in their bars (`CenterBarTexts`; BBF's fixed y offsets were tuned for the thin bars). Falls back to circle where BBF still shows portraits. Boxes are parented to the **unit frame** (`UNITS[unit].frame`), never via the portrait: BBF's No Portrait mode reparents the player container and ToT/party portraits to a hidden frame. `LayoutBars` resizes health and mana (bar + BBF posFrame, which carries border/bg/mask), keeps each top edge fixed whatever its anchor point, moves mana down by the health growth (unless it's anchored to the health bar, e.g. ToT), and with `alignMana` shifts it to line up with the health bar on the box side (Blizzard offsets target/focus mana ~8px). Original anchor/heights are stored on the bar/text and restored by `RestoreBars` (circle style, disabled, extend 0). Out of combat only. |
 | Rounded corners | **No: keep square** | Matches BBF's Pixel Border style exactly. Rejected: rounded box only (3D model corners can't be clipped, would peek past the curve) and rounded box + bars (needs custom border/mask art and takes over BBF's bar styling; fragile across BBF updates). |
 | Touching Blizzard's portrait | **Hide only, never alter** | Hidden while the model shows, restored after. Never change its texture, alpha or color (Blizzard changes those itself). |
-| Repo location | `~/GitHub/Main/bbf-animated-portraits`, symlinked into AddOns as `BBF_AnimatedPortraits` | The beta client folder is temporary. One repo can feed multiple clients. |
+| Name | **Living Portraits** (folder `LivingPortraits`, was BBF Animated Portraits until v0.2.1) | "Living portraits" (the Harry Potter-style moving pictures) is unused by other WoW addons and sets it apart from Animated Blizzard Portraits / AlwaysFace. The BBF link lives in the description (`## Notes`), not the name. Rejected: "BetterBlizzPortraits" (reads as an official Bodify addon). Settings category name is styled like BBF's (`Living |cff00c0ffPortraits|r`): the list sorts on the raw name, so no leading color code. Slash `/lp`, `/livingportraits`, old `/bap` kept as alias. Renaming the folder means a fresh SavedVariables file: testers' settings reset. |
+| Repo location | `~/GitHub/Main/bbf-animated-portraits`, symlinked into AddOns as `LivingPortraits` | The beta client folder is temporary. One repo can feed multiple clients. |
 
 ## Architecture (Core.lua)
 - `UNITS[unit]` describes each unit in one place: layout groups (`size` large/small, `offset`, `row`, `side`) and frame lookups (`frame()`, then `portrait`/`ring`/`bars`/`texts`, each taking the unit frame). **Add new units here** (and to `UNIT_LIST`, the fixed iteration order). Read lookups with `Lookup(unit, key)` / `UnitFrameOf(unit)`.
@@ -26,8 +27,8 @@ animation, like the character screen, as a **companion addon** to BetterBlizzFra
   2. `model` (child of root, level = container − 1): `PlayerModel` square sized `portrait × sizes[large|small].inset` (0.72). At 0.72 its corners stay under the ring's outer edge.
   3. Blizzard's container: the 2D portrait (hidden while active), our `vignette` texture (same sublevel as the portrait, `media/vignette.tga`) and the border ring art (one sublevel up). The ring covers the model's corners; the vignette is a **crisp circle edge** at the model's straight edges (`VIGNETTE_EDGE` = 0.72, scaled with inset, capped at portrait size), with a dark band out to the ring.
 - Circle edge: `vignette.tga` is an inverted disc (clear inside, soft fade over the last 12% of the radius, opaque corners) sized exactly like the model, so it rounds off the model's square without extending past it. The dark area out to the ring is `bgFrame` (portrait-sized circle, under the ring). Earlier versions scaled a band past the model and it peeked outside the ring.
-- Centering: `offsets[player|target|focus|tot|party]` nudge model, edge and backing together (`/bap offset`; defaults measured in game from a calibrate screenshot by fitting circles to the red edge and the ring's inner edge: player (-0.5, 0.6), target/focus (0.6, 0.3), ToT (-1.3, 2.2), party unmeasured); `/bap calibrate` tints the edge red to line it up with the ring by eye (the edge and backing are the same color, so screenshots can't measure it).
-- Containers below level 2 get raised to 2 while active (and restored): the target's container is level 0 in the BACKGROUND strata, so the model couldn't sit beneath it and drew on top (flat bottom, no circle edge). Found via `/bap debug`.
+- Centering: `offsets[player|target|focus|tot|party]` nudge model, edge and backing together (`/lp offset`; defaults measured in game from a calibrate screenshot by fitting circles to the red edge and the ring's inner edge: player (-0.5, 0.6), target/focus (0.6, 0.3), ToT (-1.3, 2.2), party unmeasured); `/lp calibrate` tints the edge red to line it up with the ring by eye (the edge and backing are the same color, so screenshots can't measure it).
+- Containers below level 2 get raised to 2 while active (and restored): the target's container is level 0 in the BACKGROUND strata, so the model couldn't sit beneath it and drew on top (flat bottom, no circle edge). Found via `/lp debug`.
 - **Layer relative to the ring's frame, not the portrait's.** On target/focus the ring (`TargetFrameContainer.FrameTexture`, LOW strata, level ~501) and the portrait (an unnamed child frame in the BACKGROUND strata, alongside other frames at levels 2-3, one of which draws a dark circle with BBF on) live in different frames. `UNITS[unit].ring` finds the ring; the circle edge is created on the ring's frame one sublevel beneath the ring texture, and model/backing sit at ring level -1/-2 in the ring's strata. On player/ToT/party the ring and portrait share a frame, so this is the same as before. Diagnosed with `/fstack`.
 - While active, Blizzard's portrait is hidden (`Hide()`), and a `hooksecurefunc(portrait, "Show")` re-hides it if anything re-shows it. It's restored on deactivate only if it was shown before. Neither Blizzard nor BBF shows or hides these portraits (Blizzard only does for boss frames), so the risk of fighting them is low. **Side effect:** BBF spec/class icon portraits are covered while the model shows (model wins).
 - The layers are no longer inside the unit frame, so they follow it via `container:HookScript("OnShow"/"OnHide")`, and `Refresh` checks `container:IsVisible()`.
@@ -38,11 +39,11 @@ animation, like the character screen, as a **companion addon** to BetterBlizzFra
 - `Tick()` (every 0.5s) compares `UnitState(unit)` (GUID + a visible/connected code, two plain values: no string built per tick) with the last refresh (`StateChanged`/`MarkState`) and refreshes only on change. This covers changes with no reliable event: ToT/FoT swaps, party members entering or leaving view range.
 - `Safe(v)` drops "secret" values (`issecretvalue`) so comparisons and concatenation never error. Battlegrounds make far more values secret (enemy health, health text and its position, bar fill alpha): any value read back from a Blizzard frame needs `Safe`/`IsSecret` before math or `==`.
 - Events: `PLAYER_ENTERING_WORLD` (0.5s delay so BBF finishes resizing; starts the ticker), `PLAYER_TARGET_CHANGED` (target + ToT), `PLAYER_FOCUS_CHANGED` (focus + FoT), `UNIT_TARGET` (ToT/FoT), `GROUP_ROSTER_UPDATE` (party), `UNIT_MODEL_CHANGED`, `UNIT_PORTRAIT_UPDATE`, `UNIT_CONNECTION`.
-- Target bar grow (`StartGrow`/`GrowStep`, `/bap grow`, `/bap growtime`, trace with `/bap grow debug`): post-hooks `TargetFrame:Update()` (Blizzard calls it on target change, login and `UNIT_TARGETABLE_CHANGED`, after setting the bar values). For `growTime` seconds an overlay `StatusBar` (`bar.bapGrowBar`, same strata/level, fill one sublevel above Blizzard's so bar texts stay on top) mirrors the bar's live min/max/value and the fill's look (`CopyBarStyle`, every frame, mask list rebuilt only when the fill's masks change so nothing is allocated per frame: texture/atlas, vertex color RGB only (its alpha follows our `SetAlpha(0)` and hid the overlay), desaturation, blend, mask textures (Blizzard's `HealthBarMask`/`ManaBarMask` clip the fill's end; unmasked, the overlay grew past it), because BBF class colors are a desaturated fill + tint, sometimes set on the fill texture directly) while its **width** eases 0 → bar width; Blizzard's fill is hidden with `SetAlpha(0)` and restored after (only if still 0, or if its alpha reads back secret, which happens in battlegrounds; `EndGrow` removes the grow before touching anything so an error can't repeat every frame). Width does the lerp because values can be secret: tainted code can't do math on them and `C_CurveUtil` `AddPoint` only takes secrets when untainted, but `SetValue`/`SetMinMaxValues` accept them. Rejected: `SetValue(v, ExponentialEaseOut)` on Blizzard's bar (Blizzard's immediate re-sets cancelled it; grew only once in game) and growing from our own `PLAYER_TARGET_CHANGED` (can run before Blizzard's handler, animating to the old target's value).
-- SavedVariables: `BBFAnimatedPortraitsDB` (defaults merged on `ADDON_LOADED`).
-- Slash: `/bap`.
-- **Settings panel** (`BuildOptions`, Options → AddOns, `/bap options`): Settings API proxy settings (`Settings.RegisterProxySetting`) over `db` paths (`Path(keys)` gives get/set/default), so there's no second copy of the settings. Setters call `QueueRefreshAll()` (sliders fire continuously). Slash changes call `NotifyOptions()` so the panel shows them. Variables are prefixed `BAP_`. Built on `ADDON_LOADED`; skipped when the client has no `Settings` API.
-- **BBF setup** (`ApplyBBFSetup` / `UndoBBFSetup`, panel buttons, `/bap bbfsetup` / `bbfundo`): writes `BBF_SETUP` (No Portrait + Pixel Border on, party-only and per-frame skips off: what `BBF.HasNoPortrait` checks) into `BetterBlizzFramesDB` at runtime, never BBF's files. The first apply backs up the old values in `db.bbfBackup` (`NO_VALUE` marks keys BBF never saved); Undo restores them; `/bap reset` keeps the backup. BBF reads these on load, so both offer a Reload UI popup. Jason chose to set only the mode itself, not his own BBF look (fonts, textures, ToT placement).
+- Target bar grow (`StartGrow`/`GrowStep`, `/lp grow`, `/lp growtime`, trace with `/lp grow debug`): post-hooks `TargetFrame:Update()` (Blizzard calls it on target change, login and `UNIT_TARGETABLE_CHANGED`, after setting the bar values). For `growTime` seconds an overlay `StatusBar` (`bar.bapGrowBar`, same strata/level, fill one sublevel above Blizzard's so bar texts stay on top) mirrors the bar's live min/max/value and the fill's look (`CopyBarStyle`, every frame, mask list rebuilt only when the fill's masks change so nothing is allocated per frame: texture/atlas, vertex color RGB only (its alpha follows our `SetAlpha(0)` and hid the overlay), desaturation, blend, mask textures (Blizzard's `HealthBarMask`/`ManaBarMask` clip the fill's end; unmasked, the overlay grew past it), because BBF class colors are a desaturated fill + tint, sometimes set on the fill texture directly) while its **width** eases 0 → bar width; Blizzard's fill is hidden with `SetAlpha(0)` and restored after (only if still 0, or if its alpha reads back secret, which happens in battlegrounds; `EndGrow` removes the grow before touching anything so an error can't repeat every frame). Width does the lerp because values can be secret: tainted code can't do math on them and `C_CurveUtil` `AddPoint` only takes secrets when untainted, but `SetValue`/`SetMinMaxValues` accept them. Rejected: `SetValue(v, ExponentialEaseOut)` on Blizzard's bar (Blizzard's immediate re-sets cancelled it; grew only once in game) and growing from our own `PLAYER_TARGET_CHANGED` (can run before Blizzard's handler, animating to the old target's value).
+- SavedVariables: `LivingPortraitsDB` (defaults merged on `ADDON_LOADED`).
+- Slash: `/lp`.
+- **Settings panel** (`BuildOptions`, Options → AddOns, `/lp options`): Settings API proxy settings (`Settings.RegisterProxySetting`) over `db` paths (`Path(keys)` gives get/set/default), so there's no second copy of the settings. Setters call `QueueRefreshAll()` (sliders fire continuously). Slash changes call `NotifyOptions()` so the panel shows them. Variables are prefixed `BAP_`. Built on `ADDON_LOADED`; skipped when the client has no `Settings` API.
+- **BBF setup** (`ApplyBBFSetup` / `UndoBBFSetup`, panel buttons, `/lp bbfsetup` / `bbfundo`): writes `BBF_SETUP` (No Portrait + Pixel Border on, party-only and per-frame skips off: what `BBF.HasNoPortrait` checks) into `BetterBlizzFramesDB` at runtime, never BBF's files. The first apply backs up the old values in `db.bbfBackup` (`NO_VALUE` marks keys BBF never saved); Undo restores them; `/lp reset` keeps the backup. BBF reads these on load, so both offer a Reload UI popup. Jason chose to set only the mode itself, not his own BBF look (fonts, textures, ToT placement).
 
 ## Blizzard / BBF frame paths (WoW Forever beta, internal name "Camelot", client 1.60.1.70374)
 
@@ -63,7 +64,7 @@ Also exported locally from the client (`exportInterfaceFiles code`) to `_classic
 
 **Shared borders:** box↔bars `squareGap` 1 and health↔mana `barSpacing` 0 make adjacent 1px borders overlap into one line. Mana's vertical position is measured after layout and corrected (`bapDY`), which also closes BBF's ToT health/mana gap; mana's border width is forced to health's (`alignMana`).
 
-**When to hand layout back to BBF:** only when the user turns something off (disabled, unit toggled off, circle style, `namerow 0`). Transient states (no target, frame hidden, out of range) just hide the box and keep bars/names pinned; restoring there let BBF's name/level positions stick after target switches (diagnosed via `/bap debug`).
+**When to hand layout back to BBF:** only when the user turns something off (disabled, unit toggled off, circle style, `namerow 0`). Transient states (no target, frame hidden, out of range) just hide the box and keep bars/names pinned; restoring there let BBF's name/level positions stick after target switches (diagnosed via `/lp debug`).
 
 **NPCs with no power:** Blizzard hides the mana bar, but BBF (pixel border) reparents the mana posFrame/border/background to `frame.noPortraitMode` so an empty mana slot stays visible. `GetBarFrames` treats a visible slot as the mana row; if BBF hides the slot too (hide-mana option), health takes the whole stack (`LayoutBars` no-mana path).
 
@@ -76,14 +77,14 @@ BBF code that touches portraits (read only, for compatibility):
 - `BBF.SpecPortraits()` (~5528) and `forever/modules/healer.lua` `UpdateSecretPortrait`: spec and healer icon portraits. **Open question:** should icons win over the model?
 
 ## Roadmap
-- [x] Step 1: player frame, inscribed square, `/bap` tuning
+- [x] Step 1: player frame, inscribed square, `/lp` tuning
 - [ ] Test step 1 in game (screenshot, then tune zoom/inset defaults)
 - [x] Step 2: target + focus (`PLAYER_TARGET_CHANGED`, `PLAYER_FOCUS_CHANGED`), untested in game
 - [x] Step 3: party frames, ToT/FoT, untested in game
 - [ ] Per-group inset/zoom (small ToT/party portraits may need a larger inset)
 - [ ] Decide final circle treatment (inscribed vs cover ring vs square art)
 - [ ] Conflict rule with BBF spec/healer portraits
-- [x] Options panel (Settings API) to complement `/bap`, untested in game
+- [x] Options panel (Settings API) to complement `/lp`, untested in game
 - [ ] Retail support (`## Interface` list, verify frame paths)
 
 ## Test checklist
@@ -91,20 +92,20 @@ BBF code that touches portraits (read only, for compatibility):
 - [ ] Target / focus: model swaps when the target changes; NPC targets look reasonable
 - [ ] ToT / FoT: model follows when your target changes its target
 - [ ] Party: models appear; a member out of view range falls back to the 2D portrait and returns when in range
-- [ ] `/bap unit tot` / `/bap unit party` toggle cleanly
+- [ ] `/lp unit tot` / `/lp unit party` toggle cleanly
 - [ ] With BBF spec icons on: note which wins on target/focus (open question)
 - [ ] No square corners poking outside the portrait ring
 - [ ] Square: box sits flush beside the bars on every frame (player/ToT/party left, target/focus right)
-- [ ] Square: border matches BBF's pixel border; face size OK (`/bap cam 0.8 square`, `/bap extend 10`)
+- [ ] Square: border matches BBF's pixel border; face size OK (`/lp cam 0.8 square`, `/lp extend 10`)
 - [ ] Circle (BBF portraits on): nothing pokes outside the ring at inset 0.84
 - [ ] No straight cut lines visible inside the circle (vignette)
-- [ ] Face size feels right on large and small frames (tune `/bap cam`)
+- [ ] Face size feels right on large and small frames (tune `/lp cam`)
 - [ ] Level badge, rest/PvP/leader/combat icons still draw on top of the model
-- [ ] `/bap toggle` brings back the normal 2D portrait
+- [ ] `/lp toggle` brings back the normal 2D portrait
 - [ ] Party members out of range fade like Blizzard's portrait
 - [ ] Mount, shapeshift and gear changes update the model
 - [ ] Vehicle / possess: no broken portrait
-- [ ] `/bap toggle` restores the normal portrait cleanly
+- [ ] `/lp toggle` restores the normal portrait cleanly
 - [ ] BBF "no portrait" mode: the addon stays hidden
 - [ ] Classic Frames mode in BBF: the model stays aligned
 - [ ] No Lua errors (`/console scriptErrors 1`)

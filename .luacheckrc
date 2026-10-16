@@ -1,15 +1,15 @@
--- luacheck config for BBF Animated Portraits (WoW uses Lua 5.1)
+-- luacheck config for Living Portraits (WoW uses Lua 5.1)
 std = "lua51"
 max_line_length = false
 exclude_files = { ".git/" }
 
 -- Globals this addon defines
 globals = {
-    "BBFAnimatedPortraitsDB",
-    "SLASH_BBFANIMPORTRAITS1",
+    "LivingPortraitsDB",
+    "SLASH_LIVINGPORTRAITS1", "SLASH_LIVINGPORTRAITS2", "SLASH_LIVINGPORTRAITS3",
     "SlashCmdList",
     "StaticPopupDialogs",
-    "BetterBlizzFramesDB", -- BBF's saved settings: /bap bbfsetup writes a few switches
+    "BetterBlizzFramesDB", -- BBF's saved settings: /lp bbfsetup writes a few switches
 }
 
 -- WoW API / frames we read

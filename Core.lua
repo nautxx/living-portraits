@@ -1,4 +1,4 @@
--- BBF Animated Portraits
+-- Living Portraits (a BetterBlizzFrames companion)
 -- Replaces the flat 2D unit-frame portrait with a live 3D model (idle "breathing"
 -- animation, like the character screen). Companion to BetterBlizzFrames; never edits BBF.
 --
@@ -45,11 +45,11 @@ local defaults = {
     nameRow     = { large = 12, tot = 9, party = 0 },
     alignMana   = true, -- square: line the mana bar's edge up with the health bar on the box side
     growBars    = true, -- new target: health and mana grow from empty to their value
-    growTime    = 0.35, -- seconds the grow takes (/bap growtime)
+    growTime    = 0.35, -- seconds the grow takes (/lp growtime)
     vignette = true,
-    calibrate = false, -- circle: tint the edge red to line it up with the ring (/bap calibrate)
+    calibrate = false, -- circle: tint the edge red to line it up with the ring (/lp calibrate)
     -- Circle: per-frame nudge (px) of the portrait inside its ring. Measured in game with
-    -- /bap calibrate (Blizzard's portrait textures aren't exactly centered on their rings).
+    -- /lp calibrate (Blizzard's portrait textures aren't exactly centered on their rings).
     offsets = {
         player = { -0.5, 0.6 },
         target = { 0.6, 0.3 },
@@ -946,7 +946,7 @@ end
 -- change (also login and UNIT_TARGETABLE_CHANGED) right after setting the new values;
 -- our own PLAYER_TARGET_CHANGED handler can run before Blizzard's.
 local growDebug = false
-local function GrowTrace(...) if growDebug then print("|cff00c0ffbap grow|r", ...) end end
+local function GrowTrace(...) if growDebug then print("|cff00c0fflp grow|r", ...) end end
 
 local grows = {} -- bar -> { ov, fill, alpha, t }
 local growDriver -- created on first grow
@@ -1109,8 +1109,8 @@ f:RegisterEvent("ADDON_LOADED")
 f:SetScript("OnEvent", function(self, event, arg1)
     if event == "ADDON_LOADED" then
         if arg1 ~= ADDON_NAME then return end
-        BBFAnimatedPortraitsDB = BBFAnimatedPortraitsDB or {}
-        db = BBFAnimatedPortraitsDB
+        LivingPortraitsDB = LivingPortraitsDB or {}
+        db = LivingPortraitsDB
         MigrateSettings()
         CopyDefaults(defaults, db)
         self:UnregisterEvent("ADDON_LOADED")
@@ -1163,14 +1163,14 @@ local NO_VALUE = "<nil>" -- backup marker: BBF had never saved this key
 
 local function ShowReloadPopup()
     if not (StaticPopupDialogs and StaticPopup_Show) then return end
-    StaticPopupDialogs.BBF_ANIMATED_PORTRAITS_RELOAD = StaticPopupDialogs.BBF_ANIMATED_PORTRAITS_RELOAD or {
-        text = "BBF Animated Portraits changed your BetterBlizzFrames settings. Reload the UI to apply them?",
+    StaticPopupDialogs.LIVING_PORTRAITS_RELOAD = StaticPopupDialogs.LIVING_PORTRAITS_RELOAD or {
+        text = "Living Portraits changed your BetterBlizzFrames settings. Reload the UI to apply them?",
         button1 = RELOADUI or "Reload UI",
         button2 = LATER or "Later",
         OnAccept = function() ReloadUI() end,
         timeout = 0, whileDead = true, hideOnEscape = true,
     }
-    StaticPopup_Show("BBF_ANIMATED_PORTRAITS_RELOAD")
+    StaticPopup_Show("LIVING_PORTRAITS_RELOAD")
 end
 
 local function BBFSetupOn()
@@ -1212,9 +1212,9 @@ local function UndoBBFSetup()
 end
 
 -- Settings panel ------------------------------------------------------------
--- Options > AddOns > BBF Animated Portraits. Proxy settings read and write db directly,
--- so the panel and /bap always agree (slash changes call NotifyOptions).
-local PREFIX = "|cff00c0ffBBF Animated Portraits|r "
+-- Options > AddOns > Living Portraits. Proxy settings read and write db directly,
+-- so the panel and /lp always agree (slash changes call NotifyOptions).
+local PREFIX = "Living |cff00c0ffPortraits|r "
 local optionVars = {} -- registered setting variables, refreshed by NotifyOptions
 local optionsCategory
 
@@ -1242,14 +1242,16 @@ end
 
 BuildOptions = function()
     if optionsCategory or not (Settings and Settings.RegisterVerticalLayoutCategory and SettingsPanel) then return end
-    local category = Settings.RegisterVerticalLayoutCategory("BBF Animated Portraits")
+    local category = -- Styled like BBF's own entry (plain first word, cyan second). The list sorts on the raw
+    -- name, so it must not start with a color code.
+    Settings.RegisterVerticalLayoutCategory("Living |cff00c0ffPortraits|r")
     local layout = SettingsPanel:GetLayout(category)
 
     local function Header(text)
         layout:AddInitializer(CreateSettingsListSectionHeaderInitializer(text))
     end
     local function Register(var, name, default, get, set)
-        var = "BAP_" .. var
+        var = "LivingPortraits_" .. var
         optionVars[#optionVars + 1] = var
         return Settings.RegisterProxySetting(category, var, nil, name, default, get, function(v)
             set(v)
@@ -1339,7 +1341,7 @@ local function OpenOptions()
     end
 end
 
--- Slash command: /bap -------------------------------------------------------
+-- Slash command: /lp --------------------------------------------------------
 
 local function PrintStatus()
     local on = {}
@@ -1348,7 +1350,7 @@ local function PrintStatus()
     end
     table.sort(on)
     local L, S = db.sizes.large, db.sizes.small
-    print("|cff00c0ffBBF Animated Portraits|r  enabled=" .. tostring(db.enabled)
+    print("Living |cff00c0ffPortraits|r  enabled=" .. tostring(db.enabled)
         .. "  style=" .. db.style .. "  zoom=" .. db.zoom .. "  vignette=" .. tostring(db.vignette)
         .. "  grow=" .. tostring(db.growBars) .. (" (%.2fs)"):format(db.growTime) .. "  units=" .. (#on > 0 and table.concat(on, ",") or "none"))
     local Q = db.sizes.square
@@ -1359,13 +1361,13 @@ local function PrintStatus()
 end
 
 local function PrintHelp()
-    print("  /bap options  |  /bap bbfsetup (turn on BBF's Pixel Border mode)  |  /bap bbfundo")
-    print("  /bap toggle  |  /bap vignette  |  /bap zoom 0-1  |  /bap grow  |  /bap growtime 0.1-2  |  /bap reset")
-    print("  /bap style square|circle  |  /bap bg 0-1  |  /bap extend 0-30 [large|small]  |  /bap split 0.4-0.85")
-    print("  /bap namerow 0-24 [large|tot|party]  |  /bap gap 0-20  |  /bap barspacing 0-10  |  /bap alignmana")
-    print("  /bap inset 0.3-1.2 [large|small]  |  /bap cam 0.3-2 [large|small|square]")
-    print("  /bap unit player|target|focus|tot|party  |  /bap refresh  |  /bap debug [unit]")
-    print("  circle: /bap circlebg 0-1  |  /bap vignette  |  /bap calibrate  |  /bap offset player|target|focus|tot|party x y")
+    print("  /lp options  |  /lp bbfsetup (turn on BBF's Pixel Border mode)  |  /lp bbfundo")
+    print("  /lp toggle  |  /lp vignette  |  /lp zoom 0-1  |  /lp grow  |  /lp growtime 0.1-2  |  /lp reset")
+    print("  /lp style square|circle  |  /lp bg 0-1  |  /lp extend 0-30 [large|small]  |  /lp split 0.4-0.85")
+    print("  /lp namerow 0-24 [large|tot|party]  |  /lp gap 0-20  |  /lp barspacing 0-10  |  /lp alignmana")
+    print("  /lp inset 0.3-1.2 [large|small]  |  /lp cam 0.3-2 [large|small|square]")
+    print("  /lp unit player|target|focus|tot|party  |  /lp refresh  |  /lp debug [unit]")
+    print("  circle: /lp circlebg 0-1  |  /lp vignette  |  /lp calibrate  |  /lp offset player|target|focus|tot|party x y")
 end
 
 -- Set a per-group value (tbl[group], or tbl[group][key]); no group given = all of them.
@@ -1377,7 +1379,7 @@ local function SetEach(tbl, only, value, key)
     end
 end
 
--- /bap debug [unit]: print the square layout's real geometry, for bug reports.
+-- /lp debug [unit]: print the square layout's real geometry, for bug reports.
 local function Fmt(v) return type(v) == "number" and ("%.1f"):format(v) or tostring(v) end
 local function PointInfo(r)
     if not r or not r.GetPoint then return "nil" end
@@ -1418,7 +1420,7 @@ end
 
 local function DebugUnit(unit)
     local hpPos, manaPos, manaBar, hpBar = GetBarFrames(unit)
-    print(("|cff00c0ffBAP debug|r %s  style=%s  bbfNoPortrait=%s"):format(unit, db.style, tostring(BBFHidesPortrait(unit))))
+    print(("|cff00c0ffLP debug|r %s  style=%s  bbfNoPortrait=%s"):format(unit, db.style, tostring(BBFHidesPortrait(unit))))
     DebugCircle(unit)
     if not hpPos then print("  no bars found"); return end
     print(("  hpPos top=%s bottom=%s h=%s row=%s"):format(Fmt(hpPos:GetTop()), Fmt(hpPos:GetBottom()), Fmt(hpPos:GetHeight()), Fmt(hpPos.bapRow)))
@@ -1440,8 +1442,10 @@ local function DebugUnit(unit)
     end
 end
 
-SLASH_BBFANIMPORTRAITS1 = "/bap"
-SlashCmdList.BBFANIMPORTRAITS = function(msg)
+SLASH_LIVINGPORTRAITS1 = "/lp"
+SLASH_LIVINGPORTRAITS2 = "/livingportraits"
+SLASH_LIVINGPORTRAITS3 = "/bap" -- the name before Living Portraits
+SlashCmdList.LIVINGPORTRAITS = function(msg)
     local args = {}
     for word in (msg or ""):lower():gmatch("%S+") do args[#args + 1] = word end
     local cmd, arg, size = args[1], args[2], args[3]
@@ -1477,7 +1481,7 @@ SlashCmdList.BBFANIMPORTRAITS = function(msg)
         db.growTime = Clamp(val, 0.1, 2)
     elseif cmd == "calibrate" then
         db.calibrate = not db.calibrate
-        print(db.calibrate and "  Calibrate on: nudge with /bap offset <player|target|focus|tot|party> x y, then /bap calibrate to finish."
+        print(db.calibrate and "  Calibrate on: nudge with /lp offset <player|target|focus|tot|party> x y, then /lp calibrate to finish."
             or "  Calibrate off.")
     elseif cmd == "offset" and arg and db.offsets[arg] then
         local x, y = tonumber(args[3]), tonumber(args[4])

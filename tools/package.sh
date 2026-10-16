@@ -3,7 +3,7 @@
 # Usage: tools/package.sh   (run from anywhere)
 set -e
 cd "$(dirname "$0")/.."
-NAME=BBF_AnimatedPortraits
+NAME=LivingPortraits
 VERSION=$(sed -n 's/^## Version: *//p' "$NAME.toc" | tr -d '\r')
 [ -n "$VERSION" ] || { echo "No ## Version in $NAME.toc" >&2; exit 1; }
 STAGE=$(mktemp -d)

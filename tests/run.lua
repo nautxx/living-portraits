@@ -1,4 +1,4 @@
--- Offline test harness for BBF Animated Portraits.
+-- Offline test harness for Living Portraits.
 -- Stubs just enough of the WoW API to load Core.lua and exercise its logic.
 -- Run from the repo root:  lua5.1 tests/run.lua
 -- Not listed in the .toc, so WoW never loads this file.
@@ -181,10 +181,10 @@ BBF = { SetCustomFonts = function() end }
 
 -- Load the addon --------------------------------------------------------------
 local chunk = assert(loadfile("Core.lua"))
-chunk("BBF_AnimatedPortraits", {})
+chunk("LivingPortraits", {})
 
 local function fire(event, arg) eventFrame.OnEvent(eventFrame, event, arg) end
-local function slash(msg) SlashCmdList.BBFANIMPORTRAITS(msg) end
+local function slash(msg) SlashCmdList.LIVINGPORTRAITS(msg) end
 local function modelFor(unit)
     for _, m in ipairs(models) do if m.unit == unit then return m end end
 end
@@ -200,13 +200,13 @@ world.exists = { player = true, target = true, targettarget = true, party1 = tru
 world.visible.party2 = false
 
 -- Saved settings from an older version (inset 0.82) must be upgraded
-BBFAnimatedPortraitsDB = { enabled = true, sizes = { large = { inset = 0.82, cam = 0.85 }, small = { inset = 0.82, cam = 0.85 } } }
-fire("ADDON_LOADED", "BBF_AnimatedPortraits")
+LivingPortraitsDB = { enabled = true, sizes = { large = { inset = 0.82, cam = 0.85 }, small = { inset = 0.82, cam = 0.85 } } }
+fire("ADDON_LOADED", "LivingPortraits")
 local bbfHooked = BBF.SetCustomFonts
 BBF = nil
-check("old saved inset migrated to new default", BBFAnimatedPortraitsDB.sizes.small.inset == 0.80)
-check("settings version recorded", BBFAnimatedPortraitsDB.version == 10)
-check("defaults applied", BBFAnimatedPortraitsDB.enabled == true and BBFAnimatedPortraitsDB.sizes.large.inset == 0.80)
+check("old saved inset migrated to new default", LivingPortraitsDB.sizes.small.inset == 0.80)
+check("settings version recorded", LivingPortraitsDB.version == 10)
+check("defaults applied", LivingPortraitsDB.enabled == true and LivingPortraitsDB.sizes.large.inset == 0.80)
 
 fire("PLAYER_ENTERING_WORLD")
 check("models created lazily, only for units on screen (4 of 9)", #models == 4)
@@ -231,24 +231,24 @@ check("portrait stays hidden if re-shown while active", not playerContainer.Play
 
 -- Circle background opacity
 slash("circlebg 0")
-check("/bap circlebg 0 hides the circle background", BBFAnimatedPortraitsDB.circleBg == 0)
+check("/lp circlebg 0 hides the circle background", LivingPortraitsDB.circleBg == 0)
 local corners = rawget(playerContainer, "textures")[2]
 check("dark corners hidden with a clear background", corners and not corners.shown)
 check("soft edge hidden too with a clear background (no dark ring)", not vig.shown)
 slash("circlebg 1")
 
 -- Centering offset and calibration
-check("measured default offsets applied", BBFAnimatedPortraitsDB.offsets.tot[1] == -1.3 and BBFAnimatedPortraitsDB.offsets.tot[2] == 2.2)
+check("measured default offsets applied", LivingPortraitsDB.offsets.tot[1] == -1.3 and LivingPortraitsDB.offsets.tot[2] == 2.2)
 local defA = modelFor("player").anchor
 check("player portrait uses its measured offset", defA and defA[4] == -0.5 and defA[5] == 0.6)
 slash("offset player 2 -1")
-check("/bap offset stores the nudge", BBFAnimatedPortraitsDB.offsets.player[1] == 2 and BBFAnimatedPortraitsDB.offsets.player[2] == -1)
+check("/lp offset stores the nudge", LivingPortraitsDB.offsets.player[1] == 2 and LivingPortraitsDB.offsets.player[2] == -1)
 local pmA = modelFor("player").anchor
 check("offset moves the model off the portrait center", pmA and pmA[4] == 2 and pmA[5] == -1)
 check("offset moves the circle edge with it", vig.anchor and vig.anchor[4] == 2 and vig.anchor[5] == -1)
 slash("offset player 0 0")
 slash("calibrate")
-check("/bap calibrate turns calibration on", BBFAnimatedPortraitsDB.calibrate == true)
+check("/lp calibrate turns calibration on", LivingPortraitsDB.calibrate == true)
 slash("calibrate")
 
 -- A container at level 0 (the target's) is raised so the model can sit beneath it
@@ -331,35 +331,35 @@ world.connected.party1 = nil
 
 -- Group toggles
 slash("unit party")
-check("/bap unit party hides party", not shownFor("party1") and not shownFor("party2"))
+check("/lp unit party hides party", not shownFor("party1") and not shownFor("party2"))
 slash("unit party")
-check("/bap unit party restores party", shownFor("party1"))
+check("/lp unit party restores party", shownFor("party1"))
 slash("unit tot")
-check("/bap unit tot hides tot", not shownFor("targettarget"))
+check("/lp unit tot hides tot", not shownFor("targettarget"))
 slash("unit tot")
 
 -- Global toggle restores the 2D portrait
 slash("toggle")
-check("/bap toggle hides everything", not shownFor("player") and not shownFor("target"))
-check("/bap toggle restores 2D portrait", playerContainer.PlayerPortrait.shown)
+check("/lp toggle hides everything", not shownFor("player") and not shownFor("target"))
+check("/lp toggle restores 2D portrait", playerContainer.PlayerPortrait.shown)
 slash("toggle")
-check("/bap toggle restores", shownFor("player"))
+check("/lp toggle restores", shownFor("player"))
 
 -- Sized settings
 slash("inset 0.9 small")
-check("inset small only", BBFAnimatedPortraitsDB.sizes.small.inset == 0.9 and BBFAnimatedPortraitsDB.sizes.large.inset == 0.80)
+check("inset small only", LivingPortraitsDB.sizes.small.inset == 0.9 and LivingPortraitsDB.sizes.large.inset == 0.80)
 slash("inset 0.5 large")
 check("circle edge follows a smaller inset", math.abs(vig.w - 30) < 0.01)
 slash("inset 0.9 large")
 check("circle edge follows a larger inset", math.abs(vig.w - 54) < 0.01)
 slash("inset 0.80 large")
 slash("cam 0.7")
-check("cam without size sets both", BBFAnimatedPortraitsDB.sizes.small.cam == 0.7 and BBFAnimatedPortraitsDB.sizes.large.cam == 0.7)
-slash("cam 9 large"); check("cam clamped to 2", BBFAnimatedPortraitsDB.sizes.large.cam == 2)
-slash("zoom 5");      check("zoom clamped to 1", BBFAnimatedPortraitsDB.zoom == 1)
-slash("vignette");    check("vignette toggles off", BBFAnimatedPortraitsDB.vignette == false)
+check("cam without size sets both", LivingPortraitsDB.sizes.small.cam == 0.7 and LivingPortraitsDB.sizes.large.cam == 0.7)
+slash("cam 9 large"); check("cam clamped to 2", LivingPortraitsDB.sizes.large.cam == 2)
+slash("zoom 5");      check("zoom clamped to 1", LivingPortraitsDB.zoom == 1)
+slash("vignette");    check("vignette toggles off", LivingPortraitsDB.vignette == false)
 slash("reset")
-check("reset restores defaults", BBFAnimatedPortraitsDB.sizes.large.cam == 0.85 and BBFAnimatedPortraitsDB.vignette == true)
+check("reset restores defaults", LivingPortraitsDB.sizes.large.cam == 0.85 and LivingPortraitsDB.vignette == true)
 
 -- BBF no-portrait mode
 BBF = { HasNoPortrait = function(u) return u == "target" end }
@@ -515,7 +515,7 @@ check("ToT bottom-anchored health keeps its top edge, minus the row", totHp.anch
 check("ToT mana closes BBF's gap under the health bar", totMana.BBFPositionFrame:GetTop() == totHp.BBFPositionFrame:GetBottom() - 1)
 check("ToT name pinned left in its row", totContainer.bbfName.points[1][1] == "LEFT" and totContainer.bbfName.points[1][5] == 4.5)
 slash("namerow 0 tot")
-check("/bap namerow 0 tot gives ToT its full bars back", totHp.h == 15 and BBFAnimatedPortraitsDB.nameRow.large == 12)
+check("/lp namerow 0 tot gives ToT its full bars back", totHp.h == 15 and LivingPortraitsDB.nameRow.large == 12)
 slash("namerow 9 tot")
 
 -- NPC with no power: Blizzard hides the mana bar, BBF keeps its empty slot visible
@@ -549,22 +549,22 @@ check("bars keep their layout while there's no target", targetHp.h == 17)
 local sqBg = box and rawget(box, "textures") and box.textures[1]
 check("square background hidden by default", sqBg and not sqBg.shown)
 slash("bg 0.5")
-check("/bap bg shows the background", sqBg and sqBg.shown and BBFAnimatedPortraitsDB.squareBg == 0.5)
+check("/lp bg shows the background", sqBg and sqBg.shown and LivingPortraitsDB.squareBg == 0.5)
 slash("bg 0")
-check("/bap bg 0 hides it again", sqBg and not sqBg.shown)
+check("/lp bg 0 hides it again", sqBg and not sqBg.shown)
 
 slash("extend 4 large")
 -- Stack 19 + 8 + 4 = 31, bars 19: health 13, mana 6, box 33
-check("/bap extend large resizes the stack", playerHp.h == 13 and playerMana.h == 6)
-check("/bap extend keeps box aligned with bars (32)", box.w == 32)
-check("/bap extend large leaves small alone", BBFAnimatedPortraitsDB.stackExtra.small == 6)
+check("/lp extend large resizes the stack", playerHp.h == 13 and playerMana.h == 6)
+check("/lp extend keeps box aligned with bars (32)", box.w == 32)
+check("/lp extend large leaves small alone", LivingPortraitsDB.stackExtra.small == 6)
 slash("split 0.5")
-check("/bap split changes the health share", playerHp.h == 10 and playerMana.h == 9)
+check("/lp split changes the health share", playerHp.h == 10 and playerMana.h == 9)
 slash("split 0.66")
 
 -- Turning alignment off restores the original offset
 slash("alignmana")
-check("/bap alignmana turns alignment off", BBFAnimatedPortraitsDB.alignMana == false)
+check("/lp alignmana turns alignment off", LivingPortraitsDB.alignMana == false)
 check("mana bar back at its original x offset", targetMana.anchor[4] == -8)
 slash("alignmana")
 check("re-aligning is stable", targetMana.anchor[4] == 0)
@@ -583,7 +583,7 @@ check("style circle restores name and level", PlayerName.points[1][1] == "TOPLEF
 check("style circle restores BBF's name", PlayerFrame.bbfName.points[1][1] == "TOPLEFT" and PlayerFrame.bbfName.justify == "CENTER")
 check("circle stays off while BBF hides the portrait", not shownFor("player"))
 slash("reset")
-check("reset defaults to square style", BBFAnimatedPortraitsDB.style == "square")
+check("reset defaults to square style", LivingPortraitsDB.style == "square")
 BBF = nil
 playerContainer.shown = true
 
@@ -596,8 +596,10 @@ for _, m in ipairs(models) do
 end
 bbfHooked()
 check("BBF font change triggers our re-layout", refreshed > 0)
-local okDebug, debugErr = pcall(SlashCmdList.BBFANIMPORTRAITS, "debug player"); if not okDebug then realPrint(debugErr) end
-check("/bap debug runs without errors", okDebug)
+local okDebug, debugErr = pcall(SlashCmdList.LIVINGPORTRAITS, "debug player"); if not okDebug then realPrint(debugErr) end
+check("/lp debug runs without errors", okDebug)
+check("/lp, /livingportraits and the old /bap all work",
+    SLASH_LIVINGPORTRAITS1 == "/lp" and SLASH_LIVINGPORTRAITS2 == "/livingportraits" and SLASH_LIVINGPORTRAITS3 == "/bap")
 
 -- Frame scale change (Edit Mode 125% -> 150%) re-frames the camera
 local setUnitCalls = 0
@@ -619,22 +621,22 @@ do
     local n = 0
     for _ in pairs(proxies) do n = n + 1 end
     check("settings panel registers its options", n >= 25)
-    local zoom = proxies.BAP_zoom
+    local zoom = proxies.LivingPortraits_zoom
     zoom.set(0.5)
-    check("panel slider writes the setting", BBFAnimatedPortraitsDB.zoom == 0.5 and zoom.get() == 0.5)
-    proxies.BAP_stackExtra_large.set(7.6)
-    check("whole-number sliders round", BBFAnimatedPortraitsDB.stackExtra.large == 8)
-    proxies.BAP_unit_party.set(false)
+    check("panel slider writes the setting", LivingPortraitsDB.zoom == 0.5 and zoom.get() == 0.5)
+    proxies.LivingPortraits_stackExtra_large.set(7.6)
+    check("whole-number sliders round", LivingPortraitsDB.stackExtra.large == 8)
+    proxies.LivingPortraits_unit_party.set(false)
     check("group checkbox toggles every unit in the group",
-        not BBFAnimatedPortraitsDB.units.party1 and not BBFAnimatedPortraitsDB.units.party4)
-    check("group checkbox reads the group", proxies.BAP_unit_party.get() == false)
-    proxies.BAP_unit_party.set(true)
-    check("defaults come from the addon's defaults", proxies.BAP_sizes_large_cam.default == 0.85 and proxies.BAP_style.default == "square")
-    notified.BAP_zoom = 0
+        not LivingPortraitsDB.units.party1 and not LivingPortraitsDB.units.party4)
+    check("group checkbox reads the group", proxies.LivingPortraits_unit_party.get() == false)
+    proxies.LivingPortraits_unit_party.set(true)
+    check("defaults come from the addon's defaults", proxies.LivingPortraits_sizes_large_cam.default == 0.85 and proxies.LivingPortraits_style.default == "square")
+    notified.LivingPortraits_zoom = 0
     slash("zoom 0.7")
-    check("/bap changes show in the panel", notified.BAP_zoom > 0 and zoom.get() == 0.7)
+    check("/lp changes show in the panel", notified.LivingPortraits_zoom > 0 and zoom.get() == 0.7)
     slash("options")
-    check("/bap options opens the panel", openedCategory == 42)
+    check("/lp options opens the panel", openedCategory == 42)
     slash("reset")
 end
 
@@ -647,17 +649,17 @@ do
     check("BBF setup turns on No Portrait + Pixel Border", bdb.noPortraitModes == true and bdb.noPortraitPixelBorder == true)
     check("BBF setup includes every frame", bdb.noPortraitSkipTarget == false and bdb.noPortraitPartyOnly == false)
     check("BBF setup leaves other BBF settings alone", bdb.unitFrameFont == 2002)
-    check("BBF setup offers a reload", popupShown == "BBF_ANIMATED_PORTRAITS_RELOAD")
-    local backup = BBFAnimatedPortraitsDB.bbfBackup
+    check("BBF setup offers a reload", popupShown == "LIVING_PORTRAITS_RELOAD")
+    local backup = LivingPortraitsDB.bbfBackup
     check("BBF setup backs up the old values", backup and backup.noPortraitModes == false and backup.noPortraitSkipTarget == true)
     buttons["Pixel Border mode"]()
-    check("applying twice keeps the original backup", BBFAnimatedPortraitsDB.bbfBackup.noPortraitModes == false)
+    check("applying twice keeps the original backup", LivingPortraitsDB.bbfBackup.noPortraitModes == false)
     slash("reset")
-    check("/bap reset keeps BBF's Undo", BBFAnimatedPortraitsDB.bbfBackup ~= nil)
+    check("/lp reset keeps BBF's Undo", LivingPortraitsDB.bbfBackup ~= nil)
     buttons["Undo Pixel Border mode"]()
     check("Undo restores BBF's values", bdb.noPortraitModes == false and bdb.noPortraitSkipTarget == true)
     check("Undo removes keys BBF never had", bdb.noPortraitPixelBorder == nil and bdb.noPortraitPartyOnly == nil)
-    check("Undo clears the backup", BBFAnimatedPortraitsDB.bbfBackup == nil)
+    check("Undo clears the backup", LivingPortraitsDB.bbfBackup == nil)
     BBF, BetterBlizzFramesDB = nil, nil
 end
 
