@@ -85,6 +85,10 @@ end
 function CreateFrame(kind, _, parent)
     local f = newFrame(kind, parent, parent and parent.level + 1)
     if kind == "PlayerModel" then models[#models + 1] = f end
+    if kind == "StatusBar" then
+        local fill = newTexture(true)
+        function f:GetStatusBarTexture() return fill end
+    end
     frames[#frames + 1] = f
     eventFrame = eventFrame or f
     return f
@@ -579,6 +583,25 @@ check("scale change refreshes the player portrait", setUnitCalls == 1)
 tick()
 check("refreshes only once per scale change", setUnitCalls == 1)
 PlayerFrame.GetEffectiveScale = nil
+
+-- Target bar grow in PvP: the fill's alpha can read back as a secret value. The grow must
+-- still end and give Blizzard's fill its alpha back (it errored every frame and left the
+-- target's health bar invisible in battlegrounds).
+do
+    local hpFill = newTexture(true)
+    function targetHp:GetStatusBarTexture() return hpFill end
+    TargetFrame:Update() -- Blizzard's target update starts the grow
+    check("grow hides Blizzard's fill while the overlay grows", hpFill.alpha == 0)
+    local SECRET = {}
+    function hpFill:GetAlpha() return world.secret and SECRET or (rawget(self, "alpha") or 1) end
+    world.secret = true
+    local driver
+    for _, fr in ipairs(frames) do if rawget(fr, "OnUpdate") then driver = fr end end
+    driver.OnUpdate(driver, 1) -- past growTime
+    world.secret = false
+    check("grow restores the fill when its alpha is secret", rawget(hpFill, "alpha") == 1)
+    check("grow stops running after it ends", rawget(driver, "OnUpdate") == nil)
+end
 
 -- Secret values must not error
 world.secret = true

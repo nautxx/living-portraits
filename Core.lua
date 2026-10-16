@@ -202,8 +202,12 @@ local function CopyDefaults(src, dst)
 end
 
 -- Newer clients can return "secret" values that error if compared or concatenated.
+local function IsSecret(v)
+    return issecretvalue ~= nil and issecretvalue(v) == true
+end
+
 local function Safe(v)
-    if issecretvalue and issecretvalue(v) then return nil end
+    if IsSecret(v) then return nil end
     return v
 end
 
@@ -531,19 +535,22 @@ end
 
 -- Move each bar text vertically to the middle of its bar (BBF's offsets were tuned for the
 -- original thin bars). Horizontal placement is left to BBF.
+-- In PvP a text showing secret health is secret too, and so is its position: skip it.
 local function CenterTexts(holder, keys, pos)
     if not holder then return end
     local _, posY = pos:GetCenter()
+    posY = Safe(posY)
     if not posY then return end
     for _, key in ipairs(keys) do
         local fs = holder[key]
         if type(fs) == "table" and fs.GetCenter and fs:GetNumPoints() == 1 then
             local _, fsY = fs:GetCenter()
+            fsY = Safe(fsY)
             local point, rel, relPoint, x, y = fs:GetPoint(1)
-            if fsY and point then
+            if fsY and point and not IsSecret(x) and not IsSecret(y) then
                 if not fs.bapOrig then fs.bapOrig = { point, rel, relPoint, x or 0, y or 0 } end
-                local ps = pos:GetEffectiveScale() or 1
-                local fsScale = fs.GetEffectiveScale and fs:GetEffectiveScale() or ps
+                local ps = Safe(pos:GetEffectiveScale()) or 1
+                local fsScale = fs.GetEffectiveScale and Safe(fs:GetEffectiveScale()) or ps
                 local diff = (posY * ps - fsY * fsScale) / fsScale
                 if math.abs(diff) >= 0.25 then
                     fs:SetPoint(point, rel, relPoint, x or 0, (y or 0) + diff)
@@ -946,10 +953,14 @@ local growDriver -- created on first grow
 local function EndGrow(bar)
     local g = grows[bar]
     if not g then return end
-    g.ov:Hide()
-    -- Restore Blizzard's fill unless something else set its alpha meanwhile.
-    if g.fill:GetAlpha() == 0 then g.fill:SetAlpha(g.alpha) end
+    -- Remove first: if anything below errors, the grow must not re-run (and error) every frame.
     grows[bar] = nil
+    g.ov:Hide()
+    -- Restore Blizzard's fill unless something else set its alpha meanwhile. In PvP the
+    -- alpha can read back as a secret value that can't be compared: restore it then too,
+    -- or the bar stays invisible.
+    local alpha = Safe(g.fill:GetAlpha())
+    if alpha == nil or alpha == 0 then g.fill:SetAlpha(g.alpha) end
     GrowTrace("done", bar.bapGrowName)
 end
 
