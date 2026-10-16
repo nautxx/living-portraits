@@ -782,6 +782,17 @@ do
     slash("surname")
     check("turning it off puts the full name back", PlayerName.text == "Naut Sfw"
         and PlayerFrame.bbfName.text == "|cffffffffNaut Sfw|r")
+    proxies.LivingPortraits_hideSurname.set(true)
+    check("the panel checkbox applies right away, not on the next tick", PlayerName.text == "Naut")
+    world.names.target = { "Creeg", "Head" }
+    TargetFrame.bbfName = rowText() -- BBF creates its own name text after us
+    TargetFrame.bbfName:SetText("Creeg Head")
+    tick()
+    check("name texts created later are picked up by the ticker", TargetFrame.bbfName.text == "Creeg")
+    TargetFrame.bbfName:SetText("Creeg Head") -- target changed: BBF sets the name again
+    check("...and stay stripped through the hook", TargetFrame.bbfName.text == "Creeg")
+    proxies.LivingPortraits_hideSurname.set(false)
+    TargetFrame.bbfName, world.names.target = nil, nil
 end
 
 -- The pre-rename addon (BBF_AnimatedPortraits) still enabled: offer to disable it

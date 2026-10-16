@@ -927,8 +927,11 @@ Refresh = function(unit)
     MarkState(unit)
 end
 
+local AfterRefreshAll -- talent build and surnames, defined with them below
+
 local function RefreshAll()
     for _, unit in ipairs(UNIT_LIST) do Refresh(unit) end
+    if AfterRefreshAll then AfterRefreshAll() end
 end
 
 -- Coalesce bursts of refresh requests (BBF re-layouts often call several functions).
@@ -1187,9 +1190,10 @@ end
 
 local function UpdateBuildFor(unit)
     local text = BuildVisible(unit) and BuildFor(unit) or nil
+    local fs = buildTexts[unit]
+    if not text and not (fs and fs:IsShown()) then return end -- nothing to show or hide
     local name, level, bbfName = Lookup(unit, "texts")
     if not level then return end
-    local fs = buildTexts[unit]
     if text and not fs then
         fs = CreateBuildText(unit, level)
         buildTexts[unit] = fs
@@ -1199,9 +1203,8 @@ local function UpdateBuildFor(unit)
     local hpPos = GetBarFrames(unit)
     local row, extra = hpPos and hpPos.bapRow or 0, BuildLine(unit)
     local above = row > 0 and extra > 0
-    local key = ("%s|%s|%s|%s"):format(tostring(text), tostring(above), row, extra)
-    if fs.bapKey == key then return end
-    fs.bapKey, fs.bapInline = key, not above
+    if fs.bapText == text and fs.bapInline == not above and fs.bapRow == row and fs.bapExtra == extra then return end
+    fs.bapText, fs.bapInline, fs.bapRow, fs.bapExtra = text, not above, row, extra
     fs:ClearAllPoints()
     if above then
         fs:SetPoint("LEFT", hpPos, "TOPLEFT", 1, row + extra / 2)
@@ -1277,23 +1280,39 @@ local function StripSurname(fs)
     SetNameText(fs, short)
 end
 
--- Hook new name texts (BBF creates bbfName later), strip or restore after a toggle.
-local function UpdateSurnames()
+-- Hook a name text once; the hook then follows every name change by itself.
+local function HookName(fs, unit)
+    if not fs or fs.bapNameHook or not fs.SetText then return end
+    fs.bapNameHook, fs.bapNameUnit = true, unit
+    hooksecurefunc(fs, "SetText", StripSurname)
+    StripSurname(fs) -- its current text
+end
+
+-- Strip (setting on) or put back (setting off) on one name text.
+local function ApplySurname(fs)
+    if not fs then return end
+    if db.hideSurname then
+        StripSurname(fs)
+    elseif fs.bapShortName then
+        if Safe(fs:GetText()) == fs.bapShortName then SetNameText(fs, fs.bapFullName) end
+        fs.bapFullName, fs.bapShortName = nil, nil
+    end
+end
+
+-- From the ticker: hook name texts as they appear (BBF creates bbfName after us). With
+-- `apply` (after a refresh or a toggle): also strip or restore every name now.
+local function UpdateSurnames(apply)
     if not db then return end
     for _, unit in ipairs(SURNAME_UNITS) do
-        for _, fs in ipairs({ NameTextsOf(unit) }) do
-            if fs.SetText and not fs.bapNameHook then
-                fs.bapNameHook, fs.bapNameUnit = true, unit
-                hooksecurefunc(fs, "SetText", StripSurname)
-            end
-            if db.hideSurname then
-                StripSurname(fs)
-            elseif fs.bapShortName then
-                if Safe(fs:GetText()) == fs.bapShortName then SetNameText(fs, fs.bapFullName) end
-                fs.bapFullName, fs.bapShortName = nil, nil
-            end
-        end
+        local a, b = NameTextsOf(unit)
+        HookName(a, unit); HookName(b, unit)
+        if apply then ApplySurname(a); ApplySurname(b) end
     end
+end
+
+AfterRefreshAll = function()
+    UpdateBuild()
+    UpdateSurnames(true)
 end
 
 -- Catches changes with no reliable event: ToT swaps, party range/visibility, and frame
@@ -1616,7 +1635,8 @@ local function PrintStatus()
     print(("  circle large: inset=%.2f cam=%.2f   small: inset=%.2f cam=%.2f"):format(L.inset, L.cam, S.inset, S.cam))
     print(("  square: cam=%.2f bg=%.2f gap=%d alignmana=%s split=%.2f  extend: large=%d small=%d"):format(
         Q.cam, db.squareBg, db.squareGap, tostring(db.alignMana), db.hpShare, db.stackExtra.large, db.stackExtra.small))
-    print(("  name rows: large=%d tot=%d party=%d"):format(db.nameRow.large, db.nameRow.tot, db.nameRow.party))
+    print(("  name rows: large=%d tot=%d party=%d   build=%s tall=%s hidesurnames=%s"):format(db.nameRow.large,
+        db.nameRow.tot, db.nameRow.party, tostring(db.showBuild), tostring(db.tallPortraits), tostring(db.hideSurname)))
 end
 
 local function PrintHelp()
@@ -1701,6 +1721,18 @@ local function DebugUnit(unit)
     end
 end
 
+-- On/off settings: command -> db key.
+local SLASH_TOGGLES = {
+    toggle = "enabled", vignette = "vignette", grow = "growBars", alignmana = "alignMana",
+    build = "showBuild", tall = "tallPortraits", surname = "hideSurname",
+}
+-- Number settings: command -> { db key, min, max }.
+local SLASH_NUMBERS = {
+    growtime = { "growTime", 0.1, 2 }, split = { "hpShare", 0.4, 0.85 }, zoom = { "zoom", 0, 1 },
+    circlebg = { "circleBg", 0, 1 }, bg = { "squareBg", 0, 1 },
+    gap = { "squareGap", 0, 20 }, barspacing = { "barSpacing", 0, 10 },
+}
+
 SLASH_LIVINGPORTRAITS1 = "/lp"
 SLASH_LIVINGPORTRAITS2 = "/livingportraits"
 SLASH_LIVINGPORTRAITS3 = "/bap" -- the name before Living Portraits
@@ -1726,18 +1758,16 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
     elseif cmd == "refresh" then
         RefreshAll()
         return
-    elseif cmd == "toggle" then
-        db.enabled = not db.enabled
-    elseif cmd == "vignette" then
-        db.vignette = not db.vignette
     elseif cmd == "grow" and arg == "debug" then
         growDebug = not growDebug
         print("  grow debug " .. (growDebug and "on: change targets and watch chat." or "off."))
         return
-    elseif cmd == "grow" then
-        db.growBars = not db.growBars
-    elseif cmd == "growtime" and val then
-        db.growTime = Clamp(val, 0.1, 2)
+    elseif SLASH_TOGGLES[cmd] then
+        local key = SLASH_TOGGLES[cmd]
+        db[key] = not db[key]
+    elseif SLASH_NUMBERS[cmd] and val then
+        local n = SLASH_NUMBERS[cmd]
+        db[n[1]] = Clamp(val, n[2], n[3])
     elseif cmd == "calibrate" then
         db.calibrate = not db.calibrate
         print(db.calibrate and "  Calibrate on: nudge with /lp offset <player|target|focus|tot|party> x y, then /lp calibrate to finish."
@@ -1752,26 +1782,6 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
         SetEach(db.stackExtra, size, Clamp(val, 0, 30))
     elseif cmd == "namerow" and val then
         SetEach(db.nameRow, args[3], Clamp(val, 0, 24))
-    elseif cmd == "split" and val then
-        db.hpShare = Clamp(val, 0.4, 0.85)
-    elseif cmd == "alignmana" then
-        db.alignMana = not db.alignMana
-    elseif cmd == "build" then
-        db.showBuild = not db.showBuild
-    elseif cmd == "tall" then
-        db.tallPortraits = not db.tallPortraits
-    elseif cmd == "surname" then
-        db.hideSurname = not db.hideSurname
-    elseif cmd == "circlebg" and val then
-        db.circleBg = Clamp(val, 0, 1)
-    elseif cmd == "bg" and val then
-        db.squareBg = Clamp(val, 0, 1)
-    elseif cmd == "gap" and val then
-        db.squareGap = Clamp(val, 0, 20)
-    elseif cmd == "barspacing" and val then
-        db.barSpacing = Clamp(val, 0, 10)
-    elseif cmd == "zoom" and val then
-        db.zoom = Clamp(val, 0, 1)
     elseif cmd == "inset" and val then
         SetEach(db.sizes, size, Clamp(val, 0.3, 1.2), "inset")
     elseif cmd == "cam" and val then
@@ -1789,9 +1799,7 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
         PrintHelp()
         return
     end
-    RefreshAll()
-    UpdateBuild()
-    UpdateSurnames()
+    RefreshAll() -- also re-applies the talent build and surnames
     NotifyOptions()
     PrintStatus()
 end
