@@ -108,6 +108,7 @@ BBF code that touches portraits (read only, for compatibility):
 - [ ] BBF "no portrait" mode: the addon stays hidden
 - [ ] Classic Frames mode in BBF: the model stays aligned
 - [ ] No Lua errors (`/console scriptErrors 1`)
+- [x] Battlegrounds: no Lua errors, target bars stay visible after the grow (2 BGs on v0.2.1, 2026-10-16)
 
 ## Conventions
 - One step per commit; test in game before starting the next step.
