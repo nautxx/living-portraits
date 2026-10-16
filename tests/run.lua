@@ -12,11 +12,21 @@ end
 
 -- WoW API stubs ---------------------------------------------------------------
 local function stubIndex(t)
-    return setmetatable(t, { __index = function() return function() end end })
+    -- Unknown Capitalized keys act as no-op WoW methods; lowercase fields are nil like in WoW.
+    return setmetatable(t, { __index = function(_, k)
+        if type(k) == "string" and k:match("^%u") then return function() end end
+    end })
 end
+
+-- Child keys the addon probes; real WoW returns nil when absent, the stub must too.
+local CHILD_KEYS = { "TargetFrameContent", "PlayerFrameContent", "HealthBarContainer",
+    "HealthBar", "ManaBar", "BBFPositionFrame" }
 
 local function region(t)
     t = stubIndex(t or {})
+    for _, k in ipairs(CHILD_KEYS) do
+        if rawget(t, k) == nil then t[k] = false end
+    end
     t.shown = t.shown or false
     function t:Show() self.shown = true end
     function t:Hide() self.shown = false end
@@ -25,6 +35,8 @@ local function region(t)
     function t:SetAlpha(a) self.alpha = a end
     function t:GetAlpha() return rawget(self, "alpha") or 1 end
     function t:SetSize(w, h) self.w, self.h = w, h end
+    function t:SetHeight(h) self.h = h end
+    function t:GetHeight() return rawget(self, "h") or 0 end
     return t
 end
 
@@ -42,11 +54,24 @@ local function newFrame(kind, parent, level)
     function f:SetScript(name, fn) self[name] = fn end
     function f:HookScript(name, fn) self.scripts[name] = fn end
     function f:SetUnit(unit) self.unit = unit end
-    function f:CreateTexture() return newTexture() end
+    function f:CreateTexture()
+        local t = newTexture()
+        local list = rawget(self, "textures") or {}
+        self.textures = list
+        list[#list + 1] = t
+        return t
+    end
     function f:CreateMaskTexture() return stubIndex({}) end
     function f:GetFrameLevel() return self.level end
     function f:SetFrameLevel(l) self.level = l end
     function f:GetFrameStrata() return "MEDIUM" end
+    function f:GetEffectiveScale() return 1 end
+    function f:GetTop() return rawget(self, "top") end
+    function f:GetBottom() return rawget(self, "bottom") end
+    function f:GetLeft() return rawget(self, "left") end
+    function f:GetRight() return rawget(self, "right") end
+    function f:GetPoint() local a = rawget(self, "anchor"); if a then return unpack(a) end end
+    function f:SetPoint(point, rel, relPoint, x, y) self.anchor = { point, rel, relPoint, x, y } end
     function f:IsVisible()
         local up = rawget(self, "parent")
         return self.shown and (not up or up:IsVisible())
@@ -61,6 +86,12 @@ function CreateFrame(kind, _, parent)
     eventFrame = eventFrame or f
     return f
 end
+
+PixelUtil = {
+    SetHeight = function(r, h) r.h = h end,
+    SetWidth = function(r, w) r.w = w end,
+    SetPoint = function(r, ...) r.anchor = { ... } end,
+}
 
 function hooksecurefunc(obj, method, hook)
     local orig = obj[method]
@@ -96,6 +127,8 @@ function UnitGUID(u) return world.guid[u] or ("G-" .. u) end
 function UnitIsVisible(u) return world.visible[u] ~= false end
 function UnitIsConnected(u) return world.connected[u] ~= false end
 function issecretvalue() return world.secret end
+local inCombat = false
+function InCombatLockdown() return inCombat end
 
 local tick
 C_Timer = {
@@ -116,8 +149,10 @@ local function modelFor(unit)
     for _, m in ipairs(models) do if m.unit == unit then return m end end
 end
 local function shownFor(unit)
-    local m = modelFor(unit)
-    return m ~= nil and m.shown
+    for _, m in ipairs(models) do
+        if m.unit == unit and m:IsVisible() then return true end
+    end
+    return false
 end
 
 -- Tests -----------------------------------------------------------------------
@@ -127,12 +162,12 @@ world.visible.party2 = false
 -- Saved settings from an older version (inset 0.82) must be upgraded
 BBFAnimatedPortraitsDB = { enabled = true, sizes = { large = { inset = 0.82, cam = 0.85 }, small = { inset = 0.82, cam = 0.85 } } }
 fire("ADDON_LOADED", "BBF_AnimatedPortraits")
-check("old saved inset migrated to new default", BBFAnimatedPortraitsDB.sizes.small.inset == 1.0)
-check("settings version recorded", BBFAnimatedPortraitsDB.version == 2)
-check("defaults applied", BBFAnimatedPortraitsDB.enabled == true and BBFAnimatedPortraitsDB.sizes.large.inset == 1.0)
+check("old saved inset migrated to new default", BBFAnimatedPortraitsDB.sizes.small.inset == 0.84)
+check("settings version recorded", BBFAnimatedPortraitsDB.version == 6)
+check("defaults applied", BBFAnimatedPortraitsDB.enabled == true and BBFAnimatedPortraitsDB.sizes.large.inset == 0.84)
 
 fire("PLAYER_ENTERING_WORLD")
-check("one model per supported unit (9)", #models == 9)
+check("models created lazily, only for units on screen (4 of 9)", #models == 4)
 check("player model shown", shownFor("player"))
 check("target model shown", shownFor("target"))
 check("tot model shown", shownFor("targettarget"))
@@ -141,7 +176,9 @@ check("party2 out of range -> hidden", not shownFor("party2"))
 check("focus missing -> hidden", not shownFor("focus"))
 
 local pm = modelFor("player")
-check("model sized by large inset", pm.w and math.abs(pm.w - 60 * 1.0) < 0.01)
+check("model sized by large inset", pm.w and math.abs(pm.w - 60 * 0.84) < 0.01)
+local vig = rawget(playerContainer, "textures")[1]
+check("vignette edge matches model edge at default inset", math.abs(vig.w - 60) < 0.01) -- capped at portrait
 check("model sits below the Blizzard container (ring on top)", pm.level < playerContainer.level)
 check("model parented to the unit frame root", pm.parent == PlayerFrame)
 check("2D portrait hidden while active", not playerContainer.PlayerPortrait.shown)
@@ -206,7 +243,12 @@ check("/bap toggle restores", shownFor("player"))
 
 -- Sized settings
 slash("inset 0.9 small")
-check("inset small only", BBFAnimatedPortraitsDB.sizes.small.inset == 0.9 and BBFAnimatedPortraitsDB.sizes.large.inset == 1.0)
+check("inset small only", BBFAnimatedPortraitsDB.sizes.small.inset == 0.9 and BBFAnimatedPortraitsDB.sizes.large.inset == 0.84)
+slash("inset 0.5 large")
+check("vignette edge follows a smaller inset", math.abs(vig.w - 60 * 0.5 / 0.72) < 0.01)
+slash("inset 0.9 large")
+check("vignette capped at portrait size", math.abs(vig.w - 60) < 0.01)
+slash("inset 0.84 large")
 slash("cam 0.7")
 check("cam without size sets both", BBFAnimatedPortraitsDB.sizes.small.cam == 0.7 and BBFAnimatedPortraitsDB.sizes.large.cam == 0.7)
 slash("cam 9 large"); check("cam clamped to 2", BBFAnimatedPortraitsDB.sizes.large.cam == 2)
@@ -220,6 +262,172 @@ BBF = { HasNoPortrait = function(u) return u == "target" end }
 fire("PLAYER_TARGET_CHANGED")
 check("BBF no-portrait -> target hidden", not shownFor("target"))
 BBF = nil
+
+-- Square style: BBF No Portrait / Pixel Border on for player and target
+-- A bar with BBF's pixel-border position frame. Like WoW, the posFrame's top follows the
+-- bar's anchor offset and its bottom follows top - height.
+local function barWithPos(parent, pos, anchor)
+    local bar = newFrame("Frame", parent, 7)
+    bar.h = pos.h
+    bar.anchor = anchor or { "TOPLEFT", parent, "TOPLEFT", 0, 0 }
+    bar.baseTop, bar.origY = pos.top, bar.anchor[5]
+    local pf = newFrame("Frame", bar, 8)
+    pf.left, pf.right, pf.h = pos.left, pos.right, pos.h
+    function pf:GetTop() return bar.baseTop + (bar.anchor[5] - bar.origY) end
+    function pf:GetBottom() return self:GetTop() - self.h end
+    function pf:GetCenter() return 0, self:GetTop() - self.h / 2 end
+    bar.BBFPositionFrame = pf
+    return bar
+end
+-- A bar text whose vertical center follows its anchor's y offset.
+local function barText(centerY)
+    local fs = region({ shown = true })
+    fs.anchor = { "LEFT", UIParent, "LEFT", 2, 0 }
+    fs.baseCY = centerY
+    function fs:GetNumPoints() return 1 end
+    function fs:GetPoint() return unpack(self.anchor) end
+    function fs:SetPoint(point, rel, relPoint, x, y) self.anchor = { point, rel, relPoint, x, y } end
+    function fs:GetCenter() return 0, self.baseCY + self.anchor[5] end
+    return fs
+end
+-- Name/level text: records its anchors so the name-row layout can be checked.
+local function rowText()
+    local fs = region({ shown = true })
+    fs.points = { { "TOPLEFT", PlayerFrame, "TOPLEFT", 88, -27 } }
+    fs.justify = "LEFT"
+    function fs:GetNumPoints() return #self.points end
+    function fs:GetPoint(i) return unpack(self.points[i]) end
+    function fs:ClearAllPoints() self.points = {} end
+    function fs:SetPoint(...) table.insert(self.points, { ... }) end
+    function fs:GetJustifyH() return self.justify end
+    function fs:SetJustifyH(j) self.justify = j end
+    return fs
+end
+PlayerName, PlayerLevelText = rowText(), rowText()
+PlayerFrame.bbfName = rowText() -- BBF's replacement name, laid out by BBF itself
+PlayerFrame.bbfName.justify = "CENTER"
+
+local function withParent(bar, holder)
+    function bar:GetParent() return holder end
+    return bar
+end
+
+local playerHpHolder = { LeftText = barText(95) }
+local playerHp = withParent(barWithPos(PlayerFrame, { top = 100, h = 19, left = 50, right = 173 }), playerHpHolder)
+playerHpHolder.HealthBar = playerHp
+local playerMana = barWithPos(PlayerFrame, { top = 79, h = 8, left = 50, right = 173 })
+playerMana.ManaBarText = barText(80)
+PlayerFrame.PlayerFrameContent = { PlayerFrameContentMain = {
+    HealthBarsContainer = playerHpHolder,
+    ManaBarArea = { ManaBar = playerMana },
+} }
+local targetName, targetLevel = rowText(), rowText()
+local targetHpHolder = {}
+local targetHp = withParent(barWithPos(TargetFrame, { top = 100, h = 19, left = 50, right = 173 }), targetHpHolder)
+targetHpHolder.HealthBar = targetHp
+local targetMana = barWithPos(TargetFrame, { top = 79, h = 8, left = 42, right = 165 },
+    { "TOPRIGHT", targetHpHolder, "BOTTOMRIGHT", -8, 0 })
+TargetFrame.TargetFrameContent = { TargetFrameContentMain = {
+    HealthBarsContainer = targetHpHolder,
+    ManaBar = targetMana,
+    Name = targetName, LevelText = targetLevel,
+} }
+
+-- BBF's No Portrait mode moves the player's portrait container into a hidden frame
+playerContainer.shown = false
+BBF = { HasNoPortrait = function(u) return u == "player" or u == "target" end }
+slash("style square")
+local function squareModel(unit, root)
+    for _, m in ipairs(models) do
+        if m.unit == unit and m.parent and m.parent.parent == root then return m end
+    end
+end
+local sqModel = squareModel("player", PlayerFrame)
+check("player square works even though BBF hid the portrait container", sqModel and sqModel:IsVisible())
+check("square box parented to the unit frame", sqModel and sqModel.parent.parent == PlayerFrame)
+check("circle model hidden in square mode", not modelFor("player"):IsVisible())
+local box = sqModel and sqModel.parent
+
+-- Stack 19 + 8 + 10 extra = 37, name row 12, bars 25 split 0.66: health 17, mana 8
+check("health bar is 2/3 of the bars (17)", playerHp.h == 17 and playerHp.BBFPositionFrame.h == 17)
+check("mana bar gets the remaining 1/3 (8)", playerMana.h == 8 and playerMana.BBFPositionFrame.h == 8)
+check("health bar starts below the 12px name row", playerHp.anchor[5] == -12)
+check("mana bar moved down under the health bar (-10)", playerMana.anchor[5] == -10)
+check("box size unchanged (39)", box and box.w == 39 and box.h == 39)
+check("box top at the top of the name row", box and box.anchor[5] == 12)
+local pn = PlayerName.points[1]
+check("player name pinned left in the name row", pn[1] == "LEFT" and pn[3] == "TOPLEFT" and pn[5] == 6 and PlayerName.justify == "LEFT")
+local pl = PlayerLevelText.points[1]
+check("player level pinned right on the same line", pl[1] == "RIGHT" and pl[3] == "TOPRIGHT" and pl[5] == 6)
+PlayerLevelText:SetPoint("LEFT", PlayerFrame, "LEFT", 194, 17) -- BBF re-positions it
+check("level stays pinned if BBF moves it", #PlayerLevelText.points == 1 and PlayerLevelText.points[1][1] == "RIGHT")
+local bn = PlayerFrame.bbfName
+check("BBF's name pinned left on the level's line", bn.points[1][1] == "LEFT" and bn.points[1][5] == 6 and bn.justify == "LEFT")
+bn:SetPoint("BOTTOM", PlayerFrame, "TOP", 0, 0); bn:SetJustifyH("CENTER") -- BBF re-lays it out
+check("BBF's name stays pinned and left-aligned after BBF re-layout", #bn.points == 1 and bn.points[1][1] == "LEFT" and bn.justify == "LEFT")
+check("target name pinned right (mirrored)", targetName.points[1][1] == "RIGHT" and targetName.justify == "RIGHT")
+check("target level pinned left (mirrored)", targetLevel.points[1][1] == "LEFT")
+check("player box sits left of the health bar", box and box.anchor[1] == "TOPRIGHT" and box.anchor[3] == "TOPLEFT")
+
+local function centered(fs, pos) local _, a = fs:GetCenter(); local _, b = pos:GetCenter(); return math.abs(a - b) < 0.5 end
+check("health text vertically centered in its bar", centered(playerHpHolder.LeftText, playerHp.BBFPositionFrame))
+check("mana text vertically centered in its bar", centered(playerMana.ManaBarText, playerMana.BBFPositionFrame))
+check("text keeps its horizontal offset", playerHpHolder.LeftText.anchor[4] == 2)
+
+local tBox = squareModel("target", TargetFrame)
+tBox = tBox and tBox.parent
+check("target box sits right of the health bar", tBox and tBox.anchor[1] == "TOPLEFT" and tBox.anchor[3] == "TOPRIGHT")
+check("target mana bar shifted to line up with health (right edges)", targetMana.anchor[4] == 0)
+check("target mana bar moved down under the health bar", targetMana.anchor[5] == -10)
+
+slash("extend 4 large")
+-- Stack 19 + 8 + 4 = 31, bars 19: health 13, mana 6, box 33
+check("/bap extend large resizes the stack", playerHp.h == 13 and playerMana.h == 6)
+check("/bap extend keeps box aligned with bars (33)", box.w == 33)
+check("/bap extend large leaves small alone", BBFAnimatedPortraitsDB.stackExtra.small == 6)
+slash("split 0.5")
+check("/bap split changes the health share", playerHp.h == 10 and playerMana.h == 9)
+slash("split 0.66")
+
+-- Turning alignment off restores the original offset
+slash("alignmana")
+check("/bap alignmana turns alignment off", BBFAnimatedPortraitsDB.alignMana == false)
+check("mana bar back at its original x offset", targetMana.anchor[4] == -8)
+slash("alignmana")
+check("re-aligning is stable", targetMana.anchor[4] == 0)
+-- In combat the bars are left alone
+inCombat = true
+slash("extend 8 large")
+check("bars not resized in combat", playerHp.h == 13)
+inCombat = false
+
+slash("style circle")
+check("style circle hides the box", not box.shown)
+check("style circle restores BBF's bar heights", playerHp.h == 19 and playerMana.h == 8 and playerMana.BBFPositionFrame.h == 8)
+check("style circle restores bar positions", playerMana.anchor[5] == 0 and targetMana.anchor[4] == -8)
+check("style circle restores text positions", playerHpHolder.LeftText.anchor[5] == 0)
+check("style circle restores name and level", PlayerName.points[1][1] == "TOPLEFT" and PlayerLevelText.points[1][4] == 88)
+check("style circle restores BBF's name", PlayerFrame.bbfName.points[1][1] == "TOPLEFT" and PlayerFrame.bbfName.justify == "CENTER")
+check("circle stays off while BBF hides the portrait", not shownFor("player"))
+slash("reset")
+check("reset defaults to square style", BBFAnimatedPortraitsDB.style == "square")
+BBF = nil
+playerContainer.shown = true
+
+-- Frame scale change (Edit Mode 125% -> 150%) re-frames the camera
+local setUnitCalls = 0
+for _, m in ipairs(models) do
+    local orig = m.SetUnit
+    m.SetUnit = function(self, u) if u == "player" then setUnitCalls = setUnitCalls + 1 end; orig(self, u) end
+end
+tick()
+check("no refresh while the scale is unchanged", setUnitCalls == 0)
+function PlayerFrame:GetEffectiveScale() return 1.5 end
+tick()
+check("scale change refreshes the player portrait", setUnitCalls == 1)
+tick()
+check("refreshes only once per scale change", setUnitCalls == 1)
+PlayerFrame.GetEffectiveScale = nil
 
 -- Secret values must not error
 world.secret = true

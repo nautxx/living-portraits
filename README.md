@@ -31,9 +31,15 @@ ln -s ~/GitHub/Main/bbf-animated-portraits \
 | `/bap` | Show current settings |
 | `/bap toggle` | Turn animated portraits on/off |
 | `/bap zoom 0-1` | Camera zoom (1 = head and shoulders, lower = more body) |
-| `/bap inset 0.3-1.2 [large\|small]` | Model size relative to the portrait (1.0 fills the circle; lower if corners poke past the ring) |
+| `/bap inset 0.3-1.2 [large\|small]` | Model size relative to the portrait (0.72 keeps corners under the ring; the circle edge follows it) |
 | `/bap cam 0.3-2 [large\|small]` | Camera distance (lower = closer, bigger face) |
-| `/bap vignette` | Toggle the thin soft edge where the model meets the ring |
+| `/bap vignette` | Toggle the crisp circle edge that hides the model's square edges |
+| `/bap style square\|circle` | Square box beside the bars (needs BBF No Portrait / Pixel Border) or round portrait |
+| `/bap extend 0-30 [large\|small]` | Square: make the health+mana stack taller; the box grows with it and stays aligned (default large 10, small 6) |
+| `/bap namerow 0-24 [large\|small]` | Square: height of the name + level row inside the box, above the health bar (default large 12, small 0) |
+| `/bap split 0.4-0.85` | Square: health bar's share of the stack (default 0.66, mana gets the rest) |
+| `/bap alignmana` | Square: toggle lining up the mana bar with the health bar next to the box (undoes live) |
+| `/bap gap 0-20` | Square: space between the box and the bars |
 | `/bap unit <group>` | Toggle a frame group: `player`, `target`, `focus`, `tot`, `party` |
 | `/bap reset` | Restore defaults |
 

@@ -13,13 +13,13 @@ globals = {
 -- WoW API / frames we read
 read_globals = {
     -- frames
-    "PlayerFrame", "TargetFrame", "FocusFrame", "PartyFrame",
+    "PlayerFrame", "TargetFrame", "FocusFrame", "PartyFrame", "UIParent", "PlayerName", "PlayerLevelText", "EditModeManagerFrame",
     -- API
-    "CreateFrame", "C_Timer", "hooksecurefunc",
+    "CreateFrame", "C_Timer", "hooksecurefunc", "PixelUtil",
     "UnitExists", "UnitGUID", "UnitIsVisible", "UnitIsConnected",
-    "issecretvalue",
+    "issecretvalue", "InCombatLockdown",
     -- WoW Lua extensions
-    "wipe",
+    "wipe", "unpack",
     -- BetterBlizzFrames (optional)
     "BBF",
 }

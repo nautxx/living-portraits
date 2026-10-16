@@ -13,6 +13,7 @@ animation, like the character screen, as a **companion addon** to BetterBlizzFra
 | BBF dependency | `OptionalDeps` | Loads after BBF so we see its portrait resizing; still works without BBF. |
 | Render approach | `PlayerModel` + `SetUnit()` + `SetPortraitZoom()` | Idle animation plays automatically. ModelScene (char screen) is heavier with no masking benefit. |
 | Circle problem | **Model behind the ring + vignette** (option B) | Mask textures can't clip Model frames. First in-game test (inscribed square above the ring) showed hard square cut lines and a small face. Now the model sits under Blizzard's border ring, which hides its corners, and a vignette hides its straight edges. Rejected: tuning only (cut lines stay visible), square portrait art (big restyle). |
+| Square style | **Default when BBF No Portrait / Pixel Border is on** | A square box can't have masking problems: the model fills it exactly. Box = BBF's 1px black pixel border recipe, anchored beside the bars (`BARS`, `SQUARE_SIDE`), height = health top to mana bottom. Bigger box = taller bar stack (`stackExtra` large 10 / small 6, split `hpShare` 0.66 health / rest mana), so box and bars always align. A name row (`nameRow` large 12 / small 0) sits inside the box above the health bar: name + level on one line (player: name left, level right; target/focus mirrored), pinned via a `SetPoint` hook so BBF re-positioning doesn't move them (BBF's `bbfName` follows the real name automatically). Bar texts are re-centered vertically in their bars (`CenterBarTexts`; BBF's fixed y offsets were tuned for the thin bars). Falls back to circle where BBF still shows portraits. Boxes are parented to the **unit frame** (`UNIT_FRAMES`), never via the portrait: BBF's No Portrait mode reparents the player container and ToT/party portraits to a hidden frame. `LayoutBars` resizes health and mana (bar + BBF posFrame, which carries border/bg/mask), keeps each top edge fixed whatever its anchor point, moves mana down by the health growth (unless it's anchored to the health bar, e.g. ToT), and with `alignMana` shifts it to line up with the health bar on the box side (Blizzard offsets target/focus mana ~8px). Original anchor/heights are stored on the bar/text and restored by `RestoreBars` (circle style, disabled, extend 0). Out of combat only. |
 | Touching Blizzard's portrait | **Hide only, never alter** | Hidden while the model shows, restored after. Never change its texture, alpha or color (Blizzard changes those itself). |
 | Repo location | `~/GitHub/Main/bbf-animated-portraits`, symlinked into AddOns as `BBF_AnimatedPortraits` | The beta client folder is temporary. One repo can feed multiple clients. |
 
@@ -21,8 +22,8 @@ animation, like the character screen, as a **companion addon** to BetterBlizzFra
 - `GROUPS` maps slash-command names (`player`, `target`, `focus`, `tot`, `party`) to units.
 - **Layering (bottom to top)**, all created by `CreateLayers(unit)`:
   1. `bgFrame` (child of the unit frame root, level = container − 2): dark circle with its own mask (`TempPortraitAlphaMask`).
-  2. `model` (child of root, level = container − 1): `PlayerModel` square sized `portrait × sizes[large|small].inset` (1.0). Its edges sit under the ring; its corners can poke a few px past the ring's outer edge if geometry reaches them.
-  3. Blizzard's container: the 2D portrait (hidden while active), our `vignette` texture (same sublevel as the portrait, `media/vignette.tga`) and the border ring art (one sublevel up). The ring covers the model's corners; the vignette is a thin soft edge (clear to ~87% radius) blending the model into the ring.
+  2. `model` (child of root, level = container − 1): `PlayerModel` square sized `portrait × sizes[large|small].inset` (0.72). At 0.72 its corners stay under the ring's outer edge.
+  3. Blizzard's container: the 2D portrait (hidden while active), our `vignette` texture (same sublevel as the portrait, `media/vignette.tga`) and the border ring art (one sublevel up). The ring covers the model's corners; the vignette is a **crisp circle edge** at the model's straight edges (`VIGNETTE_EDGE` = 0.72, scaled with inset, capped at portrait size), with a dark band out to the ring.
 - While active, Blizzard's portrait is hidden (`Hide()`), and a `hooksecurefunc(portrait, "Show")` re-hides it if anything re-shows it. It's restored on deactivate only if it was shown before. Neither Blizzard nor BBF shows or hides these portraits (Blizzard only does for boss frames), so the risk of fighting them is low. **Side effect:** BBF spec/class icon portraits are covered while the model shows (model wins).
 - The layers are no longer inside the unit frame, so they follow it via `container:HookScript("OnShow"/"OnHide")`, and `Refresh` checks `container:IsVisible()`.
 - Alpha mirrors `portrait:SetAlpha` (party out-of-range fade) onto bg, model and vignette.
@@ -77,7 +78,9 @@ BBF code that touches portraits (read only, for compatibility):
 - [ ] `/bap unit tot` / `/bap unit party` toggle cleanly
 - [ ] With BBF spec icons on: note which wins on target/focus (open question)
 - [ ] No square corners poking outside the portrait ring
-- [ ] Ring covers the model's corners; nothing pokes outside the ring (tune `/bap inset`)
+- [ ] Square: box sits flush beside the bars on every frame (player/ToT/party left, target/focus right)
+- [ ] Square: border matches BBF's pixel border; face size OK (`/bap cam 0.8 square`, `/bap extend 10`)
+- [ ] Circle (BBF portraits on): nothing pokes outside the ring at inset 0.84
 - [ ] No straight cut lines visible inside the circle (vignette)
 - [ ] Face size feels right on large and small frames (tune `/bap cam`)
 - [ ] Level badge, rest/PvP/leader/combat icons still draw on top of the model
@@ -94,6 +97,7 @@ BBF code that touches portraits (read only, for compatibility):
 - One step per commit; test in game before starting the next step.
 - Commit messages follow the rules in **Commit messages** below.
 - **Don't commit without asking.** Leave changes uncommitted for Jason to review, then commit when he approves.
+- **Geometry limit (measured in game):** the ring opening is ~0.85 × portrait size and the ring's outer edge ~1.04 ×. A square model can't fill the opening without its corners passing the outer edge (needs inset ≤ 1.04/√2 ≈ 0.73). So the picture ends on a crisp circle at ~85% of the opening, with a dark band to the ring. Tried and rejected: inset 0.82 + wide fade (looked heavy), inset 1.0 + thin fade (corners protruded).
 - Never edit BBF files. A clean backup of BBF v2.1.7 is at `_classic_beta_/Interface/AddOns_backup/`.
 - Git author: Jason <jrbarnachea@gmail.com>. Remote: `github.com/nautxx/bbf-animated-portraits` (private).
 
