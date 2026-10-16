@@ -1501,7 +1501,7 @@ BuildOptions = function()
     end
 
     Header("General")
-    Check({ "enabled" }, "Enable", "Show animated portraits.")
+    Check({ "enabled" }, "Enable", "Show living portraits.")
     Check({ "hideSurname" }, "Hide Surnames", "Show only first names on the player, target, focus, target-of-target and party frames.")
     local styleGet, styleSet, styleDefault = Path({ "style" })
     Settings.CreateDropdown(category, Register("style", "Style", styleDefault, styleGet, styleSet), function()
@@ -1510,13 +1510,16 @@ BuildOptions = function()
         c:Add("circle", "Circle")
         return c:GetData()
     end, "Square: a box beside the bars (needs BBF's Pixel Border mode, below). Circle: inside the round portrait. Frames where BBF still shows portraits always use the circle.")
-    for _, g in ipairs({ { "player", "Player" }, { "target", "Target" }, { "focus", "Focus" },
-                         { "tot", "Target of target" }, { "party", "Party" } }) do
+    for _, g in ipairs({ { "player", "Player Portrait", "player frame" },
+                         { "target", "Target Portrait", "target frame" },
+                         { "focus", "Focus Portrait", "focus frame" },
+                         { "tot", "Target of Target Portrait", "target-of-target and focus-target frames" },
+                         { "party", "Party Portraits", "party frames" } }) do
         local list = GROUPS[g[1]]
         Settings.CreateCheckbox(category, Register("unit_" .. g[1], g[2], true,
             function() return db.units[list[1]] end,
             function(v) for _, unit in ipairs(list) do db.units[unit] = v end end),
-            "Animated portrait on the " .. g[2]:lower() .. " frame.")
+            "Living portrait on the " .. g[3] .. ".")
     end
 
     Header("Camera")

@@ -73,7 +73,7 @@ The square style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. T
 | `/lp` | Show current settings |
 | `/lp options` | Open the settings panel |
 | `/lp bbfsetup` / `/lp bbfundo` | Turn on BBF's No Portrait + Pixel Border mode for every frame / put back your previous BBF settings (reload to apply) |
-| `/lp toggle` | Turn animated portraits on/off |
+| `/lp toggle` | Turn living portraits on/off |
 | `/lp zoom 0-1` | Camera zoom (1 = head and shoulders, lower = more body) |
 | `/lp inset 0.3-1.2 [large\|small]` | Model size relative to the portrait (0.72 keeps corners under the ring; the circle edge follows it) |
 | `/lp cam 0.3-2 [large\|small]` | Camera distance (lower = closer, bigger face) |
