@@ -6,6 +6,16 @@ Live 3D animated portraits for World of Warcraft unit frames. Your character bre
 
 > **Status:** v0.3.0, public test release. Tested in game on the **WoW Forever beta**, with and without BetterBlizzFrames. See [CHANGELOG](CHANGELOG.md).
 
+## Best with BetterBlizzFrames
+
+Living Portraits works on its own, but it's built to be used with [BetterBlizzFrames](https://www.curseforge.com/wow/addons/betterblizzframes) (BBF), and that's how it looks best.
+
+| | Without BBF | With BBF |
+|---|---|---|
+| Style | Circle: the model inside Blizzard's round portrait | **Square**: a pixel-bordered box beside the bars (shown below), or circle if you keep BBF's portraits |
+| Bars and names | Blizzard's default layout | Resized so the box and bars line up, name and level in one row |
+| Setup | Nothing to do | One click: **Turn on** in the settings panel (or `/lp bbfsetup`) switches on BBF's Pixel Border mode |
+
 ## Screenshots
 
 Switching targets: the health and mana bars grow from empty, and each portrait is a live 3D model.
@@ -20,9 +30,14 @@ Square style with BetterBlizzFrames' Pixel Border mode:
 
 ## How it works
 
-Instead of the flat 2D portrait, a live `PlayerModel` of the unit is drawn inside the portrait circle, behind the frame's border ring, with a soft vignette so the model's square edges don't show. If the model can't load (unit out of range, offline, or a BBF "no portrait" mode is on), the addon steps aside and the normal portrait shows.
+Instead of the flat 2D portrait, a live `PlayerModel` of the unit is drawn in one of two styles:
 
-It **does not modify BetterBlizzFrames**. BBF is an optional dependency: when installed, this addon loads after it and follows BBF's portrait sizing automatically.
+- **Square** (when BBF's No Portrait / Pixel Border mode is on): a box with BBF's 1px border beside the health and mana bars. The model fills it exactly.
+- **Circle** (Blizzard's frames, or BBF with portraits): the model sits behind the frame's border ring, with a soft round edge so its square corners don't show.
+
+If the model can't load (unit out of range or offline), the addon steps aside and the normal portrait shows.
+
+It **never modifies BetterBlizzFrames' files**. BBF is an optional dependency: when installed, this addon loads after it and follows its layout. The only BBF settings it ever changes are the No Portrait + Pixel Border switches, and only when you click **Turn on** (with Undo).
 
 ## Install
 
