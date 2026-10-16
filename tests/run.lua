@@ -65,6 +65,16 @@ local function newFrame(kind, parent, level)
         return t
     end
     function f:CreateMaskTexture() return stubIndex({}) end
+    function f:CreateFontString()
+        local fs = region({})
+        function fs:SetText(t) self.text = t end
+        function fs:GetText() return self.text end
+        function fs:GetUnboundedStringWidth() return #(self.text or "") * 6 end
+        function fs:SetPoint(point, rel, relPoint, x, y) self.anchor = { point, rel, relPoint, x, y } end
+        self.fontStrings = self.fontStrings or {}
+        table.insert(self.fontStrings, fs)
+        return fs
+    end
     function f:GetFrameLevel() return self.level end
     function f:SetFrameLevel(l) self.level = l end
     function f:GetFrameStrata() return "MEDIUM" end
@@ -134,6 +144,33 @@ function UnitGUID(u) return world.guid[u] or ("G-" .. u) end
 function UnitIsVisible(u) return world.visible[u] ~= false end
 function UnitIsConnected(u) return world.connected[u] ~= false end
 function issecretvalue() return world.secret end
+-- Players and talents: world.players marks units that are players; talent trees are
+-- 3 groups (11, 12, 13) and configs map to points per group (zero groups left out).
+world.players = {}
+function UnitIsPlayer(u) return world.players[u] or false end
+-- Camelot names: UnitName returns (first name, surname)
+world.names = { player = { "Naut", "Sfw" } }
+function UnitName(u) local n = world.names[u]; if n then return n[1], n[2] end return "Mob" end
+function UnitIsUnit(a, b) return a == b or (a == "target" and b == "player" and world.targetIsMe) or false end
+local now = 100
+function GetTime() return now end
+local inspects = {}
+function NotifyInspect(u) inspects[#inspects + 1] = u end
+function CanInspect() return true end
+Constants = { TraitConsts = { INSPECT_TRAIT_CONFIG_ID = -1 } }
+local talentConfigs = { [7] = { [11] = 5 }, [-1] = { [11] = 2, [12] = 8 } }
+C_ClassTalents = { GetActiveConfigID = function() return 7 end }
+C_Traits = {
+    GetConfigInfo = function(id) return talentConfigs[id] and { treeIDs = { 1112 } } end,
+    GetGroupDisplayInfoByTreeID = function() return { { groupID = 11 }, { groupID = 12 }, { groupID = 13 } } end,
+    GetGroupCurrencyInfo = function(id)
+        local out = {}
+        for group, spent in pairs(talentConfigs[id] or {}) do
+            out[#out + 1] = { traitNodeGroupID = group, currencyInfos = { { spent = spent } } }
+        end
+        return out
+    end,
+}
 local inCombat = false
 function InCombatLockdown() return inCombat end
 
@@ -415,6 +452,7 @@ local function rowText()
     function fs:SetJustifyH(j) self.justify = j end
     fs.text, fs.w = "", 120 -- BBF gives names a fixed-width box
     function fs:SetText(t) self.text = t end
+    function fs:GetText() return self.text end
     function fs:GetUnboundedStringWidth() return #self.text * 6 end
     return fs
 end
@@ -478,8 +516,8 @@ check("mana bar gets the remaining 1/3 (8)", playerMana.h == 8 and playerMana.BB
 check("health bar starts below the 12px name row", playerHp.anchor[5] == -12)
 check("mana bar sits right under the health bar (-9)", playerMana.anchor[5] == -9)
 check("health and mana borders share one line", playerMana.BBFPositionFrame:GetTop() == playerHp.BBFPositionFrame:GetBottom() - 1)
-check("box spans name row to mana bottom (38)", box and box.w == 38 and box.h == 38)
-check("box top at the top of the name row", box and box.anchor[5] == 12)
+check("tall box: 38 wide, name row to mana bottom plus the 9px build line", box and box.w == 38 and box.h == 38 + 9)
+check("tall box top at the build line above the name row", box and box.anchor[5] == 12 + 9)
 local pn = PlayerName.points[1]
 check("player name pinned left in the name row", pn[1] == "LEFT" and pn[3] == "TOPLEFT" and pn[5] == 6 and PlayerName.justify == "LEFT")
 local pl = PlayerLevelText.points[1]
@@ -582,6 +620,76 @@ slash("extend 8 large")
 check("bars not resized in combat", playerHp.h == 13)
 inCombat = false
 
+-- Talent build in the target's name row (square style)
+do
+    local function buildFS()
+        for _, fs in ipairs(rawget(TargetFrame, "fontStrings") or {}) do return fs end
+    end
+    world.players.target = false
+    fire("PLAYER_TARGET_CHANGED")
+    check("no build text for an NPC target", not buildFS() or not buildFS().shown)
+    world.players.target = true
+    world.guid.target = "Player-1"
+    inspects = {}
+    fire("PLAYER_TARGET_CHANGED")
+    check("another player's build is inspected", #inspects == 1 and inspects[1] == "target")
+    check("nothing shown until the inspect answers", not buildFS() or not buildFS().shown)
+    tick()
+    check("no second inspect while waiting for the reply", #inspects == 1)
+    fire("INSPECT_READY", "Player-1")
+    local fs = buildFS()
+    check("inspected build shows points per tree, empty trees as 0", fs and fs.shown and fs.text == "2/8/0")
+    local hpPos = targetHp.BBFPositionFrame
+    check("build gets its own line above the name", fs and fs.anchor[1] == "LEFT" and fs.anchor[2] == hpPos
+        and fs.anchor[3] == "TOPLEFT" and fs.anchor[5] == 12 + 9 / 2)
+    check("the box grows upward by the build line (taller than wide)", tBox.h == tBox.w + 9 and tBox.anchor[5] == 12 + 9)
+    local hpH, hpY = targetHp.h, targetHp.anchor[5]
+    slash("tall")
+    check("tall off puts the build next to the level", fs.anchor[1] == "RIGHT" and fs.anchor[2] == targetLevel and fs.anchor[3] == "LEFT")
+    check("tall off makes the box square again", tBox.h == tBox.w and tBox.anchor[5] == 12)
+    check("the build line doesn't change the health bar", targetHp.h == hpH and targetHp.anchor[5] == hpY)
+    slash("tall")
+    local pfs
+    for _, f in ipairs(rawget(PlayerFrame, "fontStrings") or {}) do pfs = f end
+    check("player frame shows your own build above your name", pfs and pfs.shown and pfs.text == "5/0/0"
+        and pfs.anchor[1] == "LEFT" and pfs.anchor[2] == playerHp.BBFPositionFrame and pfs.anchor[5] == 12 + 9 / 2)
+    -- Mirror target text: name and build on the portrait side (right), level on the outer edge
+    slash("mirror")
+    check("mirrored target name sits on the portrait side", targetName.points[1][1] == "RIGHT"
+        and targetName.points[1][3] == "TOPRIGHT" and targetName.justify == "RIGHT")
+    check("mirrored target level goes to the outer edge", targetLevel.points[1][1] == "LEFT" and targetLevel.points[1][3] == "TOPLEFT")
+    check("mirrored build sits above the name on the portrait side", fs.anchor[1] == "RIGHT" and fs.anchor[3] == "TOPRIGHT")
+    check("the player frame isn't mirrored", PlayerName.points[1][1] == "LEFT" and pfs.anchor[1] == "LEFT")
+    slash("tall")
+    check("mirrored, not tall: build between level and name", fs.anchor[1] == "LEFT" and fs.anchor[2] == targetLevel and fs.anchor[3] == "RIGHT")
+    slash("tall")
+    slash("mirror")
+    check("mirror off puts the target text back", targetName.points[1][1] == "LEFT" and targetLevel.points[1][1] == "RIGHT"
+        and fs.anchor[1] == "LEFT" and fs.anchor[3] == "TOPLEFT")
+    world.guid.target = "Player-2"
+    now = now + 0.5
+    fire("PLAYER_TARGET_CHANGED")
+    check("inspects are spaced out", #inspects == 1)
+    now = now + 2
+    tick()
+    check("the ticker retries once the gap has passed", #inspects == 2)
+    fire("INSPECT_READY", "Someone-Else")
+    check("someone else's inspect is ignored", not fs.shown)
+    world.guid.target = "Player-1"
+    fire("PLAYER_TARGET_CHANGED")
+    check("a cached build shows without a new inspect", fs.shown and fs.text == "2/8/0" and #inspects == 2)
+    world.targetIsMe = true
+    fire("PLAYER_TARGET_CHANGED")
+    check("your own build is read directly", fs.text == "5/0/0" and #inspects == 2)
+    world.targetIsMe = nil
+    slash("build")
+    check("/lp build hides it", LivingPortraitsDB.showBuild == false and not fs.shown)
+    check("tall portraits stay tall with the build hidden", tBox.h == tBox.w + 9)
+    slash("build")
+    world.players.target = nil
+    world.guid.target = nil
+end
+
 slash("style circle")
 check("style circle hides the box", not box.shown)
 check("style circle restores BBF's bar heights", playerHp.h == 19 and playerMana.h == 8 and playerMana.BBFPositionFrame.h == 8)
@@ -669,6 +777,35 @@ do
     check("Undo removes keys BBF never had", bdb.noPortraitPixelBorder == nil and bdb.noPortraitPartyOnly == nil)
     check("Undo clears the backup", LivingPortraitsDB.bbfBackup == nil)
     BBF, BetterBlizzFramesDB = nil, nil
+end
+
+-- Hide surnames on our frames
+do
+    PlayerName:SetText("Naut Sfw")
+    PlayerFrame.bbfName:SetText("|cffffffffNaut Sfw|r")
+    tick() -- hooks the name texts
+    check("surnames show by default", PlayerName.text == "Naut Sfw")
+    slash("surname")
+    check("/lp surname strips the surname", PlayerName.text == "Naut")
+    check("only the surname goes; BBF's color codes stay", PlayerFrame.bbfName.text == "|cffffffffNaut|r")
+    PlayerName:SetText("Naut Sfw") -- Blizzard updates the name
+    check("later name updates are stripped too", PlayerName.text == "Naut")
+    targetName:SetText("Wolf")
+    check("names without a surname are left alone", targetName.text == "Wolf")
+    slash("surname")
+    check("turning it off puts the full name back", PlayerName.text == "Naut Sfw"
+        and PlayerFrame.bbfName.text == "|cffffffffNaut Sfw|r")
+    proxies.LivingPortraits_hideSurname.set(true)
+    check("the panel checkbox applies right away, not on the next tick", PlayerName.text == "Naut")
+    world.names.target = { "Creeg", "Head" }
+    TargetFrame.bbfName = rowText() -- BBF creates its own name text after us
+    TargetFrame.bbfName:SetText("Creeg Head")
+    tick()
+    check("name texts created later are picked up by the ticker", TargetFrame.bbfName.text == "Creeg")
+    TargetFrame.bbfName:SetText("Creeg Head") -- target changed: BBF sets the name again
+    check("...and stay stripped through the hook", TargetFrame.bbfName.text == "Creeg")
+    proxies.LivingPortraits_hideSurname.set(false)
+    TargetFrame.bbfName, world.names.target = nil, nil
 end
 
 -- The pre-rename addon (BBF_AnimatedPortraits) still enabled: offer to disable it

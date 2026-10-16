@@ -4,7 +4,7 @@ Live 3D animated portraits for World of Warcraft unit frames. Your character bre
 
 > Formerly **BBF Animated Portraits**. Upgrading? Delete the old `BBF_AnimatedPortraits` folder from AddOns (if it's still enabled, Living Portraits offers to disable it for you); settings start fresh under the new name. `/bap` still works as an alias for `/lp`.
 
-> **Status:** v0.3.0, public test release. Tested in game on the **WoW Forever beta**, with and without BetterBlizzFrames. See [CHANGELOG](CHANGELOG.md).
+> **Status:** v0.4.0, public test release. Tested in game on the **WoW Forever beta**, with and without BetterBlizzFrames. See [CHANGELOG](CHANGELOG.md).
 
 ## Best with BetterBlizzFrames
 
@@ -73,7 +73,7 @@ The square style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. T
 | `/lp` | Show current settings |
 | `/lp options` | Open the settings panel |
 | `/lp bbfsetup` / `/lp bbfundo` | Turn on BBF's No Portrait + Pixel Border mode for every frame / put back your previous BBF settings (reload to apply) |
-| `/lp toggle` | Turn animated portraits on/off |
+| `/lp toggle` | Turn living portraits on/off |
 | `/lp zoom 0-1` | Camera zoom (1 = head and shoulders, lower = more body) |
 | `/lp inset 0.3-1.2 [large\|small]` | Model size relative to the portrait (0.72 keeps corners under the ring; the circle edge follows it) |
 | `/lp cam 0.3-2 [large\|small]` | Camera distance (lower = closer, bigger face) |
@@ -87,6 +87,10 @@ The square style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. T
 | `/lp extend 0-30 [large\|small]` | Square: make the health+mana stack taller; the box grows with it and stays aligned (default large 10, small 6) |
 | `/lp namerow 0-24 [large\|tot\|party]` | Square: height of the name + level row inside the box, above the health bar (default large 12, tot 9, party 0) |
 | `/lp split 0.4-0.85` | Square: health bar's share of the stack (default 0.66, mana gets the rest) |
+| `/lp build` | Square: toggle the talent build (points per tree, like `2/8/0`) on the player and target frames. Other players must be within inspect range (~30 yd); NPCs show nothing |
+| `/lp surname` | Toggle first names only (hide surnames) on the player, target, focus, target-of-target and party frames |
+| `/lp mirror` | Square: mirror the target and focus text so it matches the player frame (name and talent build next to the portrait, level on the outer edge) |
+| `/lp tall` | Square: toggle tall player and target portraits. On (default): the build gets its own line above the name and the portrait grows into a taller rectangle. Off: square portraits, build next to the level |
 | `/lp alignmana` | Square: toggle lining up the mana bar with the health bar next to the box (undoes live) |
 | `/lp gap 0-20` | Square: space between the box and the bars (1 = borders share one line) |
 | `/lp barspacing 0-10` | Square: space between health and mana (0 = borders share one line) |

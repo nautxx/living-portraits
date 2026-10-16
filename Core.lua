@@ -46,6 +46,10 @@ local defaults = {
     alignMana   = true, -- square: line the mana bar's edge up with the health bar on the box side
     growBars    = true, -- new target: health and mana grow from empty to their value
     growTime    = 0.35, -- seconds the grow takes (/lp growtime)
+    showBuild   = true, -- square: talent build ("2/8/0") on the player and target (/lp build)
+    tallPortraits = true, -- square: player/target box grows upward by a line for the build (/lp tall)
+    hideSurname = false, -- first names only on our frames (/lp surname)
+    mirrorTarget = false, -- square: target/focus text mirrors the player's (/lp mirror)
     vignette = true,
     calibrate = false, -- circle: tint the edge red to line it up with the ring (/lp calibrate)
     -- Circle: per-frame nudge (px) of the portrait inside its ring. Measured in game with
@@ -185,6 +189,7 @@ local GROUPS = {
 local db
 local BuildOptions -- the settings panel, defined with it below
 local CheckOldAddon -- warns when the pre-rename addon is still enabled, defined below
+local buildTexts = {} -- unit -> talent build FontString ("2/8/0"), created on first use
 local layers = {}    -- unit -> layer record
 -- unit -> GUID and visible/connected code at the last refresh, so the ticker only refreshes on change
 local lastGuid, lastCode = {}, {}
@@ -646,6 +651,7 @@ local function PinText(fs, point, rel, relPoint, x, y, justify, maxWidth)
         end
         self.bapApplying = nil
     end
+    fs.bapApply = Apply -- lets other code re-fit it (the build text changes the name's room)
     if not fs.bapPinHook then
         fs.bapPinHook = true
         hooksecurefunc(fs, "SetPoint", Apply)
@@ -655,6 +661,12 @@ local function PinText(fs, point, rel, relPoint, x, y, justify, maxWidth)
         if fs.SetFont then hooksecurefunc(fs, "SetFont", Apply) end
     end
     Apply(fs)
+end
+
+-- Mirrored text (target/focus, box on the right): name and build hug the portrait and
+-- the level goes to the outer edge, so the frame mirrors the player's.
+local function Mirrored(unit)
+    return db.mirrorTarget and UNITS[unit].side == "RIGHT"
 end
 
 local function LayoutNameRow(unit, hpPos)
@@ -671,11 +683,19 @@ local function LayoutNameRow(unit, hpPos)
         local w = Safe(hpPos:GetWidth())
         if type(w) ~= "number" then return end
         local lw = level and level:IsShown() and TextWidth(level)
-        return math.max(w - 2 - (lw and lw + 4 or 0), 10)
+        local bt = buildTexts[unit]
+        local bw = bt and bt.bapInline and bt:IsShown() and TextWidth(bt)
+        return math.max(w - 2 - (lw and lw + 4 or 0) - (bw and bw + 6 or 0), 10)
     end
-    PinText(name,    "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT", nameMax)
-    PinText(bbfName, "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT", nameMax)
-    PinText(level,   "RIGHT", hpPos, "TOPRIGHT", -1, y, "RIGHT")
+    if Mirrored(unit) then
+        PinText(name,    "RIGHT", hpPos, "TOPRIGHT", -1, y, "RIGHT", nameMax)
+        PinText(bbfName, "RIGHT", hpPos, "TOPRIGHT", -1, y, "RIGHT", nameMax)
+        PinText(level,   "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT")
+    else
+        PinText(name,    "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT", nameMax)
+        PinText(bbfName, "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT", nameMax)
+        PinText(level,   "RIGHT", hpPos, "TOPRIGHT", -1, y, "RIGHT")
+    end
 end
 
 -- Put the bars and texts back exactly as BBF/Blizzard had them.
@@ -695,23 +715,36 @@ end
 
 -- Anchor the box beside the bars; height spans the health bar top to the mana bar bottom.
 -- Returns false if the bars haven't been laid out yet.
+-- Tall portraits (player and target): px for the talent build's own line above the name
+-- row. It grows the box upward, so the box becomes a taller rectangle while the bars keep
+-- their size and spot. Reserved even with no build to show (NPC targets): bars can't be
+-- re-laid out in combat, so the layout can't change per target. Off: square box, and the
+-- build sits next to the level.
+local BUILD_LINE = 9
+local TALL_UNITS = { player = true, target = true }
+local function BuildLine(unit)
+    if not (TALL_UNITS[unit] and db.tallPortraits) then return 0 end -- independent of showBuild
+    return BUILD_LINE
+end
+
 local function PlaceSquare(sq, hpPos, manaPos)
     local box = sq.box
     local bottomRef = manaPos or hpPos
     local top, bottom = hpPos:GetTop(), bottomRef:GetBottom()
     if not top or not bottom then return false end
     local row = hpPos.bapRow or 0 -- the name row sits above the health bar, inside the box
+    local extra = row > 0 and BuildLine(sq.unit) or 0 -- the build line sits above the name row
     local scale = hpPos:GetEffectiveScale() / box:GetEffectiveScale()
     local size = (top + row - bottom) * scale
     if size <= 0 then return false end
 
     box:ClearAllPoints()
     if UNITS[sq.unit].side == "RIGHT" then
-        box:SetPoint("TOPLEFT", hpPos, "TOPRIGHT", db.squareGap, row)
+        box:SetPoint("TOPLEFT", hpPos, "TOPRIGHT", db.squareGap, row + extra)
     else
-        box:SetPoint("TOPRIGHT", hpPos, "TOPLEFT", -db.squareGap, row)
+        box:SetPoint("TOPRIGHT", hpPos, "TOPLEFT", -db.squareGap, row + extra)
     end
-    box:SetSize(size, size)
+    box:SetSize(size, size + extra * scale)
     box:SetFrameStrata(hpPos:GetFrameStrata())
     box:SetFrameLevel(hpPos:GetFrameLevel())
     return true
@@ -907,8 +940,11 @@ Refresh = function(unit)
     MarkState(unit)
 end
 
+local AfterRefreshAll -- talent build and surnames, defined with them below
+
 local function RefreshAll()
     for _, unit in ipairs(UNIT_LIST) do Refresh(unit) end
+    if AfterRefreshAll then AfterRefreshAll() end
 end
 
 -- Coalesce bursts of refresh requests (BBF re-layouts often call several functions).
@@ -1082,6 +1118,224 @@ local function HookTargetUpdate()
     end
 end
 
+-- Talent build on the player and target ------------------------------------------------
+-- Points per talent tree ("2/8/0") in the square style's name area: on its own line above
+-- the name with tall portraits (BuildLine), else just left of the level. Your own build is
+-- read directly (cached until your talents change); other players need an inspect
+-- (server round trip, ~30 yd range, shared throttle), so results are cached per GUID for
+-- the session and requests are spaced out. NPCs and players we can't inspect show
+-- nothing rather than a guess.
+local BUILD_UNITS = { "player", "target" }
+local builds = {}         -- GUID -> "2/8/0"
+local ownBuild            -- your build, cleared when your talents change
+local inspectGUID         -- GUID of our pending inspect
+local inspectAt = 0       -- GetTime() of our last NotifyInspect
+local INSPECT_GAP = 1.5   -- seconds between our inspects
+local INSPECT_TIMEOUT = 4 -- give up waiting for a reply after this long
+
+-- Points per tree for a trait config, in the talent window's tree order. The game leaves
+-- out trees with no points spent (Blizzard's own tree headers show "0" for those).
+local function ReadBuild(configID)
+    if not (configID and C_Traits and C_Traits.GetConfigInfo) then return end
+    local info = C_Traits.GetConfigInfo(configID)
+    local tree = info and info.treeIDs and info.treeIDs[1]
+    local display = tree and C_Traits.GetGroupDisplayInfoByTreeID(tree)
+    if not display or #display == 0 then return end
+    local ids = {}
+    for i, d in ipairs(display) do ids[i] = d.groupID end
+    local spent = {}
+    for _, g in ipairs(C_Traits.GetGroupCurrencyInfo(configID, ids) or {}) do
+        local c = g.currencyInfos and g.currencyInfos[1]
+        local n = c and Safe(c.spent)
+        if c and n == nil then return end -- secret: show nothing
+        spent[g.traitNodeGroupID] = n or 0
+    end
+    local parts = {}
+    for i, d in ipairs(display) do parts[i] = tostring(spent[d.groupID] or 0) end
+    return table.concat(parts, "/")
+end
+
+local function OwnBuild()
+    if not ownBuild and C_ClassTalents then -- not ready right after login: retried by the ticker
+        ownBuild = ReadBuild(C_ClassTalents.GetActiveConfigID())
+    end
+    return ownBuild
+end
+
+-- The build shows only where the square style draws the unit's name row.
+local function BuildVisible(unit)
+    return db and db.enabled and db.showBuild and db.units[unit] and db.style == "square"
+        and (db.nameRow[UNITS[unit].row] or 0) > 0 and BBFHidesPortrait(unit)
+end
+
+local function RequestInspect(guid)
+    if not (NotifyInspect and guid) or InCombatLockdown() then return end
+    if inspectGUID == guid and GetTime() - inspectAt < INSPECT_TIMEOUT then return end -- waiting
+    if GetTime() - inspectAt < INSPECT_GAP then return end -- the ticker asks again shortly
+    if CanInspect and not CanInspect("target") then return end -- out of range, enemy, ...
+    if InspectFrame and InspectFrame:IsShown() then return end -- Blizzard's inspect owns it
+    inspectGUID, inspectAt = guid, GetTime()
+    NotifyInspect("target")
+end
+
+local function BuildFor(unit)
+    if unit == "player" or Safe(UnitIsUnit(unit, "player")) then return OwnBuild() end
+    if not Safe(UnitIsPlayer(unit)) then return end
+    local guid = Safe(UnitGUID(unit))
+    if guid and not builds[guid] then RequestInspect(guid) end
+    return guid and builds[guid]
+end
+
+local function CreateBuildText(unit, level)
+    local uf = UnitFrameOf(unit)
+    if not uf then return end
+    local fs = uf:CreateFontString(nil, "OVERLAY")
+    local font, size, flags = level:GetFont()
+    if font then
+        fs:SetFont(font, math.max((size or 10) - 2, 7), flags)
+    elseif GameFontNormalSmall then
+        fs:SetFontObject(GameFontNormalSmall)
+    end
+    fs:SetTextColor(0.7, 0.7, 0.7) -- muted: the name is the main information
+    fs:Hide()
+    return fs
+end
+
+local function UpdateBuildFor(unit)
+    local text = BuildVisible(unit) and BuildFor(unit) or nil
+    local fs = buildTexts[unit]
+    if not text and not (fs and fs:IsShown()) then return end -- nothing to show or hide
+    local name, level, bbfName = Lookup(unit, "texts")
+    if not level then return end
+    if text and not fs then
+        fs = CreateBuildText(unit, level)
+        buildTexts[unit] = fs
+    end
+    if not fs then return end
+    -- Own line above the name (left-aligned with it), or next to the level.
+    local hpPos = GetBarFrames(unit)
+    local row, extra = hpPos and hpPos.bapRow or 0, BuildLine(unit)
+    local above = row > 0 and extra > 0
+    local mirror = Mirrored(unit)
+    if fs.bapText == text and fs.bapInline == not above and fs.bapRow == row and fs.bapExtra == extra
+        and fs.bapMirror == mirror then return end
+    fs.bapText, fs.bapInline, fs.bapRow, fs.bapExtra, fs.bapMirror = text, not above, row, extra, mirror
+    fs:ClearAllPoints()
+    if above and mirror then -- above the name, on the portrait side
+        fs:SetPoint("RIGHT", hpPos, "TOPRIGHT", -1, row + extra / 2)
+        fs:SetJustifyH("RIGHT")
+    elseif above then
+        fs:SetPoint("LEFT", hpPos, "TOPLEFT", 1, row + extra / 2)
+        fs:SetJustifyH("LEFT")
+    elseif mirror then -- between the level (outer edge) and the name
+        fs:SetPoint("LEFT", level, "RIGHT", 4, 0)
+        fs:SetJustifyH("LEFT")
+    else
+        fs:SetPoint("RIGHT", level, "LEFT", -4, 0)
+        fs:SetJustifyH("RIGHT")
+    end
+    fs:SetText(text or "")
+    fs:SetShown(text ~= nil)
+    -- The name's room depends on an inline build text: re-fit the pinned names.
+    for _, pinned in ipairs({ name, bbfName }) do
+        if pinned and pinned.bapLayout and pinned.bapApply then pinned.bapApply(pinned) end
+    end
+end
+
+local function UpdateBuild()
+    for _, unit in ipairs(BUILD_UNITS) do UpdateBuildFor(unit) end
+end
+
+local function OnTalentsChanged()
+    ownBuild = nil
+    UpdateBuild()
+end
+
+local function OnInspectReady(guid)
+    if not guid or guid ~= inspectGUID then return end -- someone else's inspect
+    inspectGUID = nil
+    local build = Constants and Constants.TraitConsts and ReadBuild(Constants.TraitConsts.INSPECT_TRAIT_CONFIG_ID)
+    if build then builds[guid] = build end
+    UpdateBuild()
+end
+
+-- Surnames ------------------------------------------------------------------
+-- Camelot characters have a surname: UnitName returns (name, surname) and Blizzard's
+-- frames show both. With hideSurname we strip it from the name texts on our frames, in
+-- a post-hook on SetText so it follows every name update by Blizzard or BBF. Only the
+-- surname is removed, so BBF's formatting (colors, prefixes) stays; the full text is kept
+-- to put back when the setting is turned off.
+local SURNAME_UNITS = { "player", "target", "focus", "targettarget", "focustarget", unpack(PARTY) }
+
+local function NameTextsOf(unit)
+    if UNITS[unit].texts then
+        local name, _, bbfName = Lookup(unit, "texts")
+        return name, bbfName
+    end
+    local f = UnitFrameOf(unit) -- party
+    return f and AsText(f.Name)
+end
+
+local function SurnameOf(unit)
+    local _, surname = UnitName(unit)
+    surname = Safe(surname)
+    if type(surname) == "string" and surname ~= "" then return surname end
+end
+
+local function SetNameText(fs, text)
+    fs.bapNaming = true
+    fs:SetText(text)
+    fs.bapNaming = nil
+end
+
+local function StripSurname(fs)
+    if fs.bapNaming or not (db and db.hideSurname) then return end
+    local text, surname = Safe(fs:GetText()), SurnameOf(fs.bapNameUnit)
+    if type(text) ~= "string" or not surname then return end
+    local sep = Constants and Constants.CharacterNameSeparatorConsts
+        and Constants.CharacterNameSeparatorConsts.CHARACTERNAME_SURNAME_SEPARATOR or " "
+    local i, j = text:find(sep .. surname, 1, true)
+    if not i then return end
+    local short = text:sub(1, i - 1) .. text:sub(j + 1)
+    fs.bapFullName, fs.bapShortName = text, short
+    SetNameText(fs, short)
+end
+
+-- Hook a name text once; the hook then follows every name change by itself.
+local function HookName(fs, unit)
+    if not fs or fs.bapNameHook or not fs.SetText then return end
+    fs.bapNameHook, fs.bapNameUnit = true, unit
+    hooksecurefunc(fs, "SetText", StripSurname)
+    StripSurname(fs) -- its current text
+end
+
+-- Strip (setting on) or put back (setting off) on one name text.
+local function ApplySurname(fs)
+    if not fs then return end
+    if db.hideSurname then
+        StripSurname(fs)
+    elseif fs.bapShortName then
+        if Safe(fs:GetText()) == fs.bapShortName then SetNameText(fs, fs.bapFullName) end
+        fs.bapFullName, fs.bapShortName = nil, nil
+    end
+end
+
+-- From the ticker: hook name texts as they appear (BBF creates bbfName after us). With
+-- `apply` (after a refresh or a toggle): also strip or restore every name now.
+local function UpdateSurnames(apply)
+    if not db then return end
+    for _, unit in ipairs(SURNAME_UNITS) do
+        local a, b = NameTextsOf(unit)
+        HookName(a, unit); HookName(b, unit)
+        if apply then ApplySurname(a); ApplySurname(b) end
+    end
+end
+
+AfterRefreshAll = function()
+    UpdateBuild()
+    UpdateSurnames(true)
+end
+
 -- Catches changes with no reliable event: ToT swaps, party range/visibility, and frame
 -- scale changes (Edit Mode / UI scale) that leave the 3D camera framed for the old size.
 local function ScaleChanged(unit)
@@ -1101,6 +1355,8 @@ local function Tick()
         local p = layers[unit]
         if p and p.active and not LayeringOK(p) then ApplyLayering(p) end
     end
+    UpdateBuild() -- retries until there's a build (inspect range and throttle, talents loading)
+    UpdateSurnames() -- hooks name texts as they appear (BBF creates its own later)
 end
 
 -- Events --------------------------------------------------------------------
@@ -1125,6 +1381,8 @@ f:SetScript("OnEvent", function(self, event, arg1)
         self:RegisterEvent("UNIT_CONNECTION")
         self:RegisterEvent("UI_SCALE_CHANGED")
         self:RegisterEvent("DISPLAY_SIZE_CHANGED")
+        self:RegisterEvent("INSPECT_READY")
+        self:RegisterEvent("TRAIT_CONFIG_UPDATED")
         HookBBF()
         HookTargetUpdate()
         BuildOptions()
@@ -1140,6 +1398,11 @@ f:SetScript("OnEvent", function(self, event, arg1)
         C_Timer.After(0.1, RefreshAll)
     elseif event == "PLAYER_TARGET_CHANGED" then
         QueueRefresh("target"); QueueRefresh("targettarget")
+        UpdateBuild()
+    elseif event == "INSPECT_READY" then
+        OnInspectReady(arg1)
+    elseif event == "TRAIT_CONFIG_UPDATED" then
+        OnTalentsChanged() -- your own build (player frame, or targeting yourself)
     elseif event == "PLAYER_FOCUS_CHANGED" then
         QueueRefresh("focus"); QueueRefresh("focustarget")
     elseif event == "GROUP_ROSTER_UPDATE" then
@@ -1278,7 +1541,8 @@ BuildOptions = function()
     end
 
     Header("General")
-    Check({ "enabled" }, "Enable", "Show animated portraits.")
+    Check({ "enabled" }, "Enable", "Show living portraits.")
+    Check({ "hideSurname" }, "Hide Surnames", "Show only first names on the player, target, focus, target-of-target and party frames.")
     local styleGet, styleSet, styleDefault = Path({ "style" })
     Settings.CreateDropdown(category, Register("style", "Style", styleDefault, styleGet, styleSet), function()
         local c = Settings.CreateControlTextContainer()
@@ -1286,13 +1550,16 @@ BuildOptions = function()
         c:Add("circle", "Circle")
         return c:GetData()
     end, "Square: a box beside the bars (needs BBF's Pixel Border mode, below). Circle: inside the round portrait. Frames where BBF still shows portraits always use the circle.")
-    for _, g in ipairs({ { "player", "Player" }, { "target", "Target" }, { "focus", "Focus" },
-                         { "tot", "Target of target" }, { "party", "Party" } }) do
+    for _, g in ipairs({ { "player", "Player Portrait", "player frame" },
+                         { "target", "Target Portrait", "target frame" },
+                         { "focus", "Focus Portrait", "focus frame" },
+                         { "tot", "Target of Target Portrait", "target-of-target and focus-target frames" },
+                         { "party", "Party Portraits", "party frames" } }) do
         local list = GROUPS[g[1]]
         Settings.CreateCheckbox(category, Register("unit_" .. g[1], g[2], true,
             function() return db.units[list[1]] end,
             function(v) for _, unit in ipairs(list) do db.units[unit] = v end end),
-            "Animated portrait on the " .. g[2]:lower() .. " frame.")
+            "Living portrait on the " .. g[3] .. ".")
     end
 
     Header("Camera")
@@ -1315,6 +1582,9 @@ BuildOptions = function()
     Slider({ "nameRow", "party" }, "Name row: party", "Height of the name row inside the box (0 = off).", 0, 24, 1)
     Slider({ "hpShare" }, "Health share", "Health bar's share of the stack; mana gets the rest.", 0.4, 0.85, 0.01, FormatPercent)
     Check({ "alignMana" }, "Align mana bar", "Line the mana bar up with the health bar next to the box.")
+    Check({ "showBuild" }, "Show Talent Build", "Points per talent tree (like 2/8/0) on the player and target frames. Other players need to be within inspect range (about 30 yards); NPCs show nothing.")
+    Check({ "mirrorTarget" }, "Mirror Target Text", "Target and focus: name and talent build next to the portrait, level on the outer edge, mirroring the player frame.")
+    Check({ "tallPortraits" }, "Tall portraits", "Player and target: the portrait grows into a taller rectangle, with a line above the name for the talent build. Off: square portraits, build next to the level.")
     Slider({ "squareGap" }, "Gap to bars", "Space between the box and the bars (1 = borders share one line).", 0, 20, 1)
     Slider({ "barSpacing" }, "Bar spacing", "Space between health and mana (0 = borders share one line).", 0, 10, 1)
 
@@ -1387,14 +1657,15 @@ local function PrintStatus()
     print(("  circle large: inset=%.2f cam=%.2f   small: inset=%.2f cam=%.2f"):format(L.inset, L.cam, S.inset, S.cam))
     print(("  square: cam=%.2f bg=%.2f gap=%d alignmana=%s split=%.2f  extend: large=%d small=%d"):format(
         Q.cam, db.squareBg, db.squareGap, tostring(db.alignMana), db.hpShare, db.stackExtra.large, db.stackExtra.small))
-    print(("  name rows: large=%d tot=%d party=%d"):format(db.nameRow.large, db.nameRow.tot, db.nameRow.party))
+    print(("  name rows: large=%d tot=%d party=%d   build=%s tall=%s hidesurnames=%s"):format(db.nameRow.large,
+        db.nameRow.tot, db.nameRow.party, tostring(db.showBuild), tostring(db.tallPortraits), tostring(db.hideSurname)))
 end
 
 local function PrintHelp()
     print("  /lp options  |  /lp bbfsetup (turn on BBF's Pixel Border mode)  |  /lp bbfundo")
     print("  /lp toggle  |  /lp vignette  |  /lp zoom 0-1  |  /lp grow  |  /lp growtime 0.1-2  |  /lp reset")
     print("  /lp style square|circle  |  /lp bg 0-1  |  /lp extend 0-30 [large|small]  |  /lp split 0.4-0.85")
-    print("  /lp namerow 0-24 [large|tot|party]  |  /lp gap 0-20  |  /lp barspacing 0-10  |  /lp alignmana")
+    print("  /lp namerow 0-24 [large|tot|party]  |  /lp gap 0-20  |  /lp barspacing 0-10  |  /lp alignmana  |  /lp build  |  /lp tall  |  /lp surname  |  /lp mirror")
     print("  /lp inset 0.3-1.2 [large|small]  |  /lp cam 0.3-2 [large|small|square]")
     print("  /lp unit player|target|focus|tot|party  |  /lp refresh  |  /lp debug [unit]")
     print("  circle: /lp circlebg 0-1  |  /lp vignette  |  /lp calibrate  |  /lp offset player|target|focus|tot|party x y")
@@ -1472,6 +1743,18 @@ local function DebugUnit(unit)
     end
 end
 
+-- On/off settings: command -> db key.
+local SLASH_TOGGLES = {
+    toggle = "enabled", vignette = "vignette", grow = "growBars", alignmana = "alignMana",
+    build = "showBuild", tall = "tallPortraits", surname = "hideSurname", mirror = "mirrorTarget",
+}
+-- Number settings: command -> { db key, min, max }.
+local SLASH_NUMBERS = {
+    growtime = { "growTime", 0.1, 2 }, split = { "hpShare", 0.4, 0.85 }, zoom = { "zoom", 0, 1 },
+    circlebg = { "circleBg", 0, 1 }, bg = { "squareBg", 0, 1 },
+    gap = { "squareGap", 0, 20 }, barspacing = { "barSpacing", 0, 10 },
+}
+
 SLASH_LIVINGPORTRAITS1 = "/lp"
 SLASH_LIVINGPORTRAITS2 = "/livingportraits"
 SLASH_LIVINGPORTRAITS3 = "/bap" -- the name before Living Portraits
@@ -1497,18 +1780,16 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
     elseif cmd == "refresh" then
         RefreshAll()
         return
-    elseif cmd == "toggle" then
-        db.enabled = not db.enabled
-    elseif cmd == "vignette" then
-        db.vignette = not db.vignette
     elseif cmd == "grow" and arg == "debug" then
         growDebug = not growDebug
         print("  grow debug " .. (growDebug and "on: change targets and watch chat." or "off."))
         return
-    elseif cmd == "grow" then
-        db.growBars = not db.growBars
-    elseif cmd == "growtime" and val then
-        db.growTime = Clamp(val, 0.1, 2)
+    elseif SLASH_TOGGLES[cmd] then
+        local key = SLASH_TOGGLES[cmd]
+        db[key] = not db[key]
+    elseif SLASH_NUMBERS[cmd] and val then
+        local n = SLASH_NUMBERS[cmd]
+        db[n[1]] = Clamp(val, n[2], n[3])
     elseif cmd == "calibrate" then
         db.calibrate = not db.calibrate
         print(db.calibrate and "  Calibrate on: nudge with /lp offset <player|target|focus|tot|party> x y, then /lp calibrate to finish."
@@ -1523,20 +1804,6 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
         SetEach(db.stackExtra, size, Clamp(val, 0, 30))
     elseif cmd == "namerow" and val then
         SetEach(db.nameRow, args[3], Clamp(val, 0, 24))
-    elseif cmd == "split" and val then
-        db.hpShare = Clamp(val, 0.4, 0.85)
-    elseif cmd == "alignmana" then
-        db.alignMana = not db.alignMana
-    elseif cmd == "circlebg" and val then
-        db.circleBg = Clamp(val, 0, 1)
-    elseif cmd == "bg" and val then
-        db.squareBg = Clamp(val, 0, 1)
-    elseif cmd == "gap" and val then
-        db.squareGap = Clamp(val, 0, 20)
-    elseif cmd == "barspacing" and val then
-        db.barSpacing = Clamp(val, 0, 10)
-    elseif cmd == "zoom" and val then
-        db.zoom = Clamp(val, 0, 1)
     elseif cmd == "inset" and val then
         SetEach(db.sizes, size, Clamp(val, 0.3, 1.2), "inset")
     elseif cmd == "cam" and val then
@@ -1554,7 +1821,7 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
         PrintHelp()
         return
     end
-    RefreshAll()
+    RefreshAll() -- also re-applies the talent build and surnames
     NotifyOptions()
     PrintStatus()
 end
