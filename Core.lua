@@ -22,13 +22,14 @@ local VIGNETTE = "Interface\\AddOns\\" .. ADDON_NAME .. "\\media\\vignette"
 local VIGNETTE_EDGE = 0.72 -- radius of the crisp circle edge baked into vignette.tga (fraction of the texture)
 
 -- Bump when a default changes in a way saved settings should pick up (see MigrateSettings).
-local SETTINGS_VERSION = 7
+local SETTINGS_VERSION = 8
 
 local defaults = {
     enabled  = true,
     style    = "square", -- "square" (needs BBF No Portrait / Pixel Border) or "circle"
     zoom     = 1,     -- 0..1, 1 = head & shoulders
-    squareGap   = 3,  -- px between the box and the bars
+    squareGap   = 1,  -- px between the box and the bars (1 = their borders share one line)
+    barSpacing  = 0,  -- px between health and mana (0 = their borders share one line)
     -- Square: px added to the health+mana stack; the box spans health top to mana bottom,
     -- so a taller stack means a bigger box that stays aligned with the bars.
     stackExtra  = { large = 10, small = 6 },
@@ -195,6 +196,9 @@ local function MigrateSettings()
         db.inset, db.bgInset = nil, nil -- v1 single-size settings
         db.sizes = nil                  -- v2: model fills the circle (inset 0.82 -> 1.0)
     end
+    if version < 8 then
+        db.squareGap = nil              -- v8: box and bars share a border line (3 -> 1)
+    end
     if version < 7 then
         db.nameRow = nil                -- v7: separate name rows for ToT and party
     end
@@ -344,7 +348,9 @@ local function Remember(bar, pos)
     bar.bapOrig = { point, rel, relPoint, x or 0, y or 0 }
     bar.bapBaseH = bar:GetHeight()
     pos.bapBaseH = pos:GetHeight()
+    pos.bapBaseW = pos:GetWidth()
     bar.bapDX = 0
+    bar.bapDY = 0
 end
 
 -- Set a bar's height (bar carries the fill; BBF's posFrame carries border, background and
@@ -388,17 +394,32 @@ local function LayoutBars(unit, hpPos, manaPos, manaBar, hpBar)
     local follows = manaBar.bapOrig[2] == hpBar
     local dy = follows and 0 or -(dhHp + row)
 
+    local toMana = hpPos:GetEffectiveScale() / manaBar:GetEffectiveScale()
     if db.alignMana then
+        -- Same width as the health bar's border, edges lined up on the box side.
+        if manaPos ~= manaBar then manaPos:SetWidth(hpPos:GetWidth() * toMana) end
         local a, b
         if SQUARE_SIDE[unit] == "RIGHT" then a, b = hpPos:GetRight(), manaPos:GetRight()
         else a, b = hpPos:GetLeft(), manaPos:GetLeft() end
-        if a and b and math.abs(a - b) >= 0.5 then
-            manaBar.bapDX = manaBar.bapDX + (a - b) * hpPos:GetEffectiveScale() / manaBar:GetEffectiveScale()
+        if a and b and math.abs(a - b) >= 0.25 then
+            manaBar.bapDX = manaBar.bapDX + (a - b) * toMana
         end
     else
         manaBar.bapDX = 0
+        if manaPos ~= manaBar and manaPos.bapBaseW then manaPos:SetWidth(manaPos.bapBaseW) end
     end
-    SetBarLayout(manaBar, manaPos, dhMana, manaBar.bapDX, dy)
+    SetBarLayout(manaBar, manaPos, dhMana, manaBar.bapDX, dy + manaBar.bapDY)
+
+    -- Put mana directly under health, measured after layout so it's exact whatever offsets
+    -- BBF uses: the borders share one line (barSpacing 0). BBF's ToT leaves a gap otherwise.
+    local hpBottom, manaTop = hpPos:GetBottom(), manaPos:GetTop()
+    if hpBottom and manaTop then
+        local shift = ((hpBottom - 1 - db.barSpacing) - manaTop) * toMana
+        if math.abs(shift) >= 0.25 then
+            manaBar.bapDY = manaBar.bapDY + shift
+            SetBarLayout(manaBar, manaPos, dhMana, manaBar.bapDX, dy + manaBar.bapDY)
+        end
+    end
 end
 
 -- Move each bar text vertically to the middle of its bar (BBF's offsets were tuned for the
@@ -450,8 +471,10 @@ local function RestoreBar(bar, pos)
     local o = bar.bapOrig
     bar:SetHeight(bar.bapBaseH)
     if pos and pos ~= bar and pos.bapBaseH then pos:SetHeight(pos.bapBaseH) end
+    if pos and pos ~= bar and pos.bapBaseW then pos:SetWidth(pos.bapBaseW) end
     bar:SetPoint(o[1], o[2], o[3], o[4], o[5])
     bar.bapDX = 0
+    bar.bapDY = 0
 end
 
 -- Name row: name and level on one line above the health bar, inside the box's height.
@@ -640,12 +663,19 @@ Refresh = function(unit)
     local function HideAll()
         if p then Deactivate(p) end
         DeactivateSquare(unit)
-        RestoreBars(unit)
     end
 
     local unitFrame = UNIT_FRAMES[unit] and UNIT_FRAMES[unit]()
-    if not db.units[unit] or not db.enabled or not unitFrame or not unitFrame:IsVisible()
-       or not UnitExists(unit)
+    -- Turned off by the user: hand the bars, texts and names back to BBF.
+    if not db.units[unit] or not db.enabled then
+        HideAll()
+        RestoreBars(unit)
+        lastState[unit] = UnitState(unit)
+        return
+    end
+    -- Transient (no target yet, frame hidden, out of range): just hide the portrait and
+    -- keep our bar/name layout pinned, so a target switch can't leave BBF's layout behind.
+    if not unitFrame or not unitFrame:IsVisible() or not UnitExists(unit)
        or Safe(UnitIsVisible(unit)) == false or Safe(UnitIsConnected(unit)) == false then
         HideAll()
         lastState[unit] = UnitState(unit)
@@ -658,6 +688,7 @@ Refresh = function(unit)
         local hpPos, manaPos, manaBar, hpBar = GetBarFrames(unit)
         if db.style == "square" and hpPos then
             LayoutBars(unit, hpPos, manaPos, manaBar, hpBar)
+            if not InCombatLockdown() then LayoutNameRow(unit, hpPos) end
             if not ActivateSquare(unit, unitFrame, hpPos, manaPos) then
                 C_Timer.After(0.5, function() Refresh(unit) end) -- bars not laid out yet
                 return
@@ -821,7 +852,7 @@ end
 local function PrintHelp()
     print("  /bap toggle  |  /bap vignette  |  /bap zoom 0-1  |  /bap reset")
     print("  /bap style square|circle  |  /bap extend 0-30 [large|small]  |  /bap split 0.4-0.85")
-    print("  /bap namerow 0-24 [large|tot|party]  |  /bap gap 0-20  |  /bap alignmana")
+    print("  /bap namerow 0-24 [large|tot|party]  |  /bap gap 0-20  |  /bap barspacing 0-10  |  /bap alignmana")
     print("  /bap inset 0.3-1.2 [large|small]  |  /bap cam 0.3-2 [large|small|square]")
     print("  /bap unit player|target|focus|tot|party  |  /bap refresh  |  /bap debug [unit]")
 end
@@ -904,6 +935,8 @@ SlashCmdList.BBFANIMPORTRAITS = function(msg)
         db.alignMana = not db.alignMana
     elseif cmd == "gap" and val then
         db.squareGap = math.max(0, math.min(20, val))
+    elseif cmd == "barspacing" and val then
+        db.barSpacing = math.max(0, math.min(10, val))
     elseif cmd == "zoom" and val then
         db.zoom = math.max(0, math.min(1, val))
     elseif cmd == "inset" and val then

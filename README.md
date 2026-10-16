@@ -39,7 +39,8 @@ ln -s ~/GitHub/Main/bbf-animated-portraits \
 | `/bap namerow 0-24 [large\|tot\|party]` | Square: height of the name + level row inside the box, above the health bar (default large 12, tot 9, party 0) |
 | `/bap split 0.4-0.85` | Square: health bar's share of the stack (default 0.66, mana gets the rest) |
 | `/bap alignmana` | Square: toggle lining up the mana bar with the health bar next to the box (undoes live) |
-| `/bap gap 0-20` | Square: space between the box and the bars |
+| `/bap gap 0-20` | Square: space between the box and the bars (1 = borders share one line) |
+| `/bap barspacing 0-10` | Square: space between health and mana (0 = borders share one line) |
 | `/bap unit <group>` | Toggle a frame group: `player`, `target`, `focus`, `tot`, `party` |
 | `/bap reset` | Restore defaults |
 | `/bap refresh` | Re-apply the layout now (e.g. after changing BBF settings) |

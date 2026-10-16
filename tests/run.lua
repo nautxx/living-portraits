@@ -37,6 +37,8 @@ local function region(t)
     function t:SetSize(w, h) self.w, self.h = w, h end
     function t:SetHeight(h) self.h = h end
     function t:GetHeight() return rawget(self, "h") or 0 end
+    function t:SetWidth(w) self.w = w end
+    function t:GetWidth() return rawget(self, "w") or 0 end
     return t
 end
 
@@ -168,7 +170,7 @@ fire("ADDON_LOADED", "BBF_AnimatedPortraits")
 local bbfHooked = BBF.SetCustomFonts
 BBF = nil
 check("old saved inset migrated to new default", BBFAnimatedPortraitsDB.sizes.small.inset == 0.84)
-check("settings version recorded", BBFAnimatedPortraitsDB.version == 7)
+check("settings version recorded", BBFAnimatedPortraitsDB.version == 8)
 check("defaults applied", BBFAnimatedPortraitsDB.enabled == true and BBFAnimatedPortraitsDB.sizes.large.inset == 0.84)
 
 fire("PLAYER_ENTERING_WORLD")
@@ -366,8 +368,9 @@ local box = sqModel and sqModel.parent
 check("health bar is 2/3 of the bars (17)", playerHp.h == 17 and playerHp.BBFPositionFrame.h == 17)
 check("mana bar gets the remaining 1/3 (8)", playerMana.h == 8 and playerMana.BBFPositionFrame.h == 8)
 check("health bar starts below the 12px name row", playerHp.anchor[5] == -12)
-check("mana bar moved down under the health bar (-10)", playerMana.anchor[5] == -10)
-check("box size unchanged (39)", box and box.w == 39 and box.h == 39)
+check("mana bar sits right under the health bar (-9)", playerMana.anchor[5] == -9)
+check("health and mana borders share one line", playerMana.BBFPositionFrame:GetTop() == playerHp.BBFPositionFrame:GetBottom() - 1)
+check("box spans name row to mana bottom (38)", box and box.w == 38 and box.h == 38)
 check("box top at the top of the name row", box and box.anchor[5] == 12)
 local pn = PlayerName.points[1]
 check("player name pinned left in the name row", pn[1] == "LEFT" and pn[3] == "TOPLEFT" and pn[5] == 6 and PlayerName.justify == "LEFT")
@@ -392,13 +395,14 @@ local tBox = squareModel("target", TargetFrame)
 tBox = tBox and tBox.parent
 check("target box sits right of the health bar", tBox and tBox.anchor[1] == "TOPLEFT" and tBox.anchor[3] == "TOPRIGHT")
 check("target mana bar shifted to line up with health (right edges)", targetMana.anchor[4] == 0)
-check("target mana bar moved down under the health bar", targetMana.anchor[5] == -10)
+check("target mana border same width as health border", targetMana.BBFPositionFrame.w == targetHp.BBFPositionFrame:GetWidth())
+check("target mana bar sits right under the health bar", targetMana.anchor[5] == -9)
 
 -- ToT: stack 12 + 4 + 6 = 22, name row 9, bars 13 split 0.66: health 9, mana 4
 check("ToT health shortened below its name row (9)", totHp.h == 9)
 check("ToT mana gets the rest (4)", totMana.h == 4)
 check("ToT bottom-anchored health keeps its top edge, minus the row", totHp.anchor[5] == -2.5 - (9 - 12) - 9)
-check("ToT mana follows the health bar (no extra shift)", totMana.anchor[5] == -1)
+check("ToT mana closes BBF's gap under the health bar", totMana.BBFPositionFrame:GetTop() == totHp.BBFPositionFrame:GetBottom() - 1)
 check("ToT name pinned left in its row", totContainer.bbfName.points[1][1] == "LEFT" and totContainer.bbfName.points[1][5] == 4.5)
 slash("namerow 0 tot")
 check("/bap namerow 0 tot gives ToT its full bars back", totHp.h == 15 and BBFAnimatedPortraitsDB.nameRow.large == 12)
@@ -409,8 +413,8 @@ targetMana.shown = false
 targetMana.BBFPositionFrame.parent = TargetFrame -- BBF reparents the slot to stay visible
 fire("PLAYER_TARGET_CHANGED")
 check("NPC: empty mana slot still laid out (8)", targetMana.BBFPositionFrame.h == 8)
-check("NPC: empty mana slot sits under the health bar", targetMana.anchor[5] == -10)
-check("NPC: box still spans health and the empty mana slot (39)", tBox.w == 39)
+check("NPC: empty mana slot sits under the health bar", targetMana.anchor[5] == -9)
+check("NPC: box still spans health and the empty mana slot (38)", tBox.w == 38)
 -- BBF's "hide target mana": slot hidden too, health takes the whole stack
 targetMana.BBFPositionFrame.shown = false
 fire("PLAYER_TARGET_CHANGED")
@@ -419,12 +423,22 @@ check("no mana slot: box spans name row + health (37)", tBox.w == 37)
 targetMana.shown, targetMana.BBFPositionFrame.shown = true, true
 targetMana.BBFPositionFrame.parent = targetMana
 fire("PLAYER_TARGET_CHANGED")
-check("mana back: normal 2:1 layout again", targetHp.h == 17 and tBox.w == 39)
+check("mana back: normal 2:1 layout again", targetHp.h == 17 and tBox.w == 38)
+
+-- Target switch: no target for a moment, BBF re-places the level, then a new target
+world.exists.target = false
+fire("PLAYER_TARGET_CHANGED")
+targetLevel:SetPoint("RIGHT", TargetFrame, "RIGHT", -196, 17) -- BBF's no-portrait spot
+world.exists.target = true
+fire("PLAYER_TARGET_CHANGED")
+check("level stays pinned across a target switch", #targetLevel.points == 1 and targetLevel.points[1][1] == "LEFT")
+check("name stays pinned across a target switch", targetName.points[1][1] == "RIGHT" and targetName.points[1][2] ~= TargetFrame)
+check("bars keep their layout while there's no target", targetHp.h == 17)
 
 slash("extend 4 large")
 -- Stack 19 + 8 + 4 = 31, bars 19: health 13, mana 6, box 33
 check("/bap extend large resizes the stack", playerHp.h == 13 and playerMana.h == 6)
-check("/bap extend keeps box aligned with bars (33)", box.w == 33)
+check("/bap extend keeps box aligned with bars (32)", box.w == 32)
 check("/bap extend large leaves small alone", BBFAnimatedPortraitsDB.stackExtra.small == 6)
 slash("split 0.5")
 check("/bap split changes the health share", playerHp.h == 10 and playerMana.h == 9)
