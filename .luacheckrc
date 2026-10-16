@@ -22,6 +22,7 @@ read_globals = {
     "issecretvalue", "InCombatLockdown",
     "Settings", "SettingsPanel", "CreateSettingsListSectionHeaderInitializer", "CreateSettingsButtonInitializer",
     "MinimalSliderWithSteppersMixin", "StaticPopup_Show", "ReloadUI", "RELOADUI", "LATER",
+    "C_AddOns", "DISABLE", "IGNORE_DIALOG",
     -- WoW Lua extensions
     "wipe", "unpack",
     -- BetterBlizzFrames (optional)

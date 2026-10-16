@@ -175,6 +175,14 @@ function CreateSettingsButtonInitializer(name, _, click) buttons[name] = click; 
 MinimalSliderWithSteppersMixin = { Label = { Right = 2 } }
 StaticPopupDialogs = {}
 function StaticPopup_Show(which) popupShown = which end
+local reloaded = false
+function ReloadUI() reloaded = true end
+-- Addon list: the pre-rename addon can be installed next to us
+local oldAddon = { loaded = false, disabled = false }
+C_AddOns = {
+    IsAddOnLoaded = function(name) return name == "BBF_AnimatedPortraits" and oldAddon.loaded end,
+    DisableAddOn = function(name) if name == "BBF_AnimatedPortraits" then oldAddon.disabled = true end end,
+}
 
 -- BBF present at load (OptionalDeps), with a function the addon should hook
 BBF = { SetCustomFonts = function() end }
@@ -661,6 +669,22 @@ do
     check("Undo removes keys BBF never had", bdb.noPortraitPixelBorder == nil and bdb.noPortraitPartyOnly == nil)
     check("Undo clears the backup", LivingPortraitsDB.bbfBackup == nil)
     BBF, BetterBlizzFramesDB = nil, nil
+end
+
+-- The pre-rename addon (BBF_AnimatedPortraits) still enabled: offer to disable it
+do
+    popupShown = nil
+    fire("PLAYER_ENTERING_WORLD")
+    check("no old-addon warning when it isn't installed", popupShown == nil)
+    oldAddon.loaded = true
+    fire("PLAYER_ENTERING_WORLD")
+    check("old addon still enabled -> offer to disable it", popupShown == "LIVING_PORTRAITS_OLD_ADDON")
+    StaticPopupDialogs.LIVING_PORTRAITS_OLD_ADDON.OnAccept()
+    check("accepting disables the old addon and reloads", oldAddon.disabled and reloaded)
+    popupShown = nil
+    fire("PLAYER_ENTERING_WORLD")
+    check("the warning shows once per session", popupShown == nil)
+    oldAddon.loaded = false
 end
 
 -- Target bar grow in PvP: the fill's alpha can read back as a secret value. The grow must

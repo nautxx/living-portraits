@@ -184,6 +184,7 @@ local GROUPS = {
 
 local db
 local BuildOptions -- the settings panel, defined with it below
+local CheckOldAddon -- warns when the pre-rename addon is still enabled, defined below
 local layers = {}    -- unit -> layer record
 -- unit -> GUID and visible/connected code at the last refresh, so the ticker only refreshes on change
 local lastGuid, lastCode = {}, {}
@@ -1134,6 +1135,7 @@ f:SetScript("OnEvent", function(self, event, arg1)
         -- small delay so BBF finishes resizing portraits first
         C_Timer.After(0.5, RefreshAll)
         if not ns.ticker then ns.ticker = C_Timer.NewTicker(0.5, Tick) end
+        CheckOldAddon()
     elseif event == "UI_SCALE_CHANGED" or event == "DISPLAY_SIZE_CHANGED" then
         C_Timer.After(0.1, RefreshAll)
     elseif event == "PLAYER_TARGET_CHANGED" then
@@ -1339,6 +1341,34 @@ local function OpenOptions()
         Settings.OpenToCategory(optionsCategory:GetID())
         return true
     end
+end
+
+-- Old install ---------------------------------------------------------------
+-- Until v0.2.1 this addon was "BBF_AnimatedPortraits". If that folder is still installed
+-- and enabled, both addons draw models and lay out the bars on the same frames. Offer to
+-- disable it (Blizzard's own pattern: DisableAddOn, then reload), once per session.
+local OLD_ADDON = "BBF_AnimatedPortraits"
+local oldAddonWarned = false
+
+CheckOldAddon = function()
+    local api = C_AddOns
+    if oldAddonWarned or not (api and api.IsAddOnLoaded and api.IsAddOnLoaded(OLD_ADDON)) then return end
+    oldAddonWarned = true
+    print(PREFIX .. "replaces BBF Animated Portraits, which is still enabled. Disable it, then delete the "
+        .. OLD_ADDON .. " folder from your AddOns.")
+    if not (StaticPopupDialogs and StaticPopup_Show and api.DisableAddOn) then return end
+    StaticPopupDialogs.LIVING_PORTRAITS_OLD_ADDON = StaticPopupDialogs.LIVING_PORTRAITS_OLD_ADDON or {
+        text = "LivingPortraits is the new name of BBF Animated Portraits, but the old version is still enabled. "
+            .. "Running both breaks your unit frames.\n\nDisable the old version and reload?",
+        button1 = DISABLE or "Disable",
+        button2 = IGNORE_DIALOG or "Ignore",
+        OnAccept = function()
+            api.DisableAddOn(OLD_ADDON)
+            ReloadUI()
+        end,
+        timeout = 0, whileDead = true, hideOnEscape = true,
+    }
+    StaticPopup_Show("LIVING_PORTRAITS_OLD_ADDON")
 end
 
 -- Slash command: /lp --------------------------------------------------------
