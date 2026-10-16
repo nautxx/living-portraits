@@ -720,6 +720,29 @@ do
     world.guid.target = nil
 end
 
+-- Target-of-target clearance: nudge the ToT down when our stack runs into it
+do
+    local manaPf = targetMana.BBFPositionFrame
+    local oldTop = totContainer.GetTop
+    totContainer.anchor = { "TOPRIGHT", TargetFrame, "BOTTOMRIGHT", 12, 10 }
+    local base = manaPf:GetBottom() + 5 -- overlapping the target's mana bar by 5
+    function totContainer:GetTop() return base + (self.anchor[5] - 10) end
+    fire("PLAYER_TARGET_CHANGED")
+    check("ToT nudged down just enough to clear the target's bars",
+        math.abs(totContainer:GetTop() - (manaPf:GetBottom() - 2)) < 0.001 and totContainer.anchor[5] == 10 - 7)
+    base = manaPf:GetBottom() - 20 -- already clear
+    fire("PLAYER_TARGET_CHANGED")
+    check("no nudge when the ToT is already clear", totContainer.anchor[5] == 10)
+    totContainer:SetPoint("TOPRIGHT", TargetFrame, "BOTTOMRIGHT", 12, 30) -- BBF/Blizzard re-anchor it
+    -- (base unchanged: 20 higher puts its top exactly at our bottom, so it only needs the clearance)
+    fire("PLAYER_TARGET_CHANGED")
+    check("a new anchor from Blizzard/BBF becomes the base", totContainer.anchor[5] == 30 - 2)
+    slash("style circle")
+    check("handing back puts the ToT exactly where it was", totContainer.anchor[5] == 30)
+    slash("style square")
+    totContainer.GetTop, totContainer.anchor = oldTop, nil
+end
+
 -- Border color and opacity: our box border and BBF's bar borders together
 do
     local function same(c, r, g, b, a) return c and c[1] == r and c[2] == g and c[3] == b and c[4] == a end
@@ -900,6 +923,26 @@ do
     world.secret = false
     check("grow restores the fill when its alpha is secret", rawget(hpFill, "alpha") == 1)
     check("grow stops running after it ends", rawget(driver, "OnUpdate") == nil)
+end
+
+-- The focus frame's update grows the focus's bars (traced with /lp grow debug)
+do
+    local traced = {}
+    print = function(...)
+        local parts = {}
+        for i = 1, select("#", ...) do parts[i] = tostring((select(i, ...))) end
+        traced[#traced + 1] = table.concat(parts, " ")
+    end
+    slash("grow debug")
+    local hadFocus = world.exists.focus
+    world.exists.focus = false
+    FocusFrame:Update()
+    world.exists.focus = hadFocus
+    slash("grow debug")
+    print = function() end
+    local hit = false
+    for _, line in ipairs(traced) do if line:find("skip: grow", 1, true) and line:find("focus", 1, true) then hit = true end end
+    check("a new focus runs the bar grow for the focus frame", hit)
 end
 
 -- Secret values must not error

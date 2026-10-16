@@ -66,7 +66,7 @@ Open **Options → AddOns → LivingPortraits** (or type `/lp options`):
 
 - **General:** turn it on/off, hide surnames, square or circle style, and which frames get a living portrait.
 - **Camera:** zoom and distance (face size).
-- **Target bars:** the grow-from-empty animation and its speed.
+- **Target bars:** the grow-from-empty animation (target and focus) and its speed.
 - **Square style:** show talent builds, mirror the target text, tall portraits, border color and opacity, plus box and bar sizing.
 - **Circle style:** background, round edge and model size.
 
@@ -88,7 +88,7 @@ The square style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. T
 | `/lp surname` | First names only (hide surnames) on the player, target, focus, target-of-target and party frames |
 | `/lp zoom 0-1` | Camera zoom (1 = head and shoulders, lower = more body) |
 | `/lp cam 0.3-2 [large\|small\|square]` | Camera distance (lower = closer, bigger face) |
-| `/lp grow` | Toggle the target's health and mana growing from empty on a new target |
+| `/lp grow` | Toggle the target's and focus's health and mana growing from empty when they change |
 | `/lp growtime 0.1-2` | How long the grow takes, in seconds (default 0.35) |
 | `/lp bbfsetup` / `/lp bbfundo` | Turn on BBF's No Portrait + Pixel Border mode for every frame / put back your previous BBF settings (reload to apply) |
 | `/lp reset` | Restore defaults |
@@ -131,6 +131,7 @@ The square style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. T
 ## Known limitations
 
 - **Talent builds** only show for players within inspect range (about 30 yards), and the game may refuse to share enemy players' talents. NPCs never show one.
+- **Target-of-target placement:** when the target or focus layout would run into its target-of-target (for example with Edit Mode's small focus frame), the ToT frame is moved down just enough to clear it, and put back when you switch to circle style or turn the addon off.
 - **No layout changes in combat:** WoW blocks resizing unit-frame bars mid-fight, so square-style layout changes made in combat (settings, BBF re-layouts) are skipped and apply on the next refresh, such as a target change or `/lp refresh`. That's also why the build line stays reserved on NPC targets.
 - **BBF's spec / healer icon portraits** are covered by the 3D model while it shows.
 
