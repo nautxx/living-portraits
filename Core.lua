@@ -46,7 +46,8 @@ local defaults = {
     alignMana   = true, -- square: line the mana bar's edge up with the health bar on the box side
     growBars    = true, -- new target: health and mana grow from empty to their value
     growTime    = 0.35, -- seconds the grow takes (/lp growtime)
-    showBuild   = true, -- square: target's talent build ("2/8/0") left of its level (/lp build)
+    showBuild   = true, -- square: talent build ("2/8/0") on the player and target (/lp build)
+    tallPortraits = true, -- square: player/target box grows upward by a line for the build (/lp tall)
     vignette = true,
     calibrate = false, -- circle: tint the edge red to line it up with the ring (/lp calibrate)
     -- Circle: per-frame nudge (px) of the portrait inside its ring. Measured in game with
@@ -186,7 +187,7 @@ local GROUPS = {
 local db
 local BuildOptions -- the settings panel, defined with it below
 local CheckOldAddon -- warns when the pre-rename addon is still enabled, defined below
-local buildText -- the target's talent build ("2/8/0") in its name row, created on first use
+local buildTexts = {} -- unit -> talent build FontString ("2/8/0"), created on first use
 local layers = {}    -- unit -> layer record
 -- unit -> GUID and visible/connected code at the last refresh, so the ticker only refreshes on change
 local lastGuid, lastCode = {}, {}
@@ -674,7 +675,8 @@ local function LayoutNameRow(unit, hpPos)
         local w = Safe(hpPos:GetWidth())
         if type(w) ~= "number" then return end
         local lw = level and level:IsShown() and TextWidth(level)
-        local bw = unit == "target" and buildText and buildText:IsShown() and TextWidth(buildText)
+        local bt = buildTexts[unit]
+        local bw = bt and bt.bapInline and bt:IsShown() and TextWidth(bt)
         return math.max(w - 2 - (lw and lw + 4 or 0) - (bw and bw + 6 or 0), 10)
     end
     PinText(name,    "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT", nameMax)
@@ -699,23 +701,36 @@ end
 
 -- Anchor the box beside the bars; height spans the health bar top to the mana bar bottom.
 -- Returns false if the bars haven't been laid out yet.
+-- Tall portraits (player and target): px for the talent build's own line above the name
+-- row. It grows the box upward, so the box becomes a taller rectangle while the bars keep
+-- their size and spot. Reserved even with no build to show (NPC targets): bars can't be
+-- re-laid out in combat, so the layout can't change per target. Off: square box, and the
+-- build sits next to the level.
+local BUILD_LINE = 9
+local TALL_UNITS = { player = true, target = true }
+local function BuildLine(unit)
+    if not (TALL_UNITS[unit] and db.tallPortraits) then return 0 end -- independent of showBuild
+    return BUILD_LINE
+end
+
 local function PlaceSquare(sq, hpPos, manaPos)
     local box = sq.box
     local bottomRef = manaPos or hpPos
     local top, bottom = hpPos:GetTop(), bottomRef:GetBottom()
     if not top or not bottom then return false end
     local row = hpPos.bapRow or 0 -- the name row sits above the health bar, inside the box
+    local extra = row > 0 and BuildLine(sq.unit) or 0 -- the build line sits above the name row
     local scale = hpPos:GetEffectiveScale() / box:GetEffectiveScale()
     local size = (top + row - bottom) * scale
     if size <= 0 then return false end
 
     box:ClearAllPoints()
     if UNITS[sq.unit].side == "RIGHT" then
-        box:SetPoint("TOPLEFT", hpPos, "TOPRIGHT", db.squareGap, row)
+        box:SetPoint("TOPLEFT", hpPos, "TOPRIGHT", db.squareGap, row + extra)
     else
-        box:SetPoint("TOPRIGHT", hpPos, "TOPLEFT", -db.squareGap, row)
+        box:SetPoint("TOPRIGHT", hpPos, "TOPLEFT", -db.squareGap, row + extra)
     end
-    box:SetSize(size, size)
+    box:SetSize(size, size + extra * scale)
     box:SetFrameStrata(hpPos:GetFrameStrata())
     box:SetFrameLevel(hpPos:GetFrameLevel())
     return true
@@ -1086,13 +1101,16 @@ local function HookTargetUpdate()
     end
 end
 
--- Talent build on the target ------------------------------------------------
--- Points per talent tree ("2/8/0"), in the target's name row just left of the level
--- (square style with a name row). Your own build is read directly; other players need an
--- inspect (server round trip, ~30 yd range, shared throttle), so results are cached per
--- GUID for the session and requests are spaced out. NPCs and players we can't inspect
--- show nothing rather than a guess.
+-- Talent build on the player and target ------------------------------------------------
+-- Points per talent tree ("2/8/0") in the square style's name area: on its own line above
+-- the name with tall portraits (BuildLine), else just left of the level. Your own build is
+-- read directly (cached until your talents change); other players need an inspect
+-- (server round trip, ~30 yd range, shared throttle), so results are cached per GUID for
+-- the session and requests are spaced out. NPCs and players we can't inspect show
+-- nothing rather than a guess.
+local BUILD_UNITS = { "player", "target" }
 local builds = {}         -- GUID -> "2/8/0"
+local ownBuild            -- your build, cleared when your talents change
 local inspectGUID         -- GUID of our pending inspect
 local inspectAt = 0       -- GetTime() of our last NotifyInspect
 local INSPECT_GAP = 1.5   -- seconds between our inspects
@@ -1120,10 +1138,17 @@ local function ReadBuild(configID)
     return table.concat(parts, "/")
 end
 
--- The build text shows only where the square style draws the target's name row.
-local function BuildVisible()
-    return db and db.enabled and db.showBuild and db.units.target and db.style == "square"
-        and (db.nameRow[UNITS.target.row] or 0) > 0 and BBFHidesPortrait("target")
+local function OwnBuild()
+    if not ownBuild and C_ClassTalents then -- not ready right after login: retried by the ticker
+        ownBuild = ReadBuild(C_ClassTalents.GetActiveConfigID())
+    end
+    return ownBuild
+end
+
+-- The build shows only where the square style draws the unit's name row.
+local function BuildVisible(unit)
+    return db and db.enabled and db.showBuild and db.units[unit] and db.style == "square"
+        and (db.nameRow[UNITS[unit].row] or 0) > 0 and BBFHidesPortrait(unit)
 end
 
 local function RequestInspect(guid)
@@ -1136,8 +1161,16 @@ local function RequestInspect(guid)
     NotifyInspect("target")
 end
 
-local function CreateBuildText(level)
-    local uf = UnitFrameOf("target")
+local function BuildFor(unit)
+    if unit == "player" or Safe(UnitIsUnit(unit, "player")) then return OwnBuild() end
+    if not Safe(UnitIsPlayer(unit)) then return end
+    local guid = Safe(UnitGUID(unit))
+    if guid and not builds[guid] then RequestInspect(guid) end
+    return guid and builds[guid]
+end
+
+local function CreateBuildText(unit, level)
+    local uf = UnitFrameOf(unit)
     if not uf then return end
     local fs = uf:CreateFontString(nil, "OVERLAY")
     local font, size, flags = level:GetFont()
@@ -1147,35 +1180,50 @@ local function CreateBuildText(level)
         fs:SetFontObject(GameFontNormalSmall)
     end
     fs:SetTextColor(0.7, 0.7, 0.7) -- muted: the name is the main information
-    fs:SetJustifyH("RIGHT")
     fs:Hide()
     return fs
 end
 
-local function UpdateBuild()
-    local text
-    if BuildVisible() and Safe(UnitIsPlayer("target")) then
-        if Safe(UnitIsUnit("target", "player")) then
-            text = C_ClassTalents and ReadBuild(C_ClassTalents.GetActiveConfigID())
-        else
-            local guid = Safe(UnitGUID("target"))
-            text = guid and builds[guid]
-            if guid and not text then RequestInspect(guid) end
-        end
-    end
-    local name, level, bbfName = Lookup("target", "texts")
+local function UpdateBuildFor(unit)
+    local text = BuildVisible(unit) and BuildFor(unit) or nil
+    local name, level, bbfName = Lookup(unit, "texts")
     if not level then return end
-    if text and not buildText then buildText = CreateBuildText(level) end
-    if not buildText or buildText.bapText == text then return end
-    buildText.bapText = text
-    buildText:ClearAllPoints()
-    buildText:SetPoint("RIGHT", level, "LEFT", -4, 0)
-    buildText:SetText(text or "")
-    buildText:SetShown(text ~= nil)
-    -- The name's room depends on the build text: re-fit the pinned names.
-    for _, fs in ipairs({ name, bbfName }) do
-        if fs and fs.bapLayout and fs.bapApply then fs.bapApply(fs) end
+    local fs = buildTexts[unit]
+    if text and not fs then
+        fs = CreateBuildText(unit, level)
+        buildTexts[unit] = fs
     end
+    if not fs then return end
+    -- Own line above the name (left-aligned with it), or next to the level.
+    local hpPos = GetBarFrames(unit)
+    local row, extra = hpPos and hpPos.bapRow or 0, BuildLine(unit)
+    local above = row > 0 and extra > 0
+    local key = ("%s|%s|%s|%s"):format(tostring(text), tostring(above), row, extra)
+    if fs.bapKey == key then return end
+    fs.bapKey, fs.bapInline = key, not above
+    fs:ClearAllPoints()
+    if above then
+        fs:SetPoint("LEFT", hpPos, "TOPLEFT", 1, row + extra / 2)
+        fs:SetJustifyH("LEFT")
+    else
+        fs:SetPoint("RIGHT", level, "LEFT", -4, 0)
+        fs:SetJustifyH("RIGHT")
+    end
+    fs:SetText(text or "")
+    fs:SetShown(text ~= nil)
+    -- The name's room depends on an inline build text: re-fit the pinned names.
+    for _, pinned in ipairs({ name, bbfName }) do
+        if pinned and pinned.bapLayout and pinned.bapApply then pinned.bapApply(pinned) end
+    end
+end
+
+local function UpdateBuild()
+    for _, unit in ipairs(BUILD_UNITS) do UpdateBuildFor(unit) end
+end
+
+local function OnTalentsChanged()
+    ownBuild = nil
+    UpdateBuild()
 end
 
 local function OnInspectReady(guid)
@@ -1205,7 +1253,7 @@ local function Tick()
         local p = layers[unit]
         if p and p.active and not LayeringOK(p) then ApplyLayering(p) end
     end
-    UpdateBuild() -- retries the target's inspect (range, throttle) until it has a build
+    UpdateBuild() -- retries until there's a build (inspect range and throttle, talents loading)
 end
 
 -- Events --------------------------------------------------------------------
@@ -1251,7 +1299,7 @@ f:SetScript("OnEvent", function(self, event, arg1)
     elseif event == "INSPECT_READY" then
         OnInspectReady(arg1)
     elseif event == "TRAIT_CONFIG_UPDATED" then
-        UpdateBuild() -- your own talents changed (shown when you target yourself)
+        OnTalentsChanged() -- your own build (player frame, or targeting yourself)
     elseif event == "PLAYER_FOCUS_CHANGED" then
         QueueRefresh("focus"); QueueRefresh("focustarget")
     elseif event == "GROUP_ROSTER_UPDATE" then
@@ -1427,7 +1475,8 @@ BuildOptions = function()
     Slider({ "nameRow", "party" }, "Name row: party", "Height of the name row inside the box (0 = off).", 0, 24, 1)
     Slider({ "hpShare" }, "Health share", "Health bar's share of the stack; mana gets the rest.", 0.4, 0.85, 0.01, FormatPercent)
     Check({ "alignMana" }, "Align mana bar", "Line the mana bar up with the health bar next to the box.")
-    Check({ "showBuild" }, "Target's talent build", "Points per talent tree (like 2/8/0) left of the target's level. Other players need to be within inspect range (about 30 yards); NPCs show nothing.")
+    Check({ "showBuild" }, "Show Talent Build", "Points per talent tree (like 2/8/0) on the player and target frames. Other players need to be within inspect range (about 30 yards); NPCs show nothing.")
+    Check({ "tallPortraits" }, "Tall portraits", "Player and target: the portrait grows into a taller rectangle, with a line above the name for the talent build. Off: square portraits, build next to the level.")
     Slider({ "squareGap" }, "Gap to bars", "Space between the box and the bars (1 = borders share one line).", 0, 20, 1)
     Slider({ "barSpacing" }, "Bar spacing", "Space between health and mana (0 = borders share one line).", 0, 10, 1)
 
@@ -1507,7 +1556,7 @@ local function PrintHelp()
     print("  /lp options  |  /lp bbfsetup (turn on BBF's Pixel Border mode)  |  /lp bbfundo")
     print("  /lp toggle  |  /lp vignette  |  /lp zoom 0-1  |  /lp grow  |  /lp growtime 0.1-2  |  /lp reset")
     print("  /lp style square|circle  |  /lp bg 0-1  |  /lp extend 0-30 [large|small]  |  /lp split 0.4-0.85")
-    print("  /lp namerow 0-24 [large|tot|party]  |  /lp gap 0-20  |  /lp barspacing 0-10  |  /lp alignmana  |  /lp build")
+    print("  /lp namerow 0-24 [large|tot|party]  |  /lp gap 0-20  |  /lp barspacing 0-10  |  /lp alignmana  |  /lp build  |  /lp tall")
     print("  /lp inset 0.3-1.2 [large|small]  |  /lp cam 0.3-2 [large|small|square]")
     print("  /lp unit player|target|focus|tot|party  |  /lp refresh  |  /lp debug [unit]")
     print("  circle: /lp circlebg 0-1  |  /lp vignette  |  /lp calibrate  |  /lp offset player|target|focus|tot|party x y")
@@ -1642,6 +1691,8 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
         db.alignMana = not db.alignMana
     elseif cmd == "build" then
         db.showBuild = not db.showBuild
+    elseif cmd == "tall" then
+        db.tallPortraits = not db.tallPortraits
     elseif cmd == "circlebg" and val then
         db.circleBg = Clamp(val, 0, 1)
     elseif cmd == "bg" and val then

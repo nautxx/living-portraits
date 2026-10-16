@@ -87,7 +87,8 @@ The square style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. T
 | `/lp extend 0-30 [large\|small]` | Square: make the health+mana stack taller; the box grows with it and stays aligned (default large 10, small 6) |
 | `/lp namerow 0-24 [large\|tot\|party]` | Square: height of the name + level row inside the box, above the health bar (default large 12, tot 9, party 0) |
 | `/lp split 0.4-0.85` | Square: health bar's share of the stack (default 0.66, mana gets the rest) |
-| `/lp build` | Square: toggle the target's talent build (points per tree, like `2/8/0`) left of its level. Other players must be within inspect range (~30 yd); NPCs show nothing |
+| `/lp build` | Square: toggle the talent build (points per tree, like `2/8/0`) on the player and target frames. Other players must be within inspect range (~30 yd); NPCs show nothing |
+| `/lp tall` | Square: toggle tall player and target portraits. On (default): the build gets its own line above the name and the portrait grows into a taller rectangle. Off: square portraits, build next to the level |
 | `/lp alignmana` | Square: toggle lining up the mana bar with the health bar next to the box (undoes live) |
 | `/lp gap 0-20` | Square: space between the box and the bars (1 = borders share one line) |
 | `/lp barspacing 0-10` | Square: space between health and mana (0 = borders share one line) |

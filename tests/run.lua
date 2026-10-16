@@ -512,8 +512,8 @@ check("mana bar gets the remaining 1/3 (8)", playerMana.h == 8 and playerMana.BB
 check("health bar starts below the 12px name row", playerHp.anchor[5] == -12)
 check("mana bar sits right under the health bar (-9)", playerMana.anchor[5] == -9)
 check("health and mana borders share one line", playerMana.BBFPositionFrame:GetTop() == playerHp.BBFPositionFrame:GetBottom() - 1)
-check("box spans name row to mana bottom (38)", box and box.w == 38 and box.h == 38)
-check("box top at the top of the name row", box and box.anchor[5] == 12)
+check("tall box: 38 wide, name row to mana bottom plus the 9px build line", box and box.w == 38 and box.h == 38 + 9)
+check("tall box top at the build line above the name row", box and box.anchor[5] == 12 + 9)
 local pn = PlayerName.points[1]
 check("player name pinned left in the name row", pn[1] == "LEFT" and pn[3] == "TOPLEFT" and pn[5] == 6 and PlayerName.justify == "LEFT")
 local pl = PlayerLevelText.points[1]
@@ -635,7 +635,20 @@ do
     fire("INSPECT_READY", "Player-1")
     local fs = buildFS()
     check("inspected build shows points per tree, empty trees as 0", fs and fs.shown and fs.text == "2/8/0")
-    check("build sits just left of the level", fs and fs.anchor[1] == "RIGHT" and fs.anchor[2] == targetLevel and fs.anchor[3] == "LEFT")
+    local hpPos = targetHp.BBFPositionFrame
+    check("build gets its own line above the name", fs and fs.anchor[1] == "LEFT" and fs.anchor[2] == hpPos
+        and fs.anchor[3] == "TOPLEFT" and fs.anchor[5] == 12 + 9 / 2)
+    check("the box grows upward by the build line (taller than wide)", tBox.h == tBox.w + 9 and tBox.anchor[5] == 12 + 9)
+    local hpH, hpY = targetHp.h, targetHp.anchor[5]
+    slash("tall")
+    check("tall off puts the build next to the level", fs.anchor[1] == "RIGHT" and fs.anchor[2] == targetLevel and fs.anchor[3] == "LEFT")
+    check("tall off makes the box square again", tBox.h == tBox.w and tBox.anchor[5] == 12)
+    check("the build line doesn't change the health bar", targetHp.h == hpH and targetHp.anchor[5] == hpY)
+    slash("tall")
+    local pfs
+    for _, f in ipairs(rawget(PlayerFrame, "fontStrings") or {}) do pfs = f end
+    check("player frame shows your own build above your name", pfs and pfs.shown and pfs.text == "5/0/0"
+        and pfs.anchor[1] == "LEFT" and pfs.anchor[2] == playerHp.BBFPositionFrame and pfs.anchor[5] == 12 + 9 / 2)
     world.guid.target = "Player-2"
     now = now + 0.5
     fire("PLAYER_TARGET_CHANGED")
@@ -654,6 +667,7 @@ do
     world.targetIsMe = nil
     slash("build")
     check("/lp build hides it", LivingPortraitsDB.showBuild == false and not fs.shown)
+    check("tall portraits stay tall with the build hidden", tBox.h == tBox.w + 9)
     slash("build")
     world.players.target = nil
     world.guid.target = nil
