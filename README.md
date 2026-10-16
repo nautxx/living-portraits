@@ -4,6 +4,18 @@ Live 3D animated portraits for World of Warcraft unit frames. Your character bre
 
 > **Status:** v0.2.0, early release. Tested in game on the Classic beta ("Camelot") client, with and without BetterBlizzFrames. See [CHANGELOG](CHANGELOG.md).
 
+## Screenshots
+
+Switching targets: the health and mana bars grow from empty, and each portrait is a live 3D model.
+
+![Cycling targets: bars grow from empty and the portraits animate](docs/screenshots/target-grow.gif)
+
+Square style with BetterBlizzFrames' Pixel Border mode:
+
+| Player | Target and target-of-target |
+|---|---|
+| ![Player frame with an animated square portrait](docs/screenshots/player-square.png) | ![Target and target-of-target frames with animated square portraits](docs/screenshots/target-square.png) |
+
 ## How it works
 
 Instead of the flat 2D portrait, a live `PlayerModel` of the unit is drawn inside the portrait circle, behind the frame's border ring, with a soft vignette so the model's square edges don't show. If the model can't load (unit out of range, offline, or a BBF "no portrait" mode is on), the addon steps aside and the normal portrait shows.
