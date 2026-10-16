@@ -23,6 +23,8 @@ read_globals = {
     "Settings", "SettingsPanel", "CreateSettingsListSectionHeaderInitializer", "CreateSettingsButtonInitializer",
     "MinimalSliderWithSteppersMixin", "StaticPopup_Show", "ReloadUI", "RELOADUI", "LATER",
     "C_AddOns", "DISABLE", "IGNORE_DIALOG",
+    "C_Traits", "C_ClassTalents", "Constants", "NotifyInspect", "CanInspect", "InspectFrame", "GetTime",
+    "UnitIsPlayer", "UnitIsUnit", "GameFontNormalSmall",
     -- WoW Lua extensions
     "wipe", "unpack",
     -- BetterBlizzFrames (optional)

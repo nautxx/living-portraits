@@ -46,6 +46,7 @@ local defaults = {
     alignMana   = true, -- square: line the mana bar's edge up with the health bar on the box side
     growBars    = true, -- new target: health and mana grow from empty to their value
     growTime    = 0.35, -- seconds the grow takes (/lp growtime)
+    showBuild   = true, -- square: target's talent build ("2/8/0") left of its level (/lp build)
     vignette = true,
     calibrate = false, -- circle: tint the edge red to line it up with the ring (/lp calibrate)
     -- Circle: per-frame nudge (px) of the portrait inside its ring. Measured in game with
@@ -185,6 +186,7 @@ local GROUPS = {
 local db
 local BuildOptions -- the settings panel, defined with it below
 local CheckOldAddon -- warns when the pre-rename addon is still enabled, defined below
+local buildText -- the target's talent build ("2/8/0") in its name row, created on first use
 local layers = {}    -- unit -> layer record
 -- unit -> GUID and visible/connected code at the last refresh, so the ticker only refreshes on change
 local lastGuid, lastCode = {}, {}
@@ -646,6 +648,7 @@ local function PinText(fs, point, rel, relPoint, x, y, justify, maxWidth)
         end
         self.bapApplying = nil
     end
+    fs.bapApply = Apply -- lets other code re-fit it (the build text changes the name's room)
     if not fs.bapPinHook then
         fs.bapPinHook = true
         hooksecurefunc(fs, "SetPoint", Apply)
@@ -671,7 +674,8 @@ local function LayoutNameRow(unit, hpPos)
         local w = Safe(hpPos:GetWidth())
         if type(w) ~= "number" then return end
         local lw = level and level:IsShown() and TextWidth(level)
-        return math.max(w - 2 - (lw and lw + 4 or 0), 10)
+        local bw = unit == "target" and buildText and buildText:IsShown() and TextWidth(buildText)
+        return math.max(w - 2 - (lw and lw + 4 or 0) - (bw and bw + 6 or 0), 10)
     end
     PinText(name,    "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT", nameMax)
     PinText(bbfName, "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT", nameMax)
@@ -1082,6 +1086,106 @@ local function HookTargetUpdate()
     end
 end
 
+-- Talent build on the target ------------------------------------------------
+-- Points per talent tree ("2/8/0"), in the target's name row just left of the level
+-- (square style with a name row). Your own build is read directly; other players need an
+-- inspect (server round trip, ~30 yd range, shared throttle), so results are cached per
+-- GUID for the session and requests are spaced out. NPCs and players we can't inspect
+-- show nothing rather than a guess.
+local builds = {}         -- GUID -> "2/8/0"
+local inspectGUID         -- GUID of our pending inspect
+local inspectAt = 0       -- GetTime() of our last NotifyInspect
+local INSPECT_GAP = 1.5   -- seconds between our inspects
+local INSPECT_TIMEOUT = 4 -- give up waiting for a reply after this long
+
+-- Points per tree for a trait config, in the talent window's tree order. The game leaves
+-- out trees with no points spent (Blizzard's own tree headers show "0" for those).
+local function ReadBuild(configID)
+    if not (configID and C_Traits and C_Traits.GetConfigInfo) then return end
+    local info = C_Traits.GetConfigInfo(configID)
+    local tree = info and info.treeIDs and info.treeIDs[1]
+    local display = tree and C_Traits.GetGroupDisplayInfoByTreeID(tree)
+    if not display or #display == 0 then return end
+    local ids = {}
+    for i, d in ipairs(display) do ids[i] = d.groupID end
+    local spent = {}
+    for _, g in ipairs(C_Traits.GetGroupCurrencyInfo(configID, ids) or {}) do
+        local c = g.currencyInfos and g.currencyInfos[1]
+        local n = c and Safe(c.spent)
+        if c and n == nil then return end -- secret: show nothing
+        spent[g.traitNodeGroupID] = n or 0
+    end
+    local parts = {}
+    for i, d in ipairs(display) do parts[i] = tostring(spent[d.groupID] or 0) end
+    return table.concat(parts, "/")
+end
+
+-- The build text shows only where the square style draws the target's name row.
+local function BuildVisible()
+    return db and db.enabled and db.showBuild and db.units.target and db.style == "square"
+        and (db.nameRow[UNITS.target.row] or 0) > 0 and BBFHidesPortrait("target")
+end
+
+local function RequestInspect(guid)
+    if not (NotifyInspect and guid) or InCombatLockdown() then return end
+    if inspectGUID == guid and GetTime() - inspectAt < INSPECT_TIMEOUT then return end -- waiting
+    if GetTime() - inspectAt < INSPECT_GAP then return end -- the ticker asks again shortly
+    if CanInspect and not CanInspect("target") then return end -- out of range, enemy, ...
+    if InspectFrame and InspectFrame:IsShown() then return end -- Blizzard's inspect owns it
+    inspectGUID, inspectAt = guid, GetTime()
+    NotifyInspect("target")
+end
+
+local function CreateBuildText(level)
+    local uf = UnitFrameOf("target")
+    if not uf then return end
+    local fs = uf:CreateFontString(nil, "OVERLAY")
+    local font, size, flags = level:GetFont()
+    if font then
+        fs:SetFont(font, math.max((size or 10) - 2, 7), flags)
+    elseif GameFontNormalSmall then
+        fs:SetFontObject(GameFontNormalSmall)
+    end
+    fs:SetTextColor(0.7, 0.7, 0.7) -- muted: the name is the main information
+    fs:SetJustifyH("RIGHT")
+    fs:Hide()
+    return fs
+end
+
+local function UpdateBuild()
+    local text
+    if BuildVisible() and Safe(UnitIsPlayer("target")) then
+        if Safe(UnitIsUnit("target", "player")) then
+            text = C_ClassTalents and ReadBuild(C_ClassTalents.GetActiveConfigID())
+        else
+            local guid = Safe(UnitGUID("target"))
+            text = guid and builds[guid]
+            if guid and not text then RequestInspect(guid) end
+        end
+    end
+    local name, level, bbfName = Lookup("target", "texts")
+    if not level then return end
+    if text and not buildText then buildText = CreateBuildText(level) end
+    if not buildText or buildText.bapText == text then return end
+    buildText.bapText = text
+    buildText:ClearAllPoints()
+    buildText:SetPoint("RIGHT", level, "LEFT", -4, 0)
+    buildText:SetText(text or "")
+    buildText:SetShown(text ~= nil)
+    -- The name's room depends on the build text: re-fit the pinned names.
+    for _, fs in ipairs({ name, bbfName }) do
+        if fs and fs.bapLayout and fs.bapApply then fs.bapApply(fs) end
+    end
+end
+
+local function OnInspectReady(guid)
+    if not guid or guid ~= inspectGUID then return end -- someone else's inspect
+    inspectGUID = nil
+    local build = Constants and Constants.TraitConsts and ReadBuild(Constants.TraitConsts.INSPECT_TRAIT_CONFIG_ID)
+    if build then builds[guid] = build end
+    UpdateBuild()
+end
+
 -- Catches changes with no reliable event: ToT swaps, party range/visibility, and frame
 -- scale changes (Edit Mode / UI scale) that leave the 3D camera framed for the old size.
 local function ScaleChanged(unit)
@@ -1101,6 +1205,7 @@ local function Tick()
         local p = layers[unit]
         if p and p.active and not LayeringOK(p) then ApplyLayering(p) end
     end
+    UpdateBuild() -- retries the target's inspect (range, throttle) until it has a build
 end
 
 -- Events --------------------------------------------------------------------
@@ -1125,6 +1230,8 @@ f:SetScript("OnEvent", function(self, event, arg1)
         self:RegisterEvent("UNIT_CONNECTION")
         self:RegisterEvent("UI_SCALE_CHANGED")
         self:RegisterEvent("DISPLAY_SIZE_CHANGED")
+        self:RegisterEvent("INSPECT_READY")
+        self:RegisterEvent("TRAIT_CONFIG_UPDATED")
         HookBBF()
         HookTargetUpdate()
         BuildOptions()
@@ -1140,6 +1247,11 @@ f:SetScript("OnEvent", function(self, event, arg1)
         C_Timer.After(0.1, RefreshAll)
     elseif event == "PLAYER_TARGET_CHANGED" then
         QueueRefresh("target"); QueueRefresh("targettarget")
+        UpdateBuild()
+    elseif event == "INSPECT_READY" then
+        OnInspectReady(arg1)
+    elseif event == "TRAIT_CONFIG_UPDATED" then
+        UpdateBuild() -- your own talents changed (shown when you target yourself)
     elseif event == "PLAYER_FOCUS_CHANGED" then
         QueueRefresh("focus"); QueueRefresh("focustarget")
     elseif event == "GROUP_ROSTER_UPDATE" then
@@ -1315,6 +1427,7 @@ BuildOptions = function()
     Slider({ "nameRow", "party" }, "Name row: party", "Height of the name row inside the box (0 = off).", 0, 24, 1)
     Slider({ "hpShare" }, "Health share", "Health bar's share of the stack; mana gets the rest.", 0.4, 0.85, 0.01, FormatPercent)
     Check({ "alignMana" }, "Align mana bar", "Line the mana bar up with the health bar next to the box.")
+    Check({ "showBuild" }, "Target's talent build", "Points per talent tree (like 2/8/0) left of the target's level. Other players need to be within inspect range (about 30 yards); NPCs show nothing.")
     Slider({ "squareGap" }, "Gap to bars", "Space between the box and the bars (1 = borders share one line).", 0, 20, 1)
     Slider({ "barSpacing" }, "Bar spacing", "Space between health and mana (0 = borders share one line).", 0, 10, 1)
 
@@ -1394,7 +1507,7 @@ local function PrintHelp()
     print("  /lp options  |  /lp bbfsetup (turn on BBF's Pixel Border mode)  |  /lp bbfundo")
     print("  /lp toggle  |  /lp vignette  |  /lp zoom 0-1  |  /lp grow  |  /lp growtime 0.1-2  |  /lp reset")
     print("  /lp style square|circle  |  /lp bg 0-1  |  /lp extend 0-30 [large|small]  |  /lp split 0.4-0.85")
-    print("  /lp namerow 0-24 [large|tot|party]  |  /lp gap 0-20  |  /lp barspacing 0-10  |  /lp alignmana")
+    print("  /lp namerow 0-24 [large|tot|party]  |  /lp gap 0-20  |  /lp barspacing 0-10  |  /lp alignmana  |  /lp build")
     print("  /lp inset 0.3-1.2 [large|small]  |  /lp cam 0.3-2 [large|small|square]")
     print("  /lp unit player|target|focus|tot|party  |  /lp refresh  |  /lp debug [unit]")
     print("  circle: /lp circlebg 0-1  |  /lp vignette  |  /lp calibrate  |  /lp offset player|target|focus|tot|party x y")
@@ -1527,6 +1640,8 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
         db.hpShare = Clamp(val, 0.4, 0.85)
     elseif cmd == "alignmana" then
         db.alignMana = not db.alignMana
+    elseif cmd == "build" then
+        db.showBuild = not db.showBuild
     elseif cmd == "circlebg" and val then
         db.circleBg = Clamp(val, 0, 1)
     elseif cmd == "bg" and val then
@@ -1555,6 +1670,7 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
         return
     end
     RefreshAll()
+    UpdateBuild()
     NotifyOptions()
     PrintStatus()
 end

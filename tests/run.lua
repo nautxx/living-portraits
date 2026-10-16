@@ -65,6 +65,16 @@ local function newFrame(kind, parent, level)
         return t
     end
     function f:CreateMaskTexture() return stubIndex({}) end
+    function f:CreateFontString()
+        local fs = region({})
+        function fs:SetText(t) self.text = t end
+        function fs:GetText() return self.text end
+        function fs:GetUnboundedStringWidth() return #(self.text or "") * 6 end
+        function fs:SetPoint(point, rel, relPoint, x, y) self.anchor = { point, rel, relPoint, x, y } end
+        self.fontStrings = self.fontStrings or {}
+        table.insert(self.fontStrings, fs)
+        return fs
+    end
     function f:GetFrameLevel() return self.level end
     function f:SetFrameLevel(l) self.level = l end
     function f:GetFrameStrata() return "MEDIUM" end
@@ -134,6 +144,30 @@ function UnitGUID(u) return world.guid[u] or ("G-" .. u) end
 function UnitIsVisible(u) return world.visible[u] ~= false end
 function UnitIsConnected(u) return world.connected[u] ~= false end
 function issecretvalue() return world.secret end
+-- Players and talents: world.players marks units that are players; talent trees are
+-- 3 groups (11, 12, 13) and configs map to points per group (zero groups left out).
+world.players = {}
+function UnitIsPlayer(u) return world.players[u] or false end
+function UnitIsUnit(a, b) return a == b or (a == "target" and b == "player" and world.targetIsMe) or false end
+local now = 100
+function GetTime() return now end
+local inspects = {}
+function NotifyInspect(u) inspects[#inspects + 1] = u end
+function CanInspect() return true end
+Constants = { TraitConsts = { INSPECT_TRAIT_CONFIG_ID = -1 } }
+local talentConfigs = { [7] = { [11] = 5 }, [-1] = { [11] = 2, [12] = 8 } }
+C_ClassTalents = { GetActiveConfigID = function() return 7 end }
+C_Traits = {
+    GetConfigInfo = function(id) return talentConfigs[id] and { treeIDs = { 1112 } } end,
+    GetGroupDisplayInfoByTreeID = function() return { { groupID = 11 }, { groupID = 12 }, { groupID = 13 } } end,
+    GetGroupCurrencyInfo = function(id)
+        local out = {}
+        for group, spent in pairs(talentConfigs[id] or {}) do
+            out[#out + 1] = { traitNodeGroupID = group, currencyInfos = { { spent = spent } } }
+        end
+        return out
+    end,
+}
 local inCombat = false
 function InCombatLockdown() return inCombat end
 
@@ -581,6 +615,49 @@ inCombat = true
 slash("extend 8 large")
 check("bars not resized in combat", playerHp.h == 13)
 inCombat = false
+
+-- Talent build in the target's name row (square style)
+do
+    local function buildFS()
+        for _, fs in ipairs(rawget(TargetFrame, "fontStrings") or {}) do return fs end
+    end
+    world.players.target = false
+    fire("PLAYER_TARGET_CHANGED")
+    check("no build text for an NPC target", not buildFS() or not buildFS().shown)
+    world.players.target = true
+    world.guid.target = "Player-1"
+    inspects = {}
+    fire("PLAYER_TARGET_CHANGED")
+    check("another player's build is inspected", #inspects == 1 and inspects[1] == "target")
+    check("nothing shown until the inspect answers", not buildFS() or not buildFS().shown)
+    tick()
+    check("no second inspect while waiting for the reply", #inspects == 1)
+    fire("INSPECT_READY", "Player-1")
+    local fs = buildFS()
+    check("inspected build shows points per tree, empty trees as 0", fs and fs.shown and fs.text == "2/8/0")
+    check("build sits just left of the level", fs and fs.anchor[1] == "RIGHT" and fs.anchor[2] == targetLevel and fs.anchor[3] == "LEFT")
+    world.guid.target = "Player-2"
+    now = now + 0.5
+    fire("PLAYER_TARGET_CHANGED")
+    check("inspects are spaced out", #inspects == 1)
+    now = now + 2
+    tick()
+    check("the ticker retries once the gap has passed", #inspects == 2)
+    fire("INSPECT_READY", "Someone-Else")
+    check("someone else's inspect is ignored", not fs.shown)
+    world.guid.target = "Player-1"
+    fire("PLAYER_TARGET_CHANGED")
+    check("a cached build shows without a new inspect", fs.shown and fs.text == "2/8/0" and #inspects == 2)
+    world.targetIsMe = true
+    fire("PLAYER_TARGET_CHANGED")
+    check("your own build is read directly", fs.text == "5/0/0" and #inspects == 2)
+    world.targetIsMe = nil
+    slash("build")
+    check("/lp build hides it", LivingPortraitsDB.showBuild == false and not fs.shown)
+    slash("build")
+    world.players.target = nil
+    world.guid.target = nil
+end
 
 slash("style circle")
 check("style circle hides the box", not box.shown)
