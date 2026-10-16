@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0 (2026-10-15)
+
+### Features
+- Target health and mana bars grow from empty when you pick a new target, keeping BBF's bar textures and class colors. On by default; `/bap grow` toggles it, `/bap growtime` sets the speed (default 0.35s).
+
+### Fixes
+- Square style: the name is left-aligned and the level right-aligned on every frame, whichever font BBF uses. Previously BBF's fixed-width, centered name box indented the name with Blizzard's default font.
+- Target and focus now use the same name-left / level-right layout as the player frame.
+
 ## 0.1.0 (2026-10-15)
 
 First release. Live 3D animated portraits (idle breathing, like the character screen) for Blizzard unit frames, as a companion to BetterBlizzFrames.
