@@ -25,9 +25,9 @@ Switching targets: the bars grow from empty, each player's talent build appears 
 
 Tall portraits with Mirror Target Text, on BetterBlizzFrames' Pixel Border mode. The player and target frames mirror each other:
 
-| Player | Target |
+| Player | Target and focus |
 |---|---|
-| ![Player frame with a tall living portrait, talent build 2/0/8 above the name](docs/screenshots/player-square.png) | ![Target frame mirrored: talent build 0/17/0 and name next to the portrait, level on the outer edge](docs/screenshots/target-square.png) |
+| ![Player frame with a tall living portrait, talent build 2/0/8 above the name](docs/screenshots/player-square.png) | ![Target (talent build 0/0/26) and the small focus frame (1/4/2), both mirrored, with their targets-of-target below](docs/screenshots/target-square.png) |
 
 ## How it works
 
