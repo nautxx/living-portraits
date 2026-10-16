@@ -52,6 +52,7 @@ local defaults = {
     mirrorTarget = false, -- square: target/focus text mirrors the player's (/lp mirror)
     borderColor = "ff000000", -- square: box + bar border color, ARGB hex like the settings swatch (/lp bordercolor)
     borderAlpha = 1,      -- square: border opacity (/lp borderalpha)
+    borderSize  = 1,      -- square: border thickness: 1 thin, 2 medium, 3 heavy (/lp bordersize)
     vignette = true,
     calibrate = false, -- circle: tint the edge red to line it up with the ring (/lp calibrate)
     -- Circle: per-frame nudge (px) of the portrait inside its ring. Measured in game with
@@ -406,25 +407,45 @@ local function SetPixelPoint(region, point, rel, relPoint, x, y)
 end
 
 -- Same recipe as BBF's pixel border: four 1px black edges just outside the frame.
+-- Border thickness in UI units: thin 1, medium 2, heavy 3 (/lp bordersize).
+local BORDER_SIZES = { thin = 1, medium = 2, heavy = 3 }
+local function BorderSize()
+    return Clamp(math.floor((db and db.borderSize or 1) + 0.5), 1, 3)
+end
+
+-- Size and anchor a border's four edges (top, right, bottom, left) just outside frame.
+-- Top and bottom span the corners and the sides fit between them, so each corner is drawn
+-- once (drawn twice, corners looked darker at partial opacity). `bbf` reproduces BBF's
+-- own geometry (1px, sides spanning the corners too), for handing its bars back.
+local function LayoutEdges(edges, frame, size, bbf)
+    if type(edges) ~= "table" or not frame then return end
+    local top, right, bottom, left = edges[1], edges[2], edges[3], edges[4]
+    if not (top and right and bottom and left) then return end
+    for i, t in ipairs(edges) do
+        if PixelUtil and PixelUtil.SetHeight then
+            if i % 2 == 1 then PixelUtil.SetHeight(t, size, size) else PixelUtil.SetWidth(t, size, size) end
+        elseif i % 2 == 1 then t:SetHeight(size) else t:SetWidth(size) end
+        t:ClearAllPoints()
+    end
+    local side = bbf and size or 0
+    SetPixelPoint(top,    "BOTTOMLEFT",  frame, "TOPLEFT",     -size, 0)
+    SetPixelPoint(top,    "BOTTOMRIGHT", frame, "TOPRIGHT",     size, 0)
+    SetPixelPoint(bottom, "TOPLEFT",     frame, "BOTTOMLEFT",  -size, 0)
+    SetPixelPoint(bottom, "TOPRIGHT",    frame, "BOTTOMRIGHT",  size, 0)
+    SetPixelPoint(left,   "TOPRIGHT",    frame, "TOPLEFT",      0, side)
+    SetPixelPoint(left,   "BOTTOMRIGHT", frame, "BOTTOMLEFT",   0, -side)
+    SetPixelPoint(right,  "TOPLEFT",     frame, "TOPRIGHT",     0, side)
+    SetPixelPoint(right,  "BOTTOMLEFT",  frame, "BOTTOMRIGHT",  0, -side)
+end
+
 local function CreatePixelBorder(frame)
     local edges = {}
     for i = 1, 4 do
         local t = frame:CreateTexture(nil, "BORDER", nil, 4)
         t:SetColorTexture(0, 0, 0, 1)
-        if PixelUtil and PixelUtil.SetHeight then
-            if i % 2 == 1 then PixelUtil.SetHeight(t, 1, 1) else PixelUtil.SetWidth(t, 1, 1) end
-        elseif i % 2 == 1 then t:SetHeight(1) else t:SetWidth(1) end
         edges[i] = t
     end
-    local top, right, bottom, left = edges[1], edges[2], edges[3], edges[4]
-    SetPixelPoint(top,    "BOTTOMLEFT",  frame, "TOPLEFT",     -1, 0)
-    SetPixelPoint(top,    "BOTTOMRIGHT", frame, "TOPRIGHT",     1, 0)
-    SetPixelPoint(bottom, "TOPLEFT",     frame, "BOTTOMLEFT",  -1, 0)
-    SetPixelPoint(bottom, "TOPRIGHT",    frame, "BOTTOMRIGHT",  1, 0)
-    SetPixelPoint(left,   "TOPRIGHT",    frame, "TOPLEFT",      0, 1)
-    SetPixelPoint(left,   "BOTTOMRIGHT", frame, "BOTTOMLEFT",   0, -1)
-    SetPixelPoint(right,  "TOPLEFT",     frame, "TOPRIGHT",     0, 1)
-    SetPixelPoint(right,  "BOTTOMLEFT",  frame, "BOTTOMRIGHT",  0, -1)
+    LayoutEdges(edges, frame, BorderSize())
     return edges
 end
 
@@ -491,7 +512,7 @@ end
 -- covered it and some didn't), so the pieces close up and the faint line is drawn over
 -- the bars instead.
 local function SharedLine()
-    return (db.borderAlpha or 1) >= 1 and 1 or 0
+    return (db.borderAlpha or 1) >= 1 and BorderSize() or 0
 end
 
 local function BoxGap()
@@ -742,8 +763,14 @@ end
 
 local function ApplyBorders(unit, manaBar, hpBar)
     local r, g, b, a = BorderRGBA()
+    local size = BorderSize()
     local sq = squares[unit]
-    if sq then ColorEdges(sq.edges, r, g, b, a) end
+    if sq then
+        LayoutEdges(sq.edges, sq.box, size)
+        ColorEdges(sq.edges, r, g, b, a)
+    end
+    LayoutEdges(hpBar and hpBar.BBFBlackBorder, hpBar and hpBar.BBFPositionFrame, size)
+    LayoutEdges(manaBar and manaBar.BBFBlackBorder, manaBar and manaBar.BBFPositionFrame, size)
     -- The bars' edge on the box side is the same line as the box's edge (gap 1).
     local boxSide = db.squareGap == 1 and (UNITS[unit].side == "RIGHT" and EDGE_RIGHT or EDGE_LEFT) or nil
     ColorEdges(hpBar and hpBar.BBFBlackBorder, r, g, b, a, boxSide)
@@ -751,8 +778,10 @@ local function ApplyBorders(unit, manaBar, hpBar)
     ColorEdges(manaBar and manaBar.BBFBlackBorder, r, g, b, a, boxSide, db.barSpacing == 0 and EDGE_TOP or nil)
 end
 
--- BBF's look: black, every edge shown.
+-- BBF's look: black, 1px, every edge shown.
 local function RestoreBorders(manaBar, hpBar)
+    LayoutEdges(hpBar and hpBar.BBFBlackBorder, hpBar and hpBar.BBFPositionFrame, 1, true)
+    LayoutEdges(manaBar and manaBar.BBFBlackBorder, manaBar and manaBar.BBFPositionFrame, 1, true)
     ColorEdges(hpBar and hpBar.BBFBlackBorder, 0, 0, 0, 1)
     ColorEdges(manaBar and manaBar.BBFBlackBorder, 0, 0, 0, 1)
 end
@@ -819,7 +848,7 @@ local function ClearTot(unit)
     shift = 0
     if ours and totTop and not apart then
         local totScale = tot:GetEffectiveScale()
-        local need = (totTop - ours) / totScale + TOT_CLEARANCE
+        local need = (totTop - ours) / totScale + TOT_CLEARANCE + BorderSize() -- clear the bottom border too
         if need > 0 then shift = need end
     end
     tot.bapShift = shift
@@ -1737,6 +1766,14 @@ BuildOptions = function()
     local colorGet, colorSet, colorDefault = Path({ "borderColor" })
     Settings.CreateColorSwatch(category, Register("borderColor", "Border Color", colorDefault, colorGet, colorSet),
         "Color of the 1px lines around the portrait box and the health and mana bars.")
+    local sizeGet, sizeSet, sizeDefault = Path({ "borderSize" })
+    Settings.CreateDropdown(category, Register("borderSize", "Border Thickness", sizeDefault, sizeGet, sizeSet), function()
+        local c = Settings.CreateControlTextContainer()
+        c:Add(1, "Thin")
+        c:Add(2, "Medium")
+        c:Add(3, "Heavy")
+        return c:GetData()
+    end, "Thickness of the lines around the portrait box and the bars.")
     Slider({ "borderAlpha" }, "Border Opacity", "Opacity of the 1px lines around the portrait box and the bars.", 0, 1, 0.05, FormatPercent)
     Check({ "alignMana" }, "Align mana bar", "Line the mana bar up with the health bar next to the box.")
     Check({ "showBuild" }, "Show Talent Build", "Points per talent tree (like 2/8/0) on the player, target and focus frames. Other players need to be within inspect range (about 30 yards); NPCs show nothing.")
@@ -1823,7 +1860,7 @@ local function PrintHelp()
     print("  /lp toggle  |  /lp vignette  |  /lp zoom 0-1  |  /lp grow  |  /lp growtime 0.1-2  |  /lp reset")
     print("  /lp style square|circle  |  /lp bg 0-1  |  /lp extend 0-30 [large|small]  |  /lp split 0.4-0.85")
     print("  /lp namerow 0-24 [large|tot|party]  |  /lp gap 0-20  |  /lp barspacing 0-10  |  /lp alignmana  |  /lp build  |  /lp tall  |  /lp surname  |  /lp mirror")
-    print("  /lp bordercolor RRGGBB  |  /lp borderalpha 0-1")
+    print("  /lp bordercolor RRGGBB  |  /lp borderalpha 0-1  |  /lp bordersize thin|medium|heavy")
     print("  /lp inset 0.3-1.2 [large|small]  |  /lp cam 0.3-2 [large|small|square]")
     print("  /lp unit player|target|focus|tot|party  |  /lp refresh  |  /lp debug [unit]")
     print("  circle: /lp circlebg 0-1  |  /lp vignette  |  /lp calibrate  |  /lp offset player|target|focus|tot|party x y")
@@ -1911,6 +1948,7 @@ local SLASH_NUMBERS = {
     growtime = { "growTime", 0.1, 2 }, split = { "hpShare", 0.4, 0.85 }, zoom = { "zoom", 0, 1 },
     circlebg = { "circleBg", 0, 1 }, bg = { "squareBg", 0, 1 },
     gap = { "squareGap", 0, 20 }, barspacing = { "barSpacing", 0, 10 }, borderalpha = { "borderAlpha", 0, 1 },
+    bordersize = { "borderSize", 1, 3 },
 }
 
 SLASH_LIVINGPORTRAITS1 = "/lp"
@@ -1962,6 +2000,8 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
         SetEach(db.stackExtra, size, Clamp(val, 0, 30))
     elseif cmd == "namerow" and val then
         SetEach(db.nameRow, args[3], Clamp(val, 0, 24))
+    elseif cmd == "bordersize" and BORDER_SIZES[arg] then
+        db.borderSize = BORDER_SIZES[arg]
     elseif cmd == "bordercolor" and arg and arg:match("^%x%x%x%x%x%x$") then
         db.borderColor = "ff" .. arg
     elseif cmd == "inset" and val then

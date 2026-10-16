@@ -67,7 +67,7 @@ Open **Options → AddOns → LivingPortraits** (or type `/lp options`):
 - **General:** turn it on/off, hide surnames, square or circle style, and which frames get a living portrait.
 - **Camera:** zoom and distance (face size).
 - **Target bars:** the grow-from-empty animation (target and focus) and its speed.
-- **Square style:** show talent builds, mirror the target text, tall portraits, border color and opacity, plus box and bar sizing.
+- **Square style:** show talent builds, mirror the target text, tall portraits, border color, thickness and opacity, plus box and bar sizing.
 - **Circle style:** background, round edge and model size.
 
 The square style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. The **Turn on** button under *BetterBlizzFrames* switches it on for every frame (your other BBF settings stay as they are) and reloads the UI; **Undo** puts back what you had.
@@ -101,6 +101,7 @@ The square style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. T
 | `/lp tall` | Toggle tall player, target and focus portraits (on by default): a taller rectangle with the build on its own line above the name. Off: square, build next to the level |
 | `/lp mirror` | Mirror the target and focus text to match the player frame: name and build next to the portrait, level on the outer edge |
 | `/lp bordercolor RRGGBB` | Color of the 1px lines around the portrait box and the bars (default `000000`, black) |
+| `/lp bordersize thin\|medium\|heavy` | Thickness of those lines: 1, 2 or 3px (default thin) |
 | `/lp borderalpha 0-1` | Opacity of those lines (default 1). Below 1, the box and bars close up so no gap shows where a line was |
 | `/lp bg 0-1` | Opacity of the dark background behind the model (default 0 = none) |
 | `/lp extend 0-30 [large\|small]` | Make the health + mana stack taller; the box grows with it (default large 10, small 6) |

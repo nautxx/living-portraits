@@ -728,15 +728,15 @@ do
     local base = manaPf:GetBottom() + 5 -- overlapping the target's mana bar by 5
     function totContainer:GetTop() return base + (self.anchor[5] - 10) end
     fire("PLAYER_TARGET_CHANGED")
-    check("ToT nudged down just enough to clear the target's bars",
-        math.abs(totContainer:GetTop() - (manaPf:GetBottom() - 2)) < 0.001 and totContainer.anchor[5] == 10 - 7)
+    check("ToT nudged down to clear the target's bars and bottom border (2 + 1px)",
+        math.abs(totContainer:GetTop() - (manaPf:GetBottom() - 3)) < 0.001 and totContainer.anchor[5] == 10 - 8)
     base = manaPf:GetBottom() - 20 -- already clear
     fire("PLAYER_TARGET_CHANGED")
     check("no nudge when the ToT is already clear", totContainer.anchor[5] == 10)
     totContainer:SetPoint("TOPRIGHT", TargetFrame, "BOTTOMRIGHT", 12, 30) -- BBF/Blizzard re-anchor it
     -- (base unchanged: 20 higher puts its top exactly at our bottom, so it only needs the clearance)
     fire("PLAYER_TARGET_CHANGED")
-    check("a new anchor from Blizzard/BBF becomes the base", totContainer.anchor[5] == 30 - 2)
+    check("a new anchor from Blizzard/BBF becomes the base", totContainer.anchor[5] == 30 - 3)
     slash("style circle")
     check("handing back puts the ToT exactly where it was", totContainer.anchor[5] == 30)
     slash("style square")
@@ -762,6 +762,17 @@ do
     slash("borderalpha 1")
     check("opaque border: health and mana share one 1px line again", manaPf:GetTop() == hpPf:GetBottom() - 1)
     check("opaque border: box and bars share one line again", box.anchor[4] == -1)
+    slash("bordersize 3")
+    check("/lp bordersize thickens the box border", boxEdges[1].h == 3 and boxEdges[2].w == 3)
+    check("...and BBF's bar borders", hpE[1].h == 3 and manaE[4].w == 3)
+    check("corners grow with the thickness", hpE[1].anchor[4] == 3)
+    check("health and mana still share one (3px) line", manaPf:GetTop() == hpPf:GetBottom() - 3)
+    check("box and bars still share one (3px) line", box.anchor[4] == -3)
+    slash("bordersize 9")
+    check("thickness is capped at heavy (3)", LivingPortraitsDB.borderSize == 3)
+    slash("bordersize medium")
+    check("/lp bordersize takes thin, medium or heavy", LivingPortraitsDB.borderSize == 2 and boxEdges[1].h == 2)
+    slash("bordersize 1")
     slash("borderalpha 0.5")
     slash("bordercolor zz")
     check("bad colors are ignored", LivingPortraitsDB.borderColor == "ffff0000")
@@ -771,7 +782,7 @@ do
 end
 
 slash("style circle")
-check("style circle hands BBF its black borders back", playerHp.BBFBlackBorder[1].color[1] == 0
+check("style circle hands BBF its black 1px borders back", playerHp.BBFBlackBorder[1].h == 1 and playerHp.BBFBlackBorder[1].color[1] == 0
     and playerHp.BBFBlackBorder[1].color[4] == 1 and playerHp.BBFBlackBorder[4].shown and playerMana.BBFBlackBorder[1].shown)
 check("style circle hides the box", not box.shown)
 check("style circle restores BBF's bar heights", playerHp.h == 19 and playerMana.h == 8 and playerMana.BBFPositionFrame.h == 8)
