@@ -2,7 +2,7 @@
 ## Title: BBF |cff00c0ffAnimated Portraits|r
 ## Notes: Live 3D breathing portraits for Blizzard unit frames. Companion to BetterBlizzFrames.
 ## Author: Jason
-## Version: 0.2.0
+## Version: 0.2.1
 ## OptionalDeps: BetterBlizzFrames
 ## SavedVariables: BBFAnimatedPortraitsDB
 

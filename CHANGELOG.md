@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.1 (2026-10-16)
+
+Public test release. Please report anything odd, especially in battlegrounds.
+
+### Fixes
+- Battlegrounds: targeting enemy players no longer floods Lua errors or leaves the target's health bar invisible after the bar grow. WoW hides some values (enemy health and its text) from addons in PvP; the grow and bar-text centering now skip them safely.
+
+### Performance
+- One target change no longer reloads the same 3D model two or three times: refresh requests are combined into one per frame.
+- The bar grow no longer creates new garbage every frame, and the 0.5s background check does less work.
+
 ## 0.2.0 (2026-10-15)
 
 ### Features
