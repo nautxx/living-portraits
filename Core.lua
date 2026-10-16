@@ -22,7 +22,7 @@ local VIGNETTE = "Interface\\AddOns\\" .. ADDON_NAME .. "\\media\\vignette"
 local VIGNETTE_EDGE = 0.72 -- radius of the crisp circle edge baked into vignette.tga (fraction of the texture)
 
 -- Bump when a default changes in a way saved settings should pick up (see MigrateSettings).
-local SETTINGS_VERSION = 6
+local SETTINGS_VERSION = 7
 
 local defaults = {
     enabled  = true,
@@ -34,7 +34,8 @@ local defaults = {
     stackExtra  = { large = 10, small = 6 },
     hpShare     = 0.66, -- square: health bar's share of the stack (mana gets the rest)
     -- Square: px at the top of the box for the name + level row (health starts below it).
-    nameRow     = { large = 12, small = 0 },
+    -- Groups: large = player/target/focus, tot = target-of-target/focus-target, party.
+    nameRow     = { large = 12, tot = 9, party = 0 },
     alignMana   = true, -- square: line the mana bar's edge up with the health bar on the box side
     vignette = true,
     bgR = 0.05, bgG = 0.05, bgB = 0.07,
@@ -73,6 +74,13 @@ local SIZE_OF = {
     player = "large", target = "large", focus = "large",
     targettarget = "small", focustarget = "small",
     party1 = "small", party2 = "small", party3 = "small", party4 = "small",
+}
+
+-- Name-row groups (ToT and party share the "small" size but lay out names differently).
+local ROW_GROUP = {
+    player = "large", target = "large", focus = "large",
+    targettarget = "tot", focustarget = "tot",
+    party1 = "party", party2 = "party", party3 = "party", party4 = "party",
 }
 
 -- Square style: the health/mana bars BBF frames in No Portrait / Pixel Border mode.
@@ -127,6 +135,14 @@ local NAME_TEXTS = {
     end,
     target = function() return TargetTexts(TargetFrame) end,
     focus  = function() return TargetTexts(FocusFrame) end,
+    targettarget = function()
+        local f = TargetFrame and TargetFrame.totFrame
+        return AsText(f and f.Name), nil, AsText(f and f.bbfName)
+    end,
+    focustarget = function()
+        local f = FocusFrame and FocusFrame.totFrame
+        return AsText(f and f.Name), nil, AsText(f and f.bbfName)
+    end,
 }
 
 -- Slash-command groups -> units
@@ -178,6 +194,9 @@ local function MigrateSettings()
     if version < 2 then
         db.inset, db.bgInset = nil, nil -- v1 single-size settings
         db.sizes = nil                  -- v2: model fills the circle (inset 0.82 -> 1.0)
+    end
+    if version < 7 then
+        db.nameRow = nil                -- v7: separate name rows for ToT and party
     end
     if version < 6 then
         db.manaExtra = nil              -- v6: extra height is split between health and mana
@@ -244,8 +263,14 @@ local function GetBarFrames(unit)
     if not getter then return end
     local hp, mana = getter()
     if not hp then return end
-    if mana and not mana:IsShown() then mana = nil end -- BBF can hide the mana bar
-    return hp.BBFPositionFrame or hp, mana and (mana.BBFPositionFrame or mana), mana, hp
+    local manaPos = mana and (mana.BBFPositionFrame or mana)
+    -- Units with no power (most NPCs): Blizzard hides the mana bar, but BBF keeps its empty
+    -- slot (border + background) on screen, so lay that out like a normal mana bar. If BBF
+    -- hides the slot too (its "hide mana" option), there's no mana row at all.
+    if mana and not mana:IsShown() and not (manaPos ~= mana and manaPos:IsVisible()) then
+        manaPos = nil
+    end
+    return hp.BBFPositionFrame or hp, manaPos, mana, hp
 end
 
 local function SetPixelPoint(region, point, rel, relPoint, x, y)
@@ -335,23 +360,28 @@ local function SetBarLayout(bar, pos, dh, dx, dy)
 end
 
 local function LayoutBars(unit, hpPos, manaPos, manaBar, hpBar)
-    if not (hpBar and manaPos and manaBar) or InCombatLockdown() then return end
+    if not hpBar or InCombatLockdown() then return end
     Remember(hpBar, hpPos)
-    Remember(manaBar, manaPos)
-    if not (hpBar.bapOrig and manaBar.bapOrig) then return end
+    if manaPos and manaBar then Remember(manaBar, manaPos) end
+    if not hpBar.bapOrig then return end
+    local hasMana = manaPos and manaBar and manaBar.bapOrig
 
     -- Heights: grow the stack, reserve the name row at the top, and split the rest
-    -- hpShare / rest (measured on BBF's frames).
+    -- hpShare / rest (measured on BBF's frames). Without a mana row, health takes it all.
     local size = SIZE_OF[unit]
-    local row = db.nameRow[size] or 0
-    local total = hpPos.bapBaseH + manaPos.bapBaseH + (db.stackExtra[size] or 0)
+    local row = db.nameRow[ROW_GROUP[unit]] or 0
+    -- Keep the box size even without a mana row: use mana's remembered base height.
+    local manaSlot = manaPos or (manaBar and manaBar.BBFPositionFrame)
+    local manaBase = (manaSlot and manaSlot.bapBaseH) or 0
+    local total = hpPos.bapBaseH + manaBase + (db.stackExtra[size] or 0)
     local bars = total - row
-    local hpH = math.floor(bars * db.hpShare + 0.5)
+    local hpH = hasMana and math.floor(bars * db.hpShare + 0.5) or bars
     local dhHp = hpH - hpPos.bapBaseH
-    local dhMana = (bars - hpH) - manaPos.bapBaseH
 
     SetBarLayout(hpBar, hpPos, dhHp, 0, -row) -- health starts below the name row
     hpPos.bapRow = row
+    if not hasMana then return end
+    local dhMana = (bars - hpH) - manaPos.bapBaseH
 
     -- The mana bar moves down by however much the health bar grew, unless it's anchored
     -- to the health bar itself (it follows automatically, e.g. target-of-target).
@@ -677,6 +707,30 @@ local function RefreshAll()
     for unit in pairs(PORTRAITS) do Refresh(unit) end
 end
 
+-- Coalesce bursts of refresh requests (BBF re-layouts often call several functions).
+local refreshQueued = false
+local function QueueRefreshAll()
+    if refreshQueued then return end
+    refreshQueued = true
+    C_Timer.After(0.2, function()
+        refreshQueued = false
+        RefreshAll()
+    end)
+end
+
+-- BBF functions that rebuild its frame layout at runtime (font changes, name layout, bar
+-- text, no-portrait settings). Re-apply ours right after any of them runs.
+local BBF_RELAYOUT_FUNCS = {
+    "SetCustomFonts", "ApplyNameLayout", "ApplyNameLayouts", "UpdateNoPortraitText",
+    "UpdateUserTargetSettings", "noPortraitModes", "UpdatePlayerPixelBorderSize", "AllNameChanges",
+}
+local function HookBBF()
+    if not BBF then return end
+    for _, fn in ipairs(BBF_RELAYOUT_FUNCS) do
+        if type(BBF[fn]) == "function" then hooksecurefunc(BBF, fn, QueueRefreshAll) end
+    end
+end
+
 local function RefreshList(list)
     for _, unit in ipairs(list) do Refresh(unit) end
 end
@@ -721,6 +775,7 @@ f:SetScript("OnEvent", function(self, event, arg1)
         self:RegisterEvent("UNIT_CONNECTION")
         self:RegisterEvent("UI_SCALE_CHANGED")
         self:RegisterEvent("DISPLAY_SIZE_CHANGED")
+        HookBBF()
         if EditModeManagerFrame then
             hooksecurefunc(EditModeManagerFrame, "ExitEditMode", function() C_Timer.After(0.1, RefreshAll) end)
         end
@@ -760,14 +815,15 @@ local function PrintStatus()
     print(("  circle large: inset=%.2f cam=%.2f   small: inset=%.2f cam=%.2f"):format(L.inset, L.cam, S.inset, S.cam))
     print(("  square: cam=%.2f gap=%d alignmana=%s split=%.2f  extend: large=%d small=%d"):format(
         Q.cam, db.squareGap, tostring(db.alignMana), db.hpShare, db.stackExtra.large, db.stackExtra.small))
+    print(("  name rows: large=%d tot=%d party=%d"):format(db.nameRow.large, db.nameRow.tot, db.nameRow.party))
 end
 
 local function PrintHelp()
     print("  /bap toggle  |  /bap vignette  |  /bap zoom 0-1  |  /bap reset")
     print("  /bap style square|circle  |  /bap extend 0-30 [large|small]  |  /bap split 0.4-0.85")
-    print("  /bap namerow 0-24 [large|small]  |  /bap gap 0-20  |  /bap alignmana")
+    print("  /bap namerow 0-24 [large|tot|party]  |  /bap gap 0-20  |  /bap alignmana")
     print("  /bap inset 0.3-1.2 [large|small]  |  /bap cam 0.3-2 [large|small|square]")
-    print("  /bap unit player|target|focus|tot|party")
+    print("  /bap unit player|target|focus|tot|party  |  /bap refresh  |  /bap debug [unit]")
 end
 
 -- Set a per-size value; no size given = both.
@@ -775,6 +831,39 @@ local function SetSized(key, value, size, lo, hi)
     value = math.max(lo, math.min(hi, value))
     for name, s in pairs(db.sizes) do
         if not size or size == name then s[key] = value end
+    end
+end
+
+-- /bap debug [unit]: print the square layout's real geometry, for bug reports.
+local function Fmt(v) return type(v) == "number" and ("%.1f"):format(v) or tostring(v) end
+local function PointInfo(r)
+    if not r or not r.GetPoint then return "nil" end
+    local point, rel, relPoint, x, y = r:GetPoint(1)
+    local relName = rel and (rel.GetName and rel:GetName()) or (rel and "anon") or "nil"
+    return ("%s>%s.%s (%s,%s) n=%d shown=%s"):format(tostring(point), relName, tostring(relPoint),
+        Fmt(x), Fmt(y), r:GetNumPoints() or 0, tostring(r:IsShown()))
+end
+local function DebugUnit(unit)
+    local hpPos, manaPos, manaBar, hpBar = GetBarFrames(unit)
+    print(("|cff00c0ffBAP debug|r %s  style=%s  bbfNoPortrait=%s"):format(unit, db.style, tostring(BBFHidesPortrait(unit))))
+    if not hpPos then print("  no bars found"); return end
+    print(("  hpPos top=%s bottom=%s h=%s row=%s"):format(Fmt(hpPos:GetTop()), Fmt(hpPos:GetBottom()), Fmt(hpPos:GetHeight()), Fmt(hpPos.bapRow)))
+    print("  hpBar " .. PointInfo(hpBar) .. "  h=" .. Fmt(hpBar:GetHeight()) .. " base=" .. Fmt(hpBar.bapBaseH))
+    if manaPos then
+        print(("  manaPos top=%s bottom=%s h=%s"):format(Fmt(manaPos:GetTop()), Fmt(manaPos:GetBottom()), Fmt(manaPos:GetHeight())))
+        print("  manaBar " .. PointInfo(manaBar))
+    else print("  no mana row") end
+    local sq = squares[unit]
+    if sq then
+        print(("  box top=%s bottom=%s size=%s shown=%s"):format(Fmt(sq.box:GetTop()), Fmt(sq.box:GetBottom()), Fmt(sq.box:GetHeight()), tostring(sq.box:IsShown())))
+    end
+    local getter = NAME_TEXTS[unit]
+    if getter then
+        local name, level, bbfName = getter()
+        print("  name " .. PointInfo(name))
+        print("  bbfName " .. PointInfo(bbfName))
+        print("  level " .. PointInfo(level))
+        if level and level.GetTop then print(("  level top=%s  bbfName top=%s"):format(Fmt(level:GetTop()), Fmt(bbfName and bbfName:GetTop()))) end
     end
 end
 
@@ -786,7 +875,13 @@ SlashCmdList.BBFANIMPORTRAITS = function(msg)
     local val = tonumber(arg)
     if size and not db.sizes[size] then size = nil end
 
-    if cmd == "toggle" then
+    if cmd == "debug" then
+        DebugUnit(arg or "target")
+        return
+    elseif cmd == "refresh" then
+        RefreshAll()
+        return
+    elseif cmd == "toggle" then
         db.enabled = not db.enabled
     elseif cmd == "vignette" then
         db.vignette = not db.vignette
@@ -799,8 +894,9 @@ SlashCmdList.BBFANIMPORTRAITS = function(msg)
         end
     elseif cmd == "namerow" and val then
         val = math.max(0, math.min(24, val))
+        local group = args[3]
         for name in pairs(db.nameRow) do
-            if not size or size == name then db.nameRow[name] = val end
+            if not group or group == name then db.nameRow[name] = val end
         end
     elseif cmd == "split" and val then
         db.hpShare = math.max(0.4, math.min(0.85, val))

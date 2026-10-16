@@ -139,6 +139,9 @@ function wipe(t) for k in pairs(t) do t[k] = nil end return t end
 function print() end -- silence addon chat output
 SlashCmdList = {}
 
+-- BBF present at load (OptionalDeps), with a function the addon should hook
+BBF = { SetCustomFonts = function() end }
+
 -- Load the addon --------------------------------------------------------------
 local chunk = assert(loadfile("Core.lua"))
 chunk("BBF_AnimatedPortraits", {})
@@ -162,8 +165,10 @@ world.visible.party2 = false
 -- Saved settings from an older version (inset 0.82) must be upgraded
 BBFAnimatedPortraitsDB = { enabled = true, sizes = { large = { inset = 0.82, cam = 0.85 }, small = { inset = 0.82, cam = 0.85 } } }
 fire("ADDON_LOADED", "BBF_AnimatedPortraits")
+local bbfHooked = BBF.SetCustomFonts
+BBF = nil
 check("old saved inset migrated to new default", BBFAnimatedPortraitsDB.sizes.small.inset == 0.84)
-check("settings version recorded", BBFAnimatedPortraitsDB.version == 6)
+check("settings version recorded", BBFAnimatedPortraitsDB.version == 7)
 check("defaults applied", BBFAnimatedPortraitsDB.enabled == true and BBFAnimatedPortraitsDB.sizes.large.inset == 0.84)
 
 fire("PLAYER_ENTERING_WORLD")
@@ -333,9 +338,18 @@ TargetFrame.TargetFrameContent = { TargetFrameContentMain = {
     Name = targetName, LevelText = targetLevel,
 } }
 
+-- Target-of-target: health anchored at its bottom, mana anchored under the health bar
+local totHp = barWithPos(totContainer, { top = 60, h = 12, left = 200, right = 263 },
+    { "BOTTOMRIGHT", totContainer, "RIGHT", -6, -2.5 })
+local totMana = barWithPos(totContainer, { top = 47, h = 4, left = 200, right = 263 },
+    { "TOPLEFT", totHp, "BOTTOMLEFT", 0, -1 })
+totContainer.HealthBar, totContainer.ManaBar = totHp, totMana
+totContainer.Name = rowText()
+totContainer.bbfName = rowText()
+
 -- BBF's No Portrait mode moves the player's portrait container into a hidden frame
 playerContainer.shown = false
-BBF = { HasNoPortrait = function(u) return u == "player" or u == "target" end }
+BBF = { HasNoPortrait = function(u) return u == "player" or u == "target" or u == "targettarget" end }
 slash("style square")
 local function squareModel(unit, root)
     for _, m in ipairs(models) do
@@ -380,6 +394,33 @@ check("target box sits right of the health bar", tBox and tBox.anchor[1] == "TOP
 check("target mana bar shifted to line up with health (right edges)", targetMana.anchor[4] == 0)
 check("target mana bar moved down under the health bar", targetMana.anchor[5] == -10)
 
+-- ToT: stack 12 + 4 + 6 = 22, name row 9, bars 13 split 0.66: health 9, mana 4
+check("ToT health shortened below its name row (9)", totHp.h == 9)
+check("ToT mana gets the rest (4)", totMana.h == 4)
+check("ToT bottom-anchored health keeps its top edge, minus the row", totHp.anchor[5] == -2.5 - (9 - 12) - 9)
+check("ToT mana follows the health bar (no extra shift)", totMana.anchor[5] == -1)
+check("ToT name pinned left in its row", totContainer.bbfName.points[1][1] == "LEFT" and totContainer.bbfName.points[1][5] == 4.5)
+slash("namerow 0 tot")
+check("/bap namerow 0 tot gives ToT its full bars back", totHp.h == 15 and BBFAnimatedPortraitsDB.nameRow.large == 12)
+slash("namerow 9 tot")
+
+-- NPC with no power: Blizzard hides the mana bar, BBF keeps its empty slot visible
+targetMana.shown = false
+targetMana.BBFPositionFrame.parent = TargetFrame -- BBF reparents the slot to stay visible
+fire("PLAYER_TARGET_CHANGED")
+check("NPC: empty mana slot still laid out (8)", targetMana.BBFPositionFrame.h == 8)
+check("NPC: empty mana slot sits under the health bar", targetMana.anchor[5] == -10)
+check("NPC: box still spans health and the empty mana slot (39)", tBox.w == 39)
+-- BBF's "hide target mana": slot hidden too, health takes the whole stack
+targetMana.BBFPositionFrame.shown = false
+fire("PLAYER_TARGET_CHANGED")
+check("no mana slot: health fills the bars (25)", targetHp.h == 25)
+check("no mana slot: box spans name row + health (37)", tBox.w == 37)
+targetMana.shown, targetMana.BBFPositionFrame.shown = true, true
+targetMana.BBFPositionFrame.parent = targetMana
+fire("PLAYER_TARGET_CHANGED")
+check("mana back: normal 2:1 layout again", targetHp.h == 17 and tBox.w == 39)
+
 slash("extend 4 large")
 -- Stack 19 + 8 + 4 = 31, bars 19: health 13, mana 6, box 33
 check("/bap extend large resizes the stack", playerHp.h == 13 and playerMana.h == 6)
@@ -413,6 +454,18 @@ slash("reset")
 check("reset defaults to square style", BBFAnimatedPortraitsDB.style == "square")
 BBF = nil
 playerContainer.shown = true
+
+-- BBF re-layout hooks: a BBF font change triggers our re-layout
+-- Calling BBF's (hooked) font function queues our refresh
+local refreshed = 0
+for _, m in ipairs(models) do
+    local orig = m.SetUnit
+    m.SetUnit = function(self, u) refreshed = refreshed + 1; orig(self, u) end
+end
+bbfHooked()
+check("BBF font change triggers our re-layout", refreshed > 0)
+local okDebug, debugErr = pcall(SlashCmdList.BBFANIMPORTRAITS, "debug player"); if not okDebug then realPrint(debugErr) end
+check("/bap debug runs without errors", okDebug)
 
 -- Frame scale change (Edit Mode 125% -> 150%) re-frames the camera
 local setUnitCalls = 0
