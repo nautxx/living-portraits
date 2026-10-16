@@ -35,6 +35,7 @@ ln -s ~/GitHub/Main/bbf-animated-portraits \
 | `/bap cam 0.3-2 [large\|small]` | Camera distance (lower = closer, bigger face) |
 | `/bap vignette` | Toggle the crisp circle edge that hides the model's square edges |
 | `/bap style square\|circle` | Square box beside the bars (needs BBF No Portrait / Pixel Border) or round portrait |
+| `/bap bg 0-1` | Square: opacity of the dark background behind the model (default 0 = none) |
 | `/bap extend 0-30 [large\|small]` | Square: make the health+mana stack taller; the box grows with it and stays aligned (default large 10, small 6) |
 | `/bap namerow 0-24 [large\|tot\|party]` | Square: height of the name + level row inside the box, above the health bar (default large 12, tot 9, party 0) |
 | `/bap split 0.4-0.85` | Square: health bar's share of the stack (default 0.66, mana gets the rest) |

@@ -28,6 +28,7 @@ local defaults = {
     enabled  = true,
     style    = "square", -- "square" (needs BBF No Portrait / Pixel Border) or "circle"
     zoom     = 1,     -- 0..1, 1 = head & shoulders
+    squareBg    = 0,  -- square: opacity of the dark background behind the model (0 = none)
     squareGap   = 1,  -- px between the box and the bars (1 = their borders share one line)
     barSpacing  = 0,  -- px between health and mana (0 = their borders share one line)
     -- Square: px added to the health+mana stack; the box spans health top to mana bottom,
@@ -591,7 +592,8 @@ local function ActivateSquare(unit, unitFrame, hpPos, manaPos)
         sq.box:Hide()
         return false
     end
-    sq.bg:SetColorTexture(db.bgR, db.bgG, db.bgB, 1)
+    sq.bg:SetColorTexture(db.bgR, db.bgG, db.bgB, db.squareBg)
+    sq.bg:SetShown(db.squareBg > 0)
     sq.model:ClearModel()
     sq.model:SetUnit(unit)
     ApplyCamera(sq.model, "square")
@@ -844,14 +846,14 @@ local function PrintStatus()
         .. "  units=" .. (#on > 0 and table.concat(on, ",") or "none"))
     local Q = db.sizes.square
     print(("  circle large: inset=%.2f cam=%.2f   small: inset=%.2f cam=%.2f"):format(L.inset, L.cam, S.inset, S.cam))
-    print(("  square: cam=%.2f gap=%d alignmana=%s split=%.2f  extend: large=%d small=%d"):format(
-        Q.cam, db.squareGap, tostring(db.alignMana), db.hpShare, db.stackExtra.large, db.stackExtra.small))
+    print(("  square: cam=%.2f bg=%.2f gap=%d alignmana=%s split=%.2f  extend: large=%d small=%d"):format(
+        Q.cam, db.squareBg, db.squareGap, tostring(db.alignMana), db.hpShare, db.stackExtra.large, db.stackExtra.small))
     print(("  name rows: large=%d tot=%d party=%d"):format(db.nameRow.large, db.nameRow.tot, db.nameRow.party))
 end
 
 local function PrintHelp()
     print("  /bap toggle  |  /bap vignette  |  /bap zoom 0-1  |  /bap reset")
-    print("  /bap style square|circle  |  /bap extend 0-30 [large|small]  |  /bap split 0.4-0.85")
+    print("  /bap style square|circle  |  /bap bg 0-1  |  /bap extend 0-30 [large|small]  |  /bap split 0.4-0.85")
     print("  /bap namerow 0-24 [large|tot|party]  |  /bap gap 0-20  |  /bap barspacing 0-10  |  /bap alignmana")
     print("  /bap inset 0.3-1.2 [large|small]  |  /bap cam 0.3-2 [large|small|square]")
     print("  /bap unit player|target|focus|tot|party  |  /bap refresh  |  /bap debug [unit]")
@@ -933,6 +935,8 @@ SlashCmdList.BBFANIMPORTRAITS = function(msg)
         db.hpShare = math.max(0.4, math.min(0.85, val))
     elseif cmd == "alignmana" then
         db.alignMana = not db.alignMana
+    elseif cmd == "bg" and val then
+        db.squareBg = math.max(0, math.min(1, val))
     elseif cmd == "gap" and val then
         db.squareGap = math.max(0, math.min(20, val))
     elseif cmd == "barspacing" and val then

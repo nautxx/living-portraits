@@ -435,6 +435,14 @@ check("level stays pinned across a target switch", #targetLevel.points == 1 and 
 check("name stays pinned across a target switch", targetName.points[1][1] == "RIGHT" and targetName.points[1][2] ~= TargetFrame)
 check("bars keep their layout while there's no target", targetHp.h == 17)
 
+-- Square background: off by default, adjustable
+local sqBg = box and rawget(box, "textures") and box.textures[1]
+check("square background hidden by default", sqBg and not sqBg.shown)
+slash("bg 0.5")
+check("/bap bg shows the background", sqBg and sqBg.shown and BBFAnimatedPortraitsDB.squareBg == 0.5)
+slash("bg 0")
+check("/bap bg 0 hides it again", sqBg and not sqBg.shown)
+
 slash("extend 4 large")
 -- Stack 19 + 8 + 4 = 31, bars 19: health 13, mana 6, box 33
 check("/bap extend large resizes the stack", playerHp.h == 13 and playerMana.h == 6)
