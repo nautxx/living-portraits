@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0 (2026-10-16)
+
+### Features
+- **Border Color and Border Opacity** (Settings → Square style, or `/lp bordercolor RRGGBB` and `/lp borderalpha 0-1`): one color and opacity for the 1px lines around the portrait box and BetterBlizzFrames' health and mana bars. Lines that two pieces share are drawn once, so partial opacity looks even. Circle style and turning the addon off give BBF its black borders back.
+
+### Fixes
+- Below full border opacity, the bars and box close up instead of leaving a 1px slot that showed the world through between health and mana on some frames (like the target).
+
 ## 0.4.0 (2026-10-16)
 
 ### Features
