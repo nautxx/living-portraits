@@ -552,10 +552,11 @@ local function LayoutBars(unit, hpPos, manaPos, manaBar, hpBar)
     local toMana = hpPos:GetEffectiveScale() / manaBar:GetEffectiveScale()
     if db.alignMana then
         -- Same width as the health bar's border, edges lined up on the box side.
-        if manaPos ~= manaBar then manaPos:SetWidth(hpPos:GetWidth() * toMana) end
+        local hpW = Safe(hpPos:GetWidth())
+        if manaPos ~= manaBar and hpW then manaPos:SetWidth(hpW * toMana) end
         local a, b
-        if UNITS[unit].side == "RIGHT" then a, b = hpPos:GetRight(), manaPos:GetRight()
-        else a, b = hpPos:GetLeft(), manaPos:GetLeft() end
+        if UNITS[unit].side == "RIGHT" then a, b = Safe(hpPos:GetRight()), Safe(manaPos:GetRight())
+        else a, b = Safe(hpPos:GetLeft()), Safe(manaPos:GetLeft()) end
         if a and b and math.abs(a - b) >= 0.25 then
             manaBar.bapDX = manaBar.bapDX + (a - b) * toMana
         end
@@ -567,7 +568,7 @@ local function LayoutBars(unit, hpPos, manaPos, manaBar, hpBar)
 
     -- Put mana directly under health, measured after layout so it's exact whatever offsets
     -- BBF uses: the borders share one line (barSpacing 0). BBF's ToT leaves a gap otherwise.
-    local hpBottom, manaTop = hpPos:GetBottom(), manaPos:GetTop()
+    local hpBottom, manaTop = Safe(hpPos:GetBottom()), Safe(manaPos:GetTop())
     if hpBottom and manaTop then
         local shift = ((hpBottom - SharedLine() - db.barSpacing) - manaTop) * toMana
         if math.abs(shift) >= 0.25 then
@@ -888,7 +889,8 @@ end
 local function PlaceSquare(sq, hpPos, manaPos)
     local box = sq.box
     local bottomRef = manaPos or hpPos
-    local top, bottom = hpPos:GetTop(), bottomRef:GetBottom()
+    -- Positions can read back as secret (PvP, tainted): skip until they're readable again.
+    local top, bottom = Safe(hpPos:GetTop()), Safe(bottomRef:GetBottom())
     if not top or not bottom then return false end
     local row = hpPos.bapRow or 0 -- the name row sits above the health bar, inside the box
     local extra = row > 0 and BuildLine(sq.unit) or 0 -- the build line sits above the name row
@@ -1003,6 +1005,19 @@ local function CreateLayers(unit)
     return p
 end
 
+-- One pending retry per unit: each Refresh that failed used to start its own retry chain,
+-- and the ticker kept starting more while positions stayed secret (PvP), piling up into
+-- hundreds of refreshes per tick (mouse lag).
+local retryPending = {}
+local function RetryRefresh(unit)
+    if retryPending[unit] then return end
+    retryPending[unit] = true
+    C_Timer.After(0.5, function()
+        retryPending[unit] = nil
+        Refresh(unit)
+    end)
+end
+
 -- Square style, where BBF has removed the round portrait. Returns false when the bars
 -- haven't been laid out yet (retries shortly; the ticker keeps trying meanwhile).
 local function RefreshSquare(unit, unitFrame)
@@ -1015,7 +1030,7 @@ local function RefreshSquare(unit, unitFrame)
     LayoutBars(unit, hpPos, manaPos, manaBar, hpBar)
     if not InCombatLockdown() then LayoutNameRow(unit, hpPos) end
     if not ActivateSquare(unit, unitFrame, hpPos, manaPos) then
-        C_Timer.After(0.5, function() Refresh(unit) end) -- bars not laid out yet
+        RetryRefresh(unit) -- bars not laid out yet, or their positions are secret
         return false
     end
     ApplyBorders(unit, manaBar, hpBar)
@@ -1210,14 +1225,15 @@ local function GrowStep(_, elapsed)
     for bar, g in pairs(grows) do
         g.t = g.t + elapsed
         local p = math.min(1, g.t / duration)
-        if p >= 1 or not bar:IsVisible() then
+        local w = Safe(bar:GetWidth()) -- secret in PvP: stop and show Blizzard's fill
+        if p >= 1 or not w or not bar:IsVisible() then
             EndGrow(bar)
         else
             local e = 1 - (1 - p) ^ 3 -- ease-out cubic
             -- Follow the live bar: health/power changing mid-grow shows up right away.
             g.ov:SetMinMaxValues(bar:GetMinMaxValues())
             g.ov:SetValue(bar:GetValue())
-            g.ov:SetWidth(math.max(0.01, bar:GetWidth() * e))
+            g.ov:SetWidth(math.max(0.01, w * e))
             CopyBarStyle(g.ov, g.fill)
         end
     end
