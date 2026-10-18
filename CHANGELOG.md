@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.1 (2026-10-18)
 
 ### Changes
 - **New defaults** (Jason's own setup): bar text `350 (462)` with a shadow, elite icon on the portrait's bottom corner, elite/rare borders off, resting Zzz on the portrait's corner, class resource right-aligned at radius 5. Existing installs move to these only where a setting still has the old default; anything you changed stays.
