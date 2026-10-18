@@ -4,7 +4,7 @@ Live 3D animated portraits for World of Warcraft unit frames. Your character bre
 
 > Formerly **BBF Animated Portraits**. Upgrading? Delete the old `BBF_AnimatedPortraits` folder from AddOns (if it's still enabled, Living Portraits offers to disable it for you); settings start fresh under the new name. `/bap` still works as an alias for `/lp`.
 
-> **Status:** v0.7.1, public test release. Tested in game on the **WoW Forever beta**, with and without BetterBlizzFrames. See [CHANGELOG](CHANGELOG.md).
+> **Status:** v0.8.0, public test release. Tested in game on the **WoW Forever beta**, with and without BetterBlizzFrames. See [CHANGELOG](CHANGELOG.md).
 
 ## Best with BetterBlizzFrames
 
@@ -74,7 +74,7 @@ Open **Options → AddOns → LivingPortraits** (or type `/lp options`):
 - **Camera:** zoom (both styles). Face distance is on each style's page.
 - **Bar text:** Blizzard/BBF's own, or left-aligned `current (max)` / `current (percent)` that's always shown.
 - **Target bars:** the grow-from-empty animation (target and focus) and its speed.
-- **Box Style** (its own page): distance, talent builds, mirrored target text, tall portraits (player, target & focus, party), border color, thickness and opacity, elite/rare border and icon, plus box and bar sizing.
+- **Box Style** (its own page): distance, talent builds, mirrored target text, tall portraits (player, target & focus, party), border color, thickness and opacity, elite/rare border and icon, the resting icon spot, class resource (combo points under the bars: pixel circles, BetterBlizzFrames' art or none, with alignment, size and colors), plus box and bar sizing.
 - **Circle Style** (its own page): distance for large and small frames, background, round edge and model size.
 
 The box style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. The **Turn on** button under *BetterBlizzFrames* switches it on for every frame (your other BBF settings stay as they are) and reloads the UI; **Undo** puts back what you had.
@@ -122,6 +122,11 @@ The box style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. The 
 | `/lp alignmana` | Toggle lining up the mana bar with the health bar next to the box |
 | `/lp gap 0-20` | Space between the box and the bars (1 = borders share one line) |
 | `/lp barspacing 0-10` | Space between health and mana (0 = borders share one line) |
+| `/lp resticon name\|corner` | Where the player's resting Zzz goes: after the name (default) or over the portrait box's top-right corner |
+| `/lp resource pixel\|bbf\|none` | Class resource under the player's bars: pixel-bordered circles (default; gems for soul shards), BetterBlizzFrames' own combo point art, or hidden |
+| `/lp resourcealign left\|center\|right` | Line the class resource up with the mana bar's left edge, middle (default) or right edge |
+| `/lp resourcesize 2-16` | Circle radius inside the border (default 6); also scales BetterBlizzFrames' combo points |
+| `/lp resourcecolor [combo\|shards\|arcane\|holy] RRGGBB` | Filled color per resource (defaults: red, purple, blue, gold); no resource = your class's |
 
 **Circle style**
 
@@ -147,6 +152,7 @@ The box style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. The 
 - **Target-of-target placement:** when the target or focus layout would run into its target-of-target (for example with Edit Mode's small focus frame), the ToT frame is moved down just enough to clear it, and put back when you switch to circle style or turn the addon off.
 - **No layout changes in combat:** WoW blocks resizing unit-frame bars mid-fight, so box-style layout changes made in combat (settings, BBF re-layouts) are skipped and apply on the next refresh, such as a target change or `/lp refresh`. That's also why the build line stays reserved on NPC targets.
 - **BBF's spec / healer icon portraits** are covered by the 3D model while it shows.
+- **Class resource:** only rogue and druid combo points exist on WoW Forever as far as we can tell (Blizzard's own displays define nothing else), so warlock, mage and paladin show nothing until the game adds those resources.
 
 ## Feedback
 
