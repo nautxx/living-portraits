@@ -47,6 +47,10 @@ local defaults = {
     growBars    = true, -- new target: health and mana grow from empty to their value
     growTime    = 0.35, -- seconds the grow takes (/lp growtime)
     showBuild   = true, -- square: talent build ("2/8/0") on the player, target and focus (/lp build)
+    eliteBorder = true, -- square: target/focus box border gold for elite/boss, silver for rare (/lp eliteborder)
+    -- Square: where the target/focus elite icon goes: "top"/"bottom" (outer corner of the
+    -- portrait box), "center" (bottom center of the box), "level" (beside the level), "hidden".
+    eliteIcon   = "top",
     -- Square: the box grows upward by a line (the talent build's, above the name), per group:
     -- player, target (target + focus), party. ToT stays square (/lp tall [group]).
     tallPortraits = { player = true, target = true, party = false },
@@ -125,6 +129,11 @@ local function TargetUnit(frameName, offset)
         -- Elite/rare marker: BBF's No Portrait mode turns Blizzard's portrait dragon into a
         -- 15px icon (nameplate elite atlas).
         elite    = function(f) local c = f.TargetFrameContainer; return c and c.BossPortraitFrameTexture end,
+        -- "??" level skull: shown instead of the level text for units far above you.
+        skull    = function(f)
+            local c = f.TargetFrameContent and f.TargetFrameContent.TargetFrameContentContextual
+            return c and c.HighLevelTexture
+        end,
     }
 end
 
@@ -760,6 +769,54 @@ local function EliteIcon(unit)
     return UNITS[unit].elite and Lookup(unit, "elite")
 end
 local ELITE_ROOM = 17 -- icon (15) + gap
+local ELITE_MODES = { top = true, bottom = true, center = true, level = true, hidden = true }
+-- The name row only keeps room for the icon when it sits beside the level.
+local function EliteInRow(unit)
+    return EliteIcon(unit) and db.eliteIcon == "level"
+end
+
+-- "hidden" only fades the icon (alpha), and only while we hide it; BBF/Blizzard still
+-- show/hide and re-atlas it per target as usual.
+local function SetEliteHidden(elite, hide)
+    if hide and not elite.bapHidden then
+        elite.bapHidden = true
+        elite:SetAlpha(0)
+    elseif not hide and elite.bapHidden then
+        elite.bapHidden = nil
+        elite:SetAlpha(1)
+    end
+end
+local function RestoreElite(elite)
+    if not elite then return end
+    SetEliteHidden(elite, false)
+    RestorePoints(elite)
+end
+local SKULL_WIDTH = 11 -- BBF sizes the "??" skull 11x15
+
+-- The "??" skull replaces the level text (Blizzard hides one and shows the other per target),
+-- so the elite icon sits beside whichever is shown. Re-run when the skull shows or hides.
+local function PlaceElite(unit)
+    local elite = EliteIcon(unit)
+    local _, level = Lookup(unit, "texts")
+    local skull = UNITS[unit].skull and Lookup(unit, "skull")
+    if not (elite and level and elite.bapLayout) then return end -- only once the row is laid out
+    local mode = ELITE_MODES[db.eliteIcon] and db.eliteIcon or "top"
+    SetEliteHidden(elite, mode == "hidden")
+    local sq = squares[unit]
+    if (mode == "top" or mode == "bottom" or mode == "center") and sq then
+        -- Centered on the box's outer corner (or bottom middle), straddling the border.
+        local outer = UNITS[unit].side == "RIGHT" and "RIGHT" or "LEFT"
+        local spot = mode == "center" and "BOTTOM" or (mode == "top" and "TOP" or "BOTTOM") .. outer
+        PinText(elite, "CENTER", sq.box, spot, 0, 0)
+        return
+    end
+    local anchor = skull and skull:IsShown() and skull or level
+    if Mirrored(unit) then
+        PinText(elite, "LEFT", anchor, "RIGHT", 2, 0)
+    else
+        PinText(elite, "RIGHT", anchor, "LEFT", -2, 0)
+    end
+end
 
 local function LayoutNameRow(unit, hpPos)
     local name, level, bbfName = Lookup(unit, "texts")
@@ -767,9 +824,10 @@ local function LayoutNameRow(unit, hpPos)
     local row = hpPos.bapRow or 0
     local combat, rest = StatusIcons(unit)
     local elite = EliteIcon(unit)
+    local skull = UNITS[unit].skull and Lookup(unit, "skull")
     if row <= 0 then
         RestorePoints(name); RestorePoints(level); RestorePoints(bbfName)
-        RestorePoints(combat); RestorePoints(rest); RestorePoints(elite)
+        RestorePoints(combat); RestorePoints(rest); RestoreElite(elite); RestorePoints(skull)
         return
     end
     local y = row / 2
@@ -778,10 +836,11 @@ local function LayoutNameRow(unit, hpPos)
         local w = Safe(hpPos:GetWidth())
         if type(w) ~= "number" then return end
         local lw = level and level:IsShown() and TextWidth(level)
+            or skull and skull:IsShown() and SKULL_WIDTH
         local bt = buildTexts[unit]
         local bw = bt and bt.bapInline and bt:IsShown() and TextWidth(bt)
         return math.max(w - 2 - (lw and lw + 4 or 0) - (bw and bw + 6 or 0) - (combat and STATUS_ICON_ROOM or 0)
-            - (elite and ELITE_ROOM or 0), 10)
+            - (EliteInRow(unit) and ELITE_ROOM or 0), 10)
     end
     if Mirrored(unit) then
         PinText(name,    "RIGHT", hpPos, "TOPRIGHT", -1, y, "RIGHT", nameMax)
@@ -792,11 +851,22 @@ local function LayoutNameRow(unit, hpPos)
         PinText(bbfName, "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT", nameMax)
         PinText(level,   "RIGHT", hpPos, "TOPRIGHT", -1, y, "RIGHT")
     end
-    if elite and level then
+    -- BBF puts the skull where the portrait was (now our box's corner): it goes in the level's spot.
+    if skull then
         if Mirrored(unit) then
-            PinText(elite, "LEFT", level, "RIGHT", 2, 0)
+            PinText(skull, "LEFT", hpPos, "TOPLEFT", 1, y)
         else
-            PinText(elite, "RIGHT", level, "LEFT", -2, 0)
+            PinText(skull, "RIGHT", hpPos, "TOPRIGHT", -1, y)
+        end
+    end
+    if elite and level then
+        if not elite.bapLayout then PinText(elite, "CENTER", level, "CENTER", 0, 0) end -- placeholder
+        PlaceElite(unit)
+        if skull and not skull.bapEliteHook then
+            skull.bapEliteHook = true
+            hooksecurefunc(skull, "Show", function() PlaceElite(unit) end)
+            hooksecurefunc(skull, "Hide", function() PlaceElite(unit) end)
+            hooksecurefunc(skull, "SetShown", function() PlaceElite(unit) end)
         end
     end
     -- Status icons just after the name (whichever name text BBF shows), room reserved in nameMax.
@@ -833,13 +903,27 @@ local function ColorEdges(edges, r, g, b, a, hideA, hideB)
     end
 end
 
+-- Elite/rare on target and focus: the box border turns gold (elite, boss) or silver (rare,
+-- rare elite), like classic's dragon around the portrait. The small elite icon alone was too
+-- easy to miss. nil for normal units, other frames, or a secret classification.
+local ELITE_COLORS = {
+    elite = { 1, 0.78, 0.1 }, worldboss = { 1, 0.78, 0.1 },
+    rare = { 0.78, 0.8, 0.86 }, rareelite = { 0.78, 0.8, 0.86 },
+}
+local function EliteColor(unit)
+    if not (db.eliteBorder and UNITS[unit].elite and UnitExists(unit)) then return end
+    local c = ELITE_COLORS[Safe(UnitClassification(unit)) or ""]
+    if c then return c[1], c[2], c[3] end
+end
+
 local function ApplyBorders(unit, manaBar, hpBar)
     local r, g, b, a = BorderRGBA()
     local size = BorderSize()
     local sq = squares[unit]
     if sq then
         LayoutEdges(sq.edges, sq.box, size)
-        ColorEdges(sq.edges, r, g, b, a)
+        local er, eg, eb = EliteColor(unit)
+        if er then ColorEdges(sq.edges, er, eg, eb, a) else ColorEdges(sq.edges, r, g, b, a) end
     end
     LayoutEdges(hpBar and hpBar.BBFBlackBorder, hpBar and hpBar.BBFPositionFrame, size)
     LayoutEdges(manaBar and manaBar.BBFBlackBorder, manaBar and manaBar.BBFPositionFrame, size)
@@ -941,7 +1025,8 @@ local function RestoreBars(unit)
     hpPos.bapRow = nil
     local name, level, bbfName = Lookup(unit, "texts")
     RestorePoints(name); RestorePoints(level); RestorePoints(bbfName)
-    if UNITS[unit].elite then RestorePoints(Lookup(unit, "elite")) end
+    if UNITS[unit].elite then RestoreElite(Lookup(unit, "elite")) end
+    if UNITS[unit].skull then RestorePoints(Lookup(unit, "skull")) end
     if UNITS[unit].icons then
         local role, leader, guide, disconnect = Lookup(unit, "icons")
         RestorePoints(role); RestorePoints(leader); RestorePoints(guide); RestorePoints(disconnect)
@@ -1568,10 +1653,10 @@ local function UpdateBuildFor(unit)
         fs:SetPoint("LEFT", hpPos, "TOPLEFT", 1, row + extra / 2)
         fs:SetJustifyH("LEFT")
     elseif mirror then -- between the level (outer edge) and the name, past the elite icon
-        fs:SetPoint("LEFT", level, "RIGHT", 4 + (EliteIcon(unit) and ELITE_ROOM or 0), 0)
+        fs:SetPoint("LEFT", level, "RIGHT", 4 + (EliteInRow(unit) and ELITE_ROOM or 0), 0)
         fs:SetJustifyH("LEFT")
     else
-        fs:SetPoint("RIGHT", level, "LEFT", -4 - (EliteIcon(unit) and ELITE_ROOM or 0), 0)
+        fs:SetPoint("RIGHT", level, "LEFT", -4 - (EliteInRow(unit) and ELITE_ROOM or 0), 0)
         fs:SetJustifyH("RIGHT")
     end
     fs:SetText(text or "")
@@ -1940,6 +2025,17 @@ BuildOptions = function()
     Slider({ "borderAlpha" }, "Border Opacity", "Opacity of the 1px lines around the portrait box and the bars.", 0, 1, 0.05, FormatPercent)
     Check({ "alignMana" }, "Align mana bar", "Line the mana bar up with the health bar next to the box.")
     Check({ "showBuild" }, "Show Talent Build", "Points per talent tree (like 2/8/0) on the player, target and focus frames. Other players need to be within inspect range (about 30 yards); NPCs show nothing.")
+    Check({ "eliteBorder" }, "Elite Border", "Target and focus: the portrait border turns gold for elites and bosses, silver for rares.")
+    local eliteGet, eliteSet, eliteDefault = Path({ "eliteIcon" })
+    Settings.CreateDropdown(category, Register("eliteIcon", "Elite Icon", eliteDefault, eliteGet, eliteSet), function()
+        local c = Settings.CreateControlTextContainer()
+        c:Add("top", "Portrait top corner")
+        c:Add("bottom", "Portrait bottom corner")
+        c:Add("center", "Portrait bottom center")
+        c:Add("level", "Next to level")
+        c:Add("hidden", "Hidden")
+        return c:GetData()
+    end, "Target and focus: where the small elite/rare icon goes. The corners are on the portrait's outer side.")
     Check({ "mirrorTarget" }, "Mirror Target Text", "Target and focus: name and talent build next to the portrait, level on the outer edge, mirroring the player frame.")
     local TALL_TIP = "The portrait grows into a taller rectangle. Player, target and focus: with a line above the name for the talent build (off: square, build next to the level)."
     Check({ "tallPortraits", "player" }, "Tall portraits: player", TALL_TIP)
@@ -2026,7 +2122,7 @@ local function PrintHelp()
     print("  /lp options  |  /lp bbfsetup (turn on BBF's Pixel Border mode)  |  /lp bbfundo")
     print("  /lp toggle  |  /lp vignette  |  /lp zoom 0-1  |  /lp grow  |  /lp growtime 0.1-2  |  /lp reset")
     print("  /lp style square|circle  |  /lp bg 0-1  |  /lp extend 0-30 [large|small]  |  /lp split 0.4-0.85")
-    print("  /lp namerow 0-24 [large|tot|party]  |  /lp gap 0-20  |  /lp barspacing 0-10  |  /lp alignmana  |  /lp build  |  /lp tall [player|target|party]  |  /lp surname  |  /lp mirror")
+    print("  /lp namerow 0-24 [large|tot|party]  |  /lp gap 0-20  |  /lp barspacing 0-10  |  /lp alignmana  |  /lp build  |  /lp tall [player|target|party]  |  /lp surname  |  /lp mirror  |  /lp eliteborder  |  /lp eliteicon top|bottom|center|level|hidden")
     print("  /lp bordercolor RRGGBB  |  /lp borderalpha 0-1  |  /lp bordersize thin|medium|heavy")
     print("  /lp inset 0.3-1.2 [large|small]  |  /lp cam 0.3-2 [large|small|square]")
     print("  /lp unit player|target|focus|tot|party  |  /lp refresh  |  /lp debug [unit]")
@@ -2108,7 +2204,7 @@ end
 -- On/off settings: command -> db key.
 local SLASH_TOGGLES = {
     toggle = "enabled", vignette = "vignette", grow = "growBars", alignmana = "alignMana",
-    build = "showBuild", surname = "hideSurname", mirror = "mirrorTarget",
+    build = "showBuild", surname = "hideSurname", mirror = "mirrorTarget", eliteborder = "eliteBorder",
 }
 -- Number settings: command -> { db key, min, max }.
 local SLASH_NUMBERS = {
@@ -2147,6 +2243,13 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
         growDebug = not growDebug
         print("  grow debug " .. (growDebug and "on: change targets and watch chat." or "off."))
         return
+    elseif cmd == "eliteicon" then
+        local modes = { top = "top", bottom = "bottom", center = "center", level = "level", hidden = "hidden", off = "hidden" }
+        if not modes[arg or ""] then
+            print("  /lp eliteicon top|bottom|center|level|hidden  (now " .. tostring(db.eliteIcon) .. ")")
+            return
+        end
+        db.eliteIcon = modes[arg]
     elseif cmd == "tall" then
         -- No group: player + target/focus together (party has its own switch).
         local t = db.tallPortraits
