@@ -30,6 +30,8 @@ local UpdateBarTexts = ns.UpdateBarTexts
 local UpdateSurnames = ns.UpdateSurnames
 local UpdateClassResource = ns.UpdateClassResource
 local CheckResourceBar = ns.CheckResourceBar
+local UpdateEditMode = ns.UpdateEditMode
+local HookEditMode = ns.HookEditMode
 local CheckOldAddon = ns.CheckOldAddon
 
 -- unit -> GUID and visible/connected code at the last refresh, so the ticker only refreshes on change
@@ -105,12 +107,13 @@ local function Refresh(unit)
     MarkState(unit)
 end
 
--- Talent build, bar text, surnames and class resource, after every RefreshAll.
+-- Talent build, bar text, surnames, class resource and Edit Mode selection, after every RefreshAll.
 local function AfterRefreshAll()
     UpdateBuild()
     UpdateBarTexts()
     UpdateSurnames(true)
     UpdateClassResource()
+    UpdateEditMode()
 end
 
 local function RefreshAll()
@@ -178,6 +181,7 @@ f:SetScript("OnEvent", function(self, event, arg1)
         self:RegisterEvent("TRAIT_CONFIG_UPDATED")
         HookBBF()
         HookGrowUpdates()
+        HookEditMode()
         -- Edit Mode's small/large focus frame re-anchors the focus-target (see ClearTot).
         if FocusFrame and type(FocusFrame.SetSmallSize) == "function" then
             hooksecurefunc(FocusFrame, "SetSmallSize", QueueRefreshAll)

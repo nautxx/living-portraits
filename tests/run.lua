@@ -20,7 +20,8 @@ end
 
 -- Child keys the addon probes; real WoW returns nil when absent, the stub must too.
 local CHILD_KEYS = { "TargetFrameContent", "PlayerFrameContent", "HealthBarContainer",
-    "HealthBar", "ManaBar", "BBFPositionFrame", "BossPortraitFrameTexture", "HighLevelTexture" }
+    "HealthBar", "ManaBar", "BBFPositionFrame", "BossPortraitFrameTexture", "HighLevelTexture",
+    "Selection" }
 
 local function region(t)
     t = stubIndex(t or {})
@@ -93,7 +94,12 @@ local function newFrame(kind, parent, level)
     function f:GetLeft() return rawget(self, "left") end
     function f:GetRight() return rawget(self, "right") end
     function f:GetPoint() local a = rawget(self, "anchor"); if a then return unpack(a) end end
-    function f:SetPoint(point, rel, relPoint, x, y) self.anchor = { point, rel, relPoint, x, y } end
+    function f:SetPoint(point, rel, relPoint, x, y)
+        self.anchor = { point, rel, relPoint, x, y }
+        self.points = rawget(self, "points") or {}
+        table.insert(self.points, self.anchor)
+    end
+    function f:ClearAllPoints() self.points = {} end
     function f:IsVisible()
         local up = rawget(self, "parent")
         return self.shown and (not up or up:IsVisible())
@@ -590,6 +596,51 @@ slash("resticon top")
 check("unknown rest icon spot is ignored", LivingPortraitsDB.restIcon == "corner")
 slash("resticon name")
 check("/lp resticon name puts it back after the name", playerRestIcon.points[1][2] == bn)
+
+-- Edit Mode: BBF anchors the selection art around the health bar (and hooks it to stay); the
+-- Selection frame itself (snapping, guide lines, clicks) is sized to the bars + our box
+do
+    local hpPos = playerHp.BBFPositionFrame
+    PlayerFrame.healthbar = hpPos
+    PlayerFrame.left, PlayerFrame.right, PlayerFrame.top, PlayerFrame.bottom = 0, 232, 120, 40
+    box.left, box.right, box.top, box.bottom = 10, 48, 109, 71
+    local sel = newFrame("Frame", PlayerFrame, 9)
+    sel.bbfRepositioned = true
+    function sel:SetAllPoints(rel) self.points = { { "ALL", rel } } end
+    local BBF_SPOT = { TopLeftCorner = { "TOPLEFT", -16, 21 }, TopRightCorner = { "TOPRIGHT", 15, 21 },
+        BottomLeftCorner = { "BOTTOMLEFT", -16, -25 }, BottomRightCorner = { "BOTTOMRIGHT", 15, -25 } }
+    for key, spot in pairs(BBF_SPOT) do
+        local c = rowText()
+        hooksecurefunc(c, "SetPoint", function(self) -- BBF's FixSelectionHighlight hook
+            if self.changing then return end
+            self.changing = true
+            self:ClearAllPoints()
+            self:SetPoint(spot[1], hpPos, spot[1], spot[2], spot[3])
+            self.changing = false
+        end)
+        sel[key] = c
+    end
+    PlayerFrame.Selection = sel
+    slash("refresh")
+    local p1, p2 = sel.points[1], sel.points[2]
+    check("edit mode: Selection's TOPLEFT on the unit frame, 16 left of the box, 15 over it",
+        p1[1] == "TOPLEFT" and p1[2] == PlayerFrame and p1[4] == 10 - 16 - 0 and p1[5] == 109 + 15 - 120)
+    check("edit mode: Selection's BOTTOMRIGHT 15 right of / 25 under the health bar",
+        p2[1] == "BOTTOMRIGHT" and p2[4] == hpPos:GetRight() + 15 - 232 and p2[5] == hpPos:GetBottom() - 25 - 40)
+    local tl = sel.TopLeftCorner.points
+    check("edit mode: outline corners pinned to the Selection", #tl == 1 and tl[1][2] == sel and tl[1][4] == 0
+        and sel.BottomRightCorner.points[1][2] == sel)
+    sel.TopLeftCorner:SetPoint("TOPLEFT", hpPos, "TOPLEFT", -16, 21) -- BBF re-anchors it
+    check("edit mode: our anchor wins over BBF's re-anchor", sel.TopLeftCorner.points[1][2] == sel)
+    slash("style circle")
+    check("edit mode: circle style gives the Selection back its full frame", sel.points[1][1] == "ALL")
+    check("edit mode: circle style hands the corners back to BBF", sel.TopLeftCorner.points[1][2] == hpPos
+        and sel.BottomRightCorner.points[1][2] == hpPos)
+    slash("style square")
+    check("edit mode: box style again", sel.points[1][1] == "TOPLEFT" and sel.TopLeftCorner.points[1][2] == sel)
+    PlayerFrame.Selection = false
+    PlayerFrame.healthbar = nil
+end
 
 local function centered(fs, pos) local _, a = fs:GetCenter(); local _, b = pos:GetCenter(); return math.abs(a - b) < 0.5 end
 check("health text vertically centered in its bar", centered(playerHpHolder.LeftText, playerHp.BBFPositionFrame))
