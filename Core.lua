@@ -1863,7 +1863,13 @@ local function SetBarText(unit, bar, isHealth, value, valueMax)
     if not fs then
         local ref
         EachBlizzardText(bar, keys, function(t) ref = ref or (t.GetFont and t) end)
-        fs = ((ref and ref:GetParent()) or bar):CreateFontString(nil, "OVERLAY")
+        -- Own holder frame, a few levels above the bar. Copying the Blizzard text's parent put
+        -- ours under the bars on the target (that parent is TargetFrame itself, below its
+        -- bars; BBF only gives the player a text frame above them).
+        local holder = CreateFrame("Frame", nil, bar)
+        holder:SetAllPoints(bar)
+        bar.bapTextHolder = holder
+        fs = holder:CreateFontString(nil, "OVERLAY")
         fs:SetFontObject(TextStatusBarText)
         -- Centered on the visible bar: BBF's bordered frame, not the fill (1px taller and
         -- offset), same reference CenterBarTexts uses for Blizzard's texts.
@@ -1888,6 +1894,9 @@ local function SetBarText(unit, bar, isHealth, value, valueMax)
         end
         fs:SetTextColor(ref:GetTextColor())
     end
+    local holder = bar.bapTextHolder
+    local level = bar:GetFrameLevel() + 5 -- above the fill and BBF's border/background frames
+    if holder:GetFrameLevel() ~= level then holder:SetFrameLevel(level) end
     local cur = NumberText(value)
     if db.barText == "percent" then
         local curve = CurveConstants and CurveConstants.ScaleTo100
@@ -2423,6 +2432,16 @@ local function DebugUnit(unit)
         print(("  manaPos top=%s bottom=%s h=%s"):format(Fmt(manaPos:GetTop()), Fmt(manaPos:GetBottom()), Fmt(manaPos:GetHeight())))
         print("  manaBar " .. PointInfo(manaBar))
     else print("  no mana row") end
+    for _, b in ipairs({ { "hp", hpBar }, { "mana", manaBar } }) do
+        local bar, fs = b[2], b[2] and b[2].bapText
+        if bar then
+            local p = fs and fs:GetParent()
+            print(("  bartext %s: method=%s hook=%s fs=%s shown=%s visible=%s alpha=%s text=%s parent=%s(vis=%s)"):format(
+                b[1], T(bar.UpdateTextStringWithValues ~= nil), T(bar.bapTextHook), T(fs ~= nil),
+                T(fs and fs:IsShown()), T(fs and fs:IsVisible()), Fmt(fs and fs:GetAlpha()),
+                T(fs and Safe(fs:GetText())), T(p and (p:GetName() or "anon")), T(p and p:IsVisible())))
+        end
+    end
     local sq = squares[unit]
     if sq then
         print(("  box top=%s bottom=%s size=%s shown=%s"):format(Fmt(sq.box:GetTop()), Fmt(sq.box:GetBottom()), Fmt(sq.box:GetHeight()), tostring(sq.box:IsShown())))
