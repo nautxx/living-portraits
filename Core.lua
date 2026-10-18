@@ -52,7 +52,7 @@ local defaults = {
     rareColor   = "ffc7ccdb", -- square: rare/rare elite border color (/lp rarecolor)
     -- Square: where the target/focus elite icon goes: "top"/"bottom" (outer corner of the
     -- portrait box), "center" (bottom center of the box), "level" (beside the level), "hidden".
-    eliteIcon   = "top",
+    eliteIcon   = "center",
     -- Square: the box grows upward by a line (the talent build's, above the name), per group:
     -- player, target (target + focus), party. ToT stays square (/lp tall [group]).
     tallPortraits = { player = true, target = true, party = true },
@@ -79,7 +79,7 @@ local defaults = {
     sizes = {
         large  = { inset = 0.80, cam = 0.85 },
         small  = { inset = 0.80, cam = 0.85 },
-        square = { inset = 1,    cam = 0.9 },
+        square = { inset = 1,    cam = 0.85 },
     },
     units = {
         player = true,
@@ -839,7 +839,7 @@ local function PlaceElite(unit)
     local skull = SkullIcon(unit)
     local hpPos = GetBarFrames(unit)
     if not (elite and level and hpPos and (hpPos.bapRow or 0) > 0) then return end -- name row active only
-    local mode = ELITE_MODES[db.eliteIcon] and db.eliteIcon or "top"
+    local mode = ELITE_MODES[db.eliteIcon] and db.eliteIcon or "center"
     SetEliteHidden(elite, mode == "hidden")
     local sq = squares[unit]
     if (mode == "top" or mode == "bottom" or mode == "center") and sq then
