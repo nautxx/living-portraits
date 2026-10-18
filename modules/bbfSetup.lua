@@ -179,13 +179,10 @@ ns.DeepCopy = Copy
 ns.BaseProfile = BaseProfile
 ns.BBFLoaded = BBFLoaded
 ns.WriteBBF = WriteBBF
-ns.ShowReloadPopup = ShowReloadPopup
 ns.FinishBBFChange = FinishBBFChange
 ns.Confirm = Confirm
 ns.AskBBFSetup = AskBBFSetup
 ns.AskUndo = AskUndo
-ns.ApplyBBFSetup = ApplyBBFSetup
-ns.UndoBBFSetup = UndoBBFSetup
 -- First run --------------------------------------------------------------------
 -- A good starting point on a fresh install: BBF isn't set up, so the box style can't show (circle
 -- portraits). Once per account, offer a profile (modules/profiles.lua, loaded after this file):

@@ -205,7 +205,6 @@ SlashCmdList = {}
 
 -- Settings API (Options > AddOns): records what the addon registers
 local proxies, buttons, notified, openedCategory, popupShown = {}, {}, {}, nil, nil
-local elementInitializers = {}
 Settings = {
     RegisterVerticalLayoutCategory = function(name) return { name = name, GetID = function() return 42 end } end,
     RegisterProxySetting = function(_, var, _, name, default, get, set)
@@ -217,11 +216,6 @@ Settings = {
     CreateSlider = function() end,
     CreateDropdown = function(_, _, options) options() end,
     CreateColorSwatch = function() end,
-    CreateElementInitializer = function(template, data)
-        local i = { template = template, data = data }
-        elementInitializers[#elementInitializers + 1] = i
-        return i
-    end,
     CreateSliderOptions = function() return { SetLabelFormatter = function() end } end,
     CreateControlTextContainer = function()
         local c = { data = {} }

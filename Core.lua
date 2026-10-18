@@ -10,8 +10,7 @@
 -- what other files use. The .toc order is the load order: a file copies an earlier file's
 -- exports into locals at the top, and calls into later files go through `ns` at call time.
 
-local ADDON_NAME, ns = ...
-ns.ADDON_NAME = ADDON_NAME
+local _, ns = ...
 ns.PREFIX = "Living|cff00c0ffPortraits|r " -- chat prefix
 
 -- Bump when a default changes in a way saved settings should pick up (see MigrateSettings).
