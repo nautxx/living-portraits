@@ -47,6 +47,7 @@ local defaults = {
     tallPortraits = { player = true, target = true, party = true },
     hideSurname = true, -- first names only on our frames (/lp surname)
     mirrorTarget = true, -- square: target/focus text mirrors the player's (/lp mirror)
+    restIcon    = "name", -- square: resting Zzz after the player's name, or "corner" of the portrait box (/lp resticon)
     -- Health/mana text on player, target, focus and party bars, left-aligned and always shown:
     -- "default" (Blizzard/BBF's text), "max" = "350 (462)", "percent" = "350 (76%)" (/lp bartext).
     barText     = "default",

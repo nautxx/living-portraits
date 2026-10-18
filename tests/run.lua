@@ -499,10 +499,11 @@ local playerHp = withParent(barWithPos(PlayerFrame, { top = 100, h = 19, left = 
 playerHpHolder.HealthBar = playerHp
 local playerMana = barWithPos(PlayerFrame, { top = 79, h = 8, left = 50, right = 173 })
 playerMana.ManaBarText = barText(80)
+local playerCombatIcon, playerRestIcon = rowText(), rowText()
 PlayerFrame.PlayerFrameContent = { PlayerFrameContentMain = {
     HealthBarsContainer = playerHpHolder,
     ManaBarArea = { ManaBar = playerMana },
-} }
+}, PlayerFrameContentContextual = { AttackIcon = playerCombatIcon, PlayerRestLoop = playerRestIcon } }
 local targetName, targetLevel = rowText(), rowText()
 local targetHpHolder = {}
 local targetHp = withParent(barWithPos(TargetFrame, { top = 100, h = 19, left = 50, right = 173 }), targetHpHolder)
@@ -572,8 +573,23 @@ check("name box shrinks to its text, so a centered justify can't indent it", bn.
 bn:SetWidth(120) -- BBF re-sets its fixed width on SetText
 check("name box stays shrunk after BBF resets its width", bn.w == 25)
 bn:SetText(string.rep("x", 40))
-check("long name stops short of the level", bn.w == math.ceil(123 - 2 - (12 + 4)) + 1)
+check("long name stops short of the level and the status icon room", bn.w == math.ceil(123 - 2 - (12 + 4) - 18) + 1)
 check("player box sits left of the health bar", box and box.anchor[1] == "TOPRIGHT" and box.anchor[3] == "TOPLEFT")
+
+-- Resting Zzz: after the name by default, or on the portrait box's top-right corner
+local rp = playerRestIcon.points[1]
+check("rest icon after the name by default", LivingPortraitsDB.restIcon == "name" and rp[1] == "LEFT" and rp[2] == bn and rp[3] == "RIGHT")
+slash("resticon corner")
+rp = playerRestIcon.points[1]
+check("/lp resticon corner: centered on the box's top-right corner", #playerRestIcon.points == 1
+    and rp[1] == "CENTER" and rp[2] == box and rp[3] == "TOPRIGHT")
+check("combat icon stays after the name", playerCombatIcon.points[1][2] == bn)
+playerRestIcon:SetPoint("CENTER", PlayerFrame, "TOPLEFT", 40, -30) -- Blizzard/BBF re-place it
+check("rest icon stays on the corner", #playerRestIcon.points == 1 and playerRestIcon.points[1][2] == box)
+slash("resticon top")
+check("unknown rest icon spot is ignored", LivingPortraitsDB.restIcon == "corner")
+slash("resticon name")
+check("/lp resticon name puts it back after the name", playerRestIcon.points[1][2] == bn)
 
 local function centered(fs, pos) local _, a = fs:GetCenter(); local _, b = pos:GetCenter(); return math.abs(a - b) < 0.5 end
 check("health text vertically centered in its bar", centered(playerHpHolder.LeftText, playerHp.BBFPositionFrame))

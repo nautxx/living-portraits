@@ -108,6 +108,10 @@ local STATUS_ICON_ROOM = 18 -- icon (~15 px) + gaps, kept free after the name
 -- frame by 5 units per side. Tuned in game: 3 px closer to the name and 3 px up (the
 -- small "z" sat below the name's baseline).
 local REST_X, REST_Y = 2, 6
+-- db.restIcon: "name" (just after the name, above) or "corner" (centered on the portrait box's
+-- top-right corner, overlapping it). Jason likes both, so it's a setting.
+local REST_MODES = { name = true, corner = true }
+local REST_CORNER_X, REST_CORNER_Y = 0, 0 -- in the Zzz frame's 0.5 scale
 
 -- Target/focus elite icon. BBF centers it on the health bar's top-right corner, which is now
 -- where the name ends and our box begins (on the name and the model). It goes beside the
@@ -243,8 +247,12 @@ local function LayoutNameRow(unit, hpPos)
     end
     -- Status icons just after the name (whichever name text BBF shows), room reserved in nameMax.
     local shown = bbfName and bbfName:IsShown() and bbfName or name
-    if shown then
-        Pin(unit, combat, "LEFT", shown, "RIGHT", 3, 0)
+    if shown then Pin(unit, combat, "LEFT", shown, "RIGHT", 3, 0) end
+    -- The first layout runs before the box exists: the name's spot until the next one.
+    local sq = squares[unit]
+    if db.restIcon == "corner" and sq then
+        Pin(unit, rest, "CENTER", sq.box, "TOPRIGHT", REST_CORNER_X, REST_CORNER_Y)
+    elseif shown then
         Pin(unit, rest, "LEFT", shown, "RIGHT", REST_X, REST_Y)
     end
 end
@@ -288,5 +296,6 @@ ns.EliteInRow = EliteInRow
 ns.ELITE_ROOM = ELITE_ROOM
 ns.TintElite = TintElite
 ns.RestorePins = RestorePins
+ns.REST_MODES = REST_MODES
 ns.LayoutNameRow = LayoutNameRow
 ns.LayoutPartyIcons = LayoutPartyIcons

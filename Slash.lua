@@ -27,6 +27,7 @@ local ApplyBBFSetup = ns.ApplyBBFSetup
 local UndoBBFSetup = ns.UndoBBFSetup
 local OpenOptions = ns.OpenOptions
 local NotifyOptions = ns.NotifyOptions
+local REST_MODES = ns.REST_MODES
 
 -- Slash command: /lp --------------------------------------------------------
 
@@ -54,7 +55,7 @@ local function PrintHelp()
     print("  /lp toggle  |  /lp vignette  |  /lp zoom 0-1  |  /lp grow  |  /lp growtime 0.1-2  |  /lp reset")
     print("  /lp style box|circle  |  /lp bg 0-1  |  /lp extend 0-30 [large|small]  |  /lp split 0.4-0.85")
     print("  /lp namerow 0-24 [large|tot|party]  |  /lp gap 0-20  |  /lp barspacing 0-10  |  /lp alignmana  |  /lp build  |  /lp tall [player|target|party]  |  /lp surname  |  /lp mirror  |  /lp eliteborder  |  /lp eliteicon top|bottom|center|level|hidden")
-    print("  /lp elitecolor RRGGBB  |  /lp rarecolor RRGGBB  |  /lp bartext default|max|percent")
+    print("  /lp elitecolor RRGGBB  |  /lp rarecolor RRGGBB  |  /lp bartext default|max|percent  |  /lp resticon name|corner")
     print("  /lp bartextstyle outline_shadow|outline|shadow|thick|thick_shadow")
     print("  /lp bordercolor RRGGBB  |  /lp borderalpha 0-1  |  /lp bordersize thin|medium|heavy")
     print("  /lp resource pixel|bbf  |  /lp resourcealign left|center|right  |  /lp resourcesize 2-16")
@@ -225,6 +226,12 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
             return
         end
         db.resourceColors[key] = "ff" .. hex
+    elseif cmd == "resticon" then
+        if not REST_MODES[arg or ""] then
+            print("  /lp resticon name|corner  (now " .. tostring(db.restIcon) .. ")")
+            return
+        end
+        db.restIcon = arg
     elseif cmd == "eliteicon" then
         local modes = { top = "top", bottom = "bottom", center = "center", level = "level", hidden = "hidden", off = "hidden" }
         if not modes[arg or ""] then
