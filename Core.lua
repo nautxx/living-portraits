@@ -142,6 +142,12 @@ local function PartyUnit(i)
         portrait = function(f) return f.Portrait end,
         ring     = function(f) return RingTex(f.Texture) end,
         bars     = function(f) return f.HealthBarContainer and f.HealthBarContainer.HealthBar, f.ManaBar end,
+        icons    = function(f)
+            local o = f.PartyMemberOverlay
+            if o then return o.RoleIcon, o.LeaderIcon, o.GuideIcon, o.Disconnect end
+        end,
+        -- Not `texts`: party has no name row, and LayoutNameRow would hand those back to BBF.
+        partyName = function(f) return AsText(f.bbfName), AsText(f.Name) end,
     }
 end
 
@@ -219,6 +225,13 @@ end
 local function Safe(v)
     if IsSecret(v) then return nil end
     return v
+end
+
+local function AnySecret(...)
+    for i = 1, select("#", ...) do
+        if IsSecret((select(i, ...))) then return true end
+    end
+    return false
 end
 
 local function BBFHidesPortrait(unit)
@@ -900,6 +913,44 @@ local function RestoreBars(unit)
     hpPos.bapRow = nil
     local name, level, bbfName = Lookup(unit, "texts")
     RestorePoints(name); RestorePoints(level); RestorePoints(bbfName)
+    if UNITS[unit].icons then
+        local role, leader, guide, disconnect = Lookup(unit, "icons")
+        RestorePoints(role); RestorePoints(leader); RestorePoints(guide); RestorePoints(disconnect)
+        local bbfPartyName, partyName = Lookup(unit, "partyName")
+        RestorePoints(bbfPartyName); RestorePoints(partyName)
+    end
+end
+
+-- Party icons (square style). BBF's No Portrait mode put the role icon on our box's top-right
+-- corner (over the box/bar border) and the disconnect icon over box and bar. Role, then
+-- leader/guide, go just left of the name ("[role][crown] Name"); the disconnect icon goes in
+-- the middle of the box, which is empty for an offline member. BBF centers the name in a
+-- fixed-width box, so its box is fitted to the text first (kept at BBF's anchor and width
+-- cap), or "left of the name" would be the box's edge. Pinned, so BBF re-anchoring them
+-- (its party updates) doesn't move them back.
+local function PartyNameText(unit)
+    local bbfName, name = Lookup(unit, "partyName")
+    if bbfName and bbfName:IsShown() then return bbfName end
+    return name
+end
+
+local function LayoutPartyIcons(unit)
+    local sq = squares[unit]
+    if not (UNITS[unit].icons and sq) or InCombatLockdown() then return end
+    local role, leader, guide, disconnect = Lookup(unit, "icons")
+    PinText(disconnect, "CENTER", sq.box, "CENTER", 0, 0)
+    local name = PartyNameText(unit)
+    if not name then return end
+    if not name.bapLayout then -- fit the name's box to its text, in place
+        local point, rel, relPoint, x, y = name:GetPoint(1)
+        if not point or AnySecret(x, y) then return end
+        PinText(name, point, rel, relPoint, x, y, nil, function() return name.bapWidth end)
+    end
+    if role then
+        PinText(role, "RIGHT", name, "LEFT", -2, 0)
+        PinText(leader, "RIGHT", role, "LEFT", -1, 0)
+        PinText(guide, "RIGHT", role, "LEFT", -1, 0)
+    end
 end
 
 -- Anchor the box beside the bars; height spans the health bar top to the mana bar bottom.
@@ -1073,6 +1124,7 @@ local function RefreshSquare(unit, unitFrame, empty)
     end
     retryDelay[unit] = nil
     ApplyBorders(unit, manaBar, hpBar)
+    LayoutPartyIcons(unit)
     -- Once the resized bars have been laid out: re-measure the box, center the texts.
     C_Timer.After(0, function()
         PlaceSquare(squares[unit], hpPos, manaPos)
@@ -1225,12 +1277,6 @@ end
 -- The grow compares and does math on what the bar and its fill report (orientation, reverse
 -- fill, texture, draw layer, masks). In instances and PvP any of these can come back secret,
 -- and comparing a secret errors (tainted code). The grow is cosmetic: skip or end it then.
-local function AnySecret(...)
-    for i = 1, select("#", ...) do
-        if IsSecret((select(i, ...))) then return true end
-    end
-    return false
-end
 local function BarReadable(bar, fill)
     if AnySecret(bar:GetWidth(), bar.GetOrientation and bar:GetOrientation(),
         bar.GetReverseFill and bar:GetReverseFill()) then return false end
