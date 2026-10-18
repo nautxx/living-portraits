@@ -50,10 +50,18 @@ end
 -- SettingsListElementTemplate can't be used: it never runs its OnLoad, Init errored in game.)
 -- One row for now: wrap it when there are more profiles than fit.
 local PROFILE_BUTTON_GAP, PROFILE_BUTTON_WIDTH, STOCK_BUTTON_WIDTH = 6, 120, 200
+-- A profile's name, in its class's color when it has one (like BBF's streamer profiles).
+local function ProfileTitle(p)
+    local c = p.class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[p.class]
+    if not c then return p.name end
+    if type(c.colorStr) == "string" then return "|c" .. c.colorStr .. p.name .. "|r" end -- Blizzard's exact hex
+    return ("|cff%02x%02x%02x%s|r"):format(math.floor(c.r * 255 + 0.5), math.floor(c.g * 255 + 0.5),
+        math.floor(c.b * 255 + 0.5), p.name)
+end
 local PROFILE_NOTE = " Replaces your Living Portraits and BetterBlizzFrames settings; Undo puts them back. Reloads the UI."
 local function ProfileButtonsInitializer(say)
     local first = PROFILES[1]
-    local initializer = CreateSettingsButtonInitializer("", first.name, function() say(AskLoadProfile(first.name)) end,
+    local initializer = CreateSettingsButtonInitializer("", ProfileTitle(first), function() say(AskLoadProfile(first.name)) end,
         first.name .. ": " .. first.desc .. PROFILE_NOTE, true)
     local baseInit, baseReset = initializer.InitFrame, initializer.Resetter
     function initializer:InitFrame(frame)
@@ -68,7 +76,7 @@ local function ProfileButtonsInitializer(say)
                 b = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
                 b:SetScript("OnEnter", function(btn)
                     GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
-                    GameTooltip:SetText(btn.lpProfile.name, 1, 1, 1)
+                    GameTooltip:SetText(ProfileTitle(btn.lpProfile), 1, 1, 1)
                     GameTooltip:AddLine(btn.lpProfile.desc .. PROFILE_NOTE, nil, nil, nil, true)
                     GameTooltip:Show()
                 end)
@@ -77,7 +85,7 @@ local function ProfileButtonsInitializer(say)
                 frame.lpProfileButtons[i] = b
             end
             b.lpProfile = PROFILES[i]
-            b:SetText(PROFILES[i].name)
+            b:SetText(ProfileTitle(PROFILES[i]))
             b:SetSize(PROFILE_BUTTON_WIDTH, frame.Button:GetHeight())
             b:ClearAllPoints()
             b:SetPoint("LEFT", prev, "RIGHT", PROFILE_BUTTON_GAP, 0)

@@ -1223,6 +1223,7 @@ do
     BBF, BetterBlizzFramesDB = nil, nil
 end
 
+RAID_CLASS_COLORS = { PALADIN = { r = 0.957, g = 0.549, b = 0.729, colorStr = "fff48cba" } }
 -- Profiles: Living Portraits + BBF settings together. Built-in "Naut", export/import strings.
 do
     -- Stand-ins for BBF's LibSerialize/LibDeflate (registry-backed, reversible)
@@ -1254,7 +1255,8 @@ do
     local bdb = BetterBlizzFramesDB
     LivingPortraitsDB.zoom = 0.5
     LivingPortraitsDB.barText = "percent"
-    check("built-in profiles: Starter, then Naut", ns.PROFILES[1].name == "Starter" and ns.PROFILES[2].name == "Naut")
+    check("built-in profiles: Starter, Naut, BlizzFrames", ns.PROFILES[1].name == "Starter" and ns.PROFILES[2].name == "Naut"
+        and ns.PROFILES[3].name == "BlizzFrames")
     -- The profile row: Blizzard's button row with no name (its button sits where labels start),
     -- our own buttons to its right for further profiles
     table.insert(ns.PROFILES, { name = "Pal", desc = "Test." })
@@ -1267,9 +1269,10 @@ do
     rowInit:InitFrame(row)
     local pal = row.lpProfileButtons and row.lpProfileButtons[2]
     local nautBtn = row.lpProfileButtons and row.lpProfileButtons[2]
-    pal = row.lpProfileButtons and row.lpProfileButtons[3]
-    check("profile row: Naut's button next to Starter's", nautBtn and nautBtn.text == "Naut" and nautBtn.anchor[2] == row.Button)
-    check("profile row: more profiles get buttons to its right", pal and pal.text == "Pal" and pal.anchor[2] == nautBtn
+    pal = row.lpProfileButtons and row.lpProfileButtons[4]
+    check("profile row: Naut's button next to Starter's, its name in paladin pink", nautBtn
+        and nautBtn.text == "|cfff48cbaNaut|r" and nautBtn.anchor[2] == row.Button)
+    check("profile row: more profiles get buttons to its right", pal and pal.text == "Pal" and pal.anchor[2] == row.lpProfileButtons[3]
         and pal.anchor[1] == "LEFT" and pal.anchor[3] == "RIGHT" and pal.shown and row.Button.w == 120)
     rowInit:Resetter(row)
     check("profile row: recycled row gets the stock button back", not pal.shown and row.Button.w == 200)
@@ -1310,6 +1313,20 @@ do
         and LivingPortraitsDB.barText == "default")
     check("Starter: everything else at the defaults", LivingPortraitsDB.zoom == 1 and LivingPortraitsDB.barTextStyle == "shadow")
     buttons["Undo setup / profile"]()
+
+    -- BlizzFrames: BBF's Forever profile as it is, circle style with bigger large models
+    BBF.ProfileData[#BBF.ProfileData + 1] = { name = "Forever", importString = "!BBFf!BBF" }
+    local oldImport = BBF.OldImportProfile
+    BBF.OldImportProfile = function(str) if str == "!BBFf!BBF" then return { foreverKey = true, classicFrames = true } end return oldImport(str) end
+    ns.LoadProfile("blizzframes")
+    check("BlizzFrames: BBF's Forever profile, nothing on top", bdb.foreverKey == true and bdb.classicFrames == true
+        and bdb.noPortraitModes == nil and bdb.myOwnSetting == nil)
+    check("BlizzFrames: circle style, large models 0.9, the rest of sizes default", LivingPortraitsDB.style == "circle"
+        and LivingPortraitsDB.sizes.large.inset == 0.9 and LivingPortraitsDB.sizes.large.cam == 0.85
+        and LivingPortraitsDB.sizes.small.inset == 0.80 and LivingPortraitsDB.barText == "default")
+    buttons["Undo setup / profile"]()
+    BBF.OldImportProfile = oldImport
+    table.remove(BBF.ProfileData)
     check("Undo after a profile: Living Portraits settings back", LivingPortraitsDB.zoom == 0.5
         and LivingPortraitsDB.barText == "percent" and LivingPortraitsDB.lpBackup == nil)
     check("Undo after a profile: BBF settings back", bdb.myOwnSetting == "keep me" and bdb.unitFrameFont == "Morpheus"

@@ -80,7 +80,7 @@ ln -s ~/GitHub/Main/living-portraits \
 
 Open **Options → AddOns → LivingPortraits** (or type `/lp options`):
 
-- **Profiles** (its own page, first): load a whole look, Living Portraits and BetterBlizzFrames settings together, in one click. **Starter** is a clean starting point (square box portraits with the elite border, full names, no talent builds and Blizzard's bar text, on BBF's own Starter profile with Pixel Border mode), **Naut** is the author's full look (BBF's Bodify profile with Pixel Border mode and his fonts, textures, class colors, combo points and target-of-target placement). Export your own as a text string to copy to another PC or share it, and import one. Loading or importing replaces both addons' settings; **Undo** puts them back. The Pixel Border mode switch (below) is here too.
+- **Profiles** (its own page, first): load a whole look, Living Portraits and BetterBlizzFrames settings together, in one click. **Starter** is a clean starting point (square box portraits with the elite border, full names, no talent builds and Blizzard's bar text, on BBF's own Starter profile with Pixel Border mode), **Naut** is the author's full look (BBF's Bodify profile with Pixel Border mode and his fonts, textures, class colors, combo points and target-of-target placement), and **BlizzFrames** keeps the round portraits (BBF's Forever profile, its Classic Frames look, with bigger models). Export your own as a text string to copy to another PC or share it, and import one. Loading or importing replaces both addons' settings; **Undo** puts them back. The Pixel Border mode switch (below) is here too.
 - **General:** turn it on/off, hide surnames, box or circle style, and which frames get a living portrait.
 - **Camera:** zoom (both styles). Face distance is on each style's page.
 - **Bar text:** Blizzard/BBF's own, or left-aligned `current (max)` / `current (percent)` that's always shown.
@@ -110,7 +110,7 @@ The box style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. Load
 | `/lp bartextstyle outline_shadow\|outline\|shadow\|thick\|thick_shadow` | Outline and shadow of the left-aligned bar text (default: shadow); the font follows BetterBlizzFrames' unit frame number font |
 | `/lp grow` | Toggle the target's and focus's health and mana growing from empty when they change |
 | `/lp growtime 0.1-2` | How long the grow takes, in seconds (default 0.35) |
-| `/lp profile [name]` | Load a built-in profile (Living Portraits + BetterBlizzFrames settings; asks first): `starter` or `naut`. No name lists them |
+| `/lp profile [name]` | Load a built-in profile (Living Portraits + BetterBlizzFrames settings; asks first): `starter`, `naut` or `blizzframes`. No name lists them |
 | `/lp export` / `/lp import` | Show your profile as a string to copy / paste a profile string to load it (needs BetterBlizzFrames) |
 | `/lp bbfsetup` / `/lp bbfundo` | Turn on BBF's No Portrait + Pixel Border mode for every frame, keeping your other BBF settings / undo that or a profile load: put back your previous BBF and Living Portraits settings (reload to apply) |
 | `/lp reset` | Restore defaults |

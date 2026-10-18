@@ -18,7 +18,8 @@ local WriteBBF = ns.WriteBBF
 local ShowReloadPopup = ns.ShowReloadPopup
 
 -- One entry per built-in profile; the panel shows a button each, named after it, in this order.
--- To add one (a friend's config): name (button, /lp profile <name>), desc (tooltip), then either `string` = their export string (/lp export: both addons' settings,
+-- To add one (a friend's config): name (button, /lp profile <name>), desc (tooltip), class
+-- (optional, e.g. "PALADIN": the button name in that class's color), then either `string` = their export string (/lp export: both addons' settings,
 -- the easy way to add a friend), or lp = our settings that differ from the defaults (the rest are
 -- defaults), bbfBase = one of BBF's built-in profiles to start from (optional), bbf = BBF settings
 -- on top.
@@ -86,6 +87,7 @@ local PROFILES = {
     },
     {
         name = "Naut",
+        class = "PALADIN",
         desc = "Jason's setup: tall box portraits with bar text and class resource circles, and BetterBlizzFrames' Bodify profile with Pixel Border mode and his unit frame look (fonts, textures, class colors, combo points, target-of-target placement, less clutter).",
         lp = {
             barText = "max", barTextStyle = "shadow", eliteIcon = "bottom", eliteBorder = false,
@@ -93,6 +95,17 @@ local PROFILES = {
         },
         bbfBase = "Bodify",
         bbf = Merge(ns.BBF_MODE, NAUT_LOOK),
+    },
+    {
+        -- Saved from Jason's in-game setup (2026-10-18): BBF was exactly its Forever profile.
+        name = "BlizzFrames",
+        desc = "Living portraits in the round portrait, on BetterBlizzFrames' Forever profile (its Classic Frames look): bigger player, target and focus models, Blizzard's bar text, full names and no talent builds.",
+        lp = {
+            style = "circle", sizes = { large = { inset = 0.9 } }, barText = "default",
+            eliteBorder = true, tallPortraits = { player = false, target = false, party = false },
+            hideSurname = false, showBuild = false,
+        },
+        bbfBase = "Forever",
     },
 }
 

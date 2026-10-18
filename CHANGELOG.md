@@ -6,9 +6,10 @@
 - **Profiles:** load a whole look, Living Portraits and BetterBlizzFrames settings together, in one click, from the new **Profiles** page (Options → AddOns → Living Portraits → Profiles):
   - **Starter:** a clean starting point. Square box portraits with the gold/silver elite border, full names, no talent builds and Blizzard's bar text, on BetterBlizzFrames' own Starter profile with Pixel Border mode.
   - **Naut:** the author's full look. BetterBlizzFrames' Bodify profile with Pixel Border mode and his unit frame look: fonts, textures, class colors, combo points under the player frame, target-of-target placement, less clutter.
+  - **BlizzFrames:** living portraits in the round portrait, on BetterBlizzFrames' Forever profile (its Classic Frames look), with bigger player, target and focus models.
   - **Export / Import:** your setup as a text string, to copy to another PC or share.
 
-  Loading or importing replaces both addons' settings; **Undo** puts them back. `/lp profile starter|naut`, `/lp export`, `/lp import`.
+  Loading or importing replaces both addons' settings; **Undo** puts them back. `/lp profile starter|naut|blizzframes`, `/lp export`, `/lp import`.
 - **Welcome on a fresh install:** if BetterBlizzFrames isn't set up for the box portraits yet, Living Portraits offers Starter or Naut once (or recommends BetterBlizzFrames when it isn't installed).
 
 ### Changes
