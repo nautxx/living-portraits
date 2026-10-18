@@ -102,6 +102,7 @@ The box style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. The 
 | `/lp tall [player\|target\|party]` | Toggle tall portraits per group: a taller rectangle, with the build on its own line above the name on player, target and focus (off: square, build next to the level). On by default for all three. No group toggles player + target/focus together |
 | `/lp mirror` | Mirror the target and focus text to match the player frame: name and build next to the portrait, level on the outer edge |
 | `/lp bartext default\|max\|percent` | Health and mana text on the player, target, focus and party bars: Blizzard/BBF's own (default), or left-aligned and always shown as `350 (462)` (max) or `350 (76%)` (percent) |
+| `/lp bartextstyle outline_shadow\|outline\|shadow\|thick\|thick_shadow` | Outline and shadow of the left-aligned bar text (default: thin outline + shadow); the font follows BetterBlizzFrames' unit frame number font |
 | `/lp eliteborder` | Toggle the gold (elite, boss) and silver (rare) portrait and bar borders on the target and focus (on by default) |
 | `/lp elitecolor RRGGBB` / `/lp rarecolor RRGGBB` | Border colors for elite/boss (default `ffc71a`, gold) and rare (default `c7ccdb`, silver) targets |
 | `/lp eliteicon top\|bottom\|center\|level\|hidden` | Where the target/focus elite icon goes: the portrait's outer top corner, outer bottom corner, bottom center (default), next to the level, or hidden |

@@ -61,6 +61,8 @@ local defaults = {
     -- Health/mana text on player, target, focus and party bars, left-aligned and always shown:
     -- "default" (Blizzard/BBF's text), "max" = "350 (462)", "percent" = "350 (76%)" (/lp bartext).
     barText     = "default",
+    -- Its look: "outline_shadow" (default), "outline", "shadow", "thick", "thick_shadow" (/lp bartextstyle).
+    barTextStyle = "outline_shadow",
     borderColor = "ff000000", -- square: box + bar border color, ARGB hex like the settings swatch (/lp bordercolor)
     borderAlpha = 1,      -- square: border opacity (/lp borderalpha)
     borderSize  = 1,      -- square: border thickness: 1 thin, 2 medium, 3 heavy (/lp bordersize)
@@ -1823,6 +1825,11 @@ end
 -- SetFormattedText (both take secrets from addon code), never compared or used in math;
 -- percent comes from UnitHealthPercent/UnitPowerPercent with Blizzard's 0-100 curve.
 local BAR_TEXT_MODES = { default = true, max = true, percent = true }
+-- Text style -> font outline flag, drop shadow. The font face and size follow BBF.
+local BAR_TEXT_STYLES = {
+    outline_shadow = { "OUTLINE", true }, outline = { "OUTLINE", false }, shadow = { "", true },
+    thick = { "THICKOUTLINE", false }, thick_shadow = { "THICKOUTLINE", true },
+}
 local UpdateBarTexts
 do -- scoped: Core.lua's main chunk is near Lua's 200-local limit
 local BAR_TEXT_UNITS = { "player", "target", "focus", "party1", "party2", "party3", "party4" }
@@ -1864,14 +1871,20 @@ local function SetBarText(unit, bar, isHealth, value, valueMax)
         fs:SetJustifyH("LEFT")
         bar.bapText, bar.bapTextRef = fs, ref
     end
-    -- Follow Blizzard's/BBF's number font and color live (BBF: "Change unit frame number
-    -- font"), so changing it there changes ours too. Only re-set when it differs.
+    -- Follow Blizzard's/BBF's number font face, size and color live (BBF: "Change unit frame
+    -- number font"), so changing it there changes ours too; only re-set when it differs.
+    -- Outline and shadow are ours (db.barTextStyle): BBF's thin outline alone got lost on light
+    -- bars (white priest health).
     local ref = bar.bapTextRef
     if ref then
-        local font, size, flags = ref:GetFont()
-        if font and (font ~= fs.bapFont or size ~= fs.bapSize or flags ~= fs.bapFlags) then
-            fs:SetFont(font, size, flags)
-            fs.bapFont, fs.bapSize, fs.bapFlags = font, size, flags
+        local font, size = ref:GetFont()
+        local style = BAR_TEXT_STYLES[db.barTextStyle] and db.barTextStyle or "outline_shadow"
+        if font and (font ~= fs.bapFont or size ~= fs.bapSize or style ~= fs.bapStyle) then
+            local look = BAR_TEXT_STYLES[style]
+            fs:SetFont(font, size, look[1])
+            fs:SetShadowColor(0, 0, 0, look[2] and 1 or 0)
+            fs:SetShadowOffset(look[2] and 1 or 0, look[2] and -1 or 0)
+            fs.bapFont, fs.bapSize, fs.bapStyle = font, size, style
         end
         fs:SetTextColor(ref:GetTextColor())
     end
@@ -2171,6 +2184,19 @@ BuildOptions = function()
         c:Add("percent", "Current (percent), left")
         return c:GetData()
     end, "Health and mana text on the player, target, focus and party bars. The left-aligned formats are always shown, whatever the Status Text setting.")
+    local styleTextGet, styleTextSet, styleTextDefault = Path({ "barTextStyle" })
+    Settings.CreateDropdown(category, Register("barTextStyle", "Bar Text Style", styleTextDefault, styleTextGet, function(v)
+        styleTextSet(v)
+        UpdateBarTexts()
+    end), function()
+        local c = Settings.CreateControlTextContainer()
+        c:Add("outline_shadow", "Outline + shadow")
+        c:Add("outline", "Outline")
+        c:Add("shadow", "Shadow")
+        c:Add("thick", "Thick outline")
+        c:Add("thick_shadow", "Thick outline + shadow")
+        return c:GetData()
+    end, "Outline and shadow of the left-aligned bar text. The font itself follows BetterBlizzFrames' unit frame number font.")
 
     Header("Target bars")
     Check({ "growBars" }, "Grow on new target", "Health and mana grow from empty when you pick a new target or focus.")
@@ -2331,6 +2357,7 @@ local function PrintHelp()
     print("  /lp style box|circle  |  /lp bg 0-1  |  /lp extend 0-30 [large|small]  |  /lp split 0.4-0.85")
     print("  /lp namerow 0-24 [large|tot|party]  |  /lp gap 0-20  |  /lp barspacing 0-10  |  /lp alignmana  |  /lp build  |  /lp tall [player|target|party]  |  /lp surname  |  /lp mirror  |  /lp eliteborder  |  /lp eliteicon top|bottom|center|level|hidden")
     print("  /lp elitecolor RRGGBB  |  /lp rarecolor RRGGBB  |  /lp bartext default|max|percent")
+    print("  /lp bartextstyle outline_shadow|outline|shadow|thick|thick_shadow")
     print("  /lp bordercolor RRGGBB  |  /lp borderalpha 0-1  |  /lp bordersize thin|medium|heavy")
     print("  /lp inset 0.3-1.2 [large|small]  |  /lp cam 0.3-2 [large|small|box]")
     print("  /lp unit player|target|focus|tot|party  |  /lp refresh  |  /lp debug [unit]")
@@ -2452,6 +2479,13 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
         growDebug = not growDebug
         print("  grow debug " .. (growDebug and "on: change targets and watch chat." or "off."))
         return
+    elseif cmd == "bartextstyle" then
+        if not BAR_TEXT_STYLES[arg or ""] then
+            print("  /lp bartextstyle outline_shadow|outline|shadow|thick|thick_shadow  (now " .. tostring(db.barTextStyle) .. ")")
+            return
+        end
+        db.barTextStyle = arg
+        UpdateBarTexts()
     elseif cmd == "bartext" then
         if not BAR_TEXT_MODES[arg or ""] then
             print("  /lp bartext default|max|percent  (now " .. tostring(db.barText) .. ")")
