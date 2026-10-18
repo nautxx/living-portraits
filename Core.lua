@@ -1032,11 +1032,15 @@ end
 -- One pending retry per unit: each Refresh that failed used to start its own retry chain,
 -- and the ticker kept starting more while positions stayed secret (PvP), piling up into
 -- hundreds of refreshes per tick (mouse lag).
-local retryPending = {}
+-- Retries back off (0.5s, 1s, 2s, then every 4s) while positions stay secret, since each
+-- one re-lays out the bars and names; a successful placement resets the delay.
+local retryPending, retryDelay = {}, {}
 local function RetryRefresh(unit)
     if retryPending[unit] then return end
     retryPending[unit] = true
-    C_Timer.After(0.5, function()
+    local delay = retryDelay[unit] or 0.5
+    retryDelay[unit] = math.min(delay * 2, 4)
+    C_Timer.After(delay, function()
         retryPending[unit] = nil
         Refresh(unit)
     end)
@@ -1057,6 +1061,7 @@ local function RefreshSquare(unit, unitFrame)
         RetryRefresh(unit) -- bars not laid out yet, or their positions are secret
         return false
     end
+    retryDelay[unit] = nil
     ApplyBorders(unit, manaBar, hpBar)
     -- Once the resized bars have been laid out: re-measure the box, center the texts.
     C_Timer.After(0, function()
@@ -1107,6 +1112,7 @@ local function HideAll(p, unit)
 end
 
 Refresh = function(unit)
+    if StateChanged(unit) then retryDelay[unit] = nil end -- new unit: retry quickly again
     lastGuid[unit] = nil
     if not db then return end
     local p = layers[unit]
@@ -1126,7 +1132,7 @@ Refresh = function(unit)
         HideAll(p, unit)
     elseif BBFHidesPortrait(unit) then
         if p then Deactivate(p) end
-        if not RefreshSquare(unit, unitFrame) then return end
+        RefreshSquare(unit, unitFrame) -- on failure it schedules its own retry; the ticker leaves it alone
     else
         DeactivateSquare(unit)
         RestoreBars(unit)
