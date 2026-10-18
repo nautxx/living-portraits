@@ -1171,25 +1171,49 @@ do
     slash("reset")
 end
 
--- Turning on BBF's Pixel Border mode from our panel, with Undo
+-- Setting up BBF from our panel (Pixel Border mode + the unit frame look), with Undo
 do
     BBF = {}
-    BetterBlizzFramesDB = { noPortraitModes = false, noPortraitSkipTarget = true, unitFrameFont = 2002 }
+    BetterBlizzFramesDB = { noPortraitModes = false, noPortraitSkipTarget = true, unitFrameFont = "Friz Quadrata TT",
+        unitFrameFontColorRGB = { 1, 1, 1, 1 }, darkModeUi = true }
     local bdb = BetterBlizzFramesDB
-    buttons["Pixel Border mode"]()
+    local oldColor = bdb.unitFrameFontColorRGB
+    buttons["Set up BetterBlizzFrames"]()
     check("BBF setup turns on No Portrait + Pixel Border", bdb.noPortraitModes == true and bdb.noPortraitPixelBorder == true)
     check("BBF setup includes every frame", bdb.noPortraitSkipTarget == false and bdb.noPortraitPartyOnly == false)
-    check("BBF setup leaves other BBF settings alone", bdb.unitFrameFont == 2002)
+    check("BBF setup applies the unit frame look", bdb.unitFrameFont == "2002" and bdb.unitFrameValueFont == "Arial Narrow"
+        and bdb.unitFrameHealthbarTexture == "Solid" and bdb.classColorFrames == true and bdb.foreverComboPoints == true
+        and bdb.targetToTYPos == 17 and bdb.hideTargetReputationColor == true)
+    check("BBF setup copies color tables (never hands BBF ours)", bdb.unitFrameFontColorRGB[2] == 1
+        and bdb.unitFrameFontColorRGB ~= oldColor)
+    check("BBF setup leaves BBF's other settings alone", bdb.darkModeUi == true)
     check("BBF setup offers a reload", popupShown == "LIVING_PORTRAITS_RELOAD")
     local backup = LivingPortraitsDB.bbfBackup
-    check("BBF setup backs up the old values", backup and backup.noPortraitModes == false and backup.noPortraitSkipTarget == true)
-    buttons["Pixel Border mode"]()
-    check("applying twice keeps the original backup", LivingPortraitsDB.bbfBackup.noPortraitModes == false)
+    check("BBF setup backs up the old values", backup and backup.noPortraitModes == false and backup.noPortraitSkipTarget == true
+        and backup.unitFrameFont == "Friz Quadrata TT" and backup.unitFrameFontColorRGB[1] == 1)
+    popupShown = nil
+    buttons["Set up BetterBlizzFrames"]()
+    check("already set up: nothing to do", popupShown == nil)
+    bdb.unitFrameFont = "Morpheus" -- changed in BBF after the setup
+    buttons["Set up BetterBlizzFrames"]()
+    check("applying again keeps the original backup", LivingPortraitsDB.bbfBackup.unitFrameFont == "Friz Quadrata TT"
+        and bdb.unitFrameFont == "2002")
+    -- A backup from an older setup (mode only) gets the newer keys added, not overwritten
+    LivingPortraitsDB.bbfBackup = { noPortraitModes = false }
+    bdb.unitFrameFont, bdb.classColorFrames = "Skurri", nil
+    buttons["Set up BetterBlizzFrames"]()
+    check("older backup: newer keys added from the current values", LivingPortraitsDB.bbfBackup.noPortraitModes == false
+        and LivingPortraitsDB.bbfBackup.unitFrameFont == "Skurri" and LivingPortraitsDB.bbfBackup.classColorFrames == "<nil>")
+    LivingPortraitsDB.bbfBackup = nil
+    bdb.noPortraitModes, bdb.noPortraitSkipTarget, bdb.unitFrameFont, bdb.classColorFrames = false, true, "Friz Quadrata TT", nil
+    bdb.noPortraitPixelBorder = nil
+    buttons["Set up BetterBlizzFrames"]()
     slash("reset")
     check("/lp reset keeps BBF's Undo", LivingPortraitsDB.bbfBackup ~= nil)
-    buttons["Undo Pixel Border mode"]()
-    check("Undo restores BBF's values", bdb.noPortraitModes == false and bdb.noPortraitSkipTarget == true)
-    check("Undo removes keys BBF never had", bdb.noPortraitPixelBorder == nil and bdb.noPortraitPartyOnly == nil)
+    buttons["Undo BetterBlizzFrames setup"]()
+    check("Undo restores BBF's values", bdb.noPortraitModes == false and bdb.noPortraitSkipTarget == true
+        and bdb.unitFrameFont == "Friz Quadrata TT")
+    check("Undo removes keys BBF never had", bdb.noPortraitPixelBorder == nil and bdb.classColorFrames == nil)
     check("Undo clears the backup", LivingPortraitsDB.bbfBackup == nil)
     BBF, BetterBlizzFramesDB = nil, nil
 end

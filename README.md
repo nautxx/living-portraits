@@ -15,7 +15,7 @@ Living Portraits works on its own, but it's built to be used with [BetterBlizzFr
 | Style | Circle: the model inside Blizzard's round portrait | **Box**: a pixel-bordered box beside the bars (shown below), or circle if you keep BBF's portraits |
 | Bars and names | Blizzard's default layout | Resized so the box and bars line up, name and level in one row |
 | Extras | Bar text (`350 (462)` or `350 (76%)`) | Also talent builds, tall portraits, mirrored target text, gold/silver elite and rare borders, combo points under the bars and Edit Mode outlines that fit the portrait (box style only) |
-| Setup | Nothing to do | One click: **Turn on** in the settings panel (or `/lp bbfsetup`) switches on BBF's Pixel Border mode |
+| Setup | Nothing to do | One click: **Set up** in the settings panel (or `/lp bbfsetup`) sets BBF up for Living Portraits: Pixel Border mode plus the matching unit frame look |
 
 ## Screenshots
 
@@ -52,7 +52,7 @@ In Edit Mode, the box style's selection outline, snap guide lines and click area
 
 If the model can't load (unit out of range, not zoned in yet, or offline), the circle style steps aside and the normal portrait shows; the box style keeps an empty box so the bars stay lined up, and the model appears when they're back in range.
 
-It **never modifies BetterBlizzFrames' files**. BBF is an optional dependency: when installed, this addon loads after it and follows its layout. The only BBF settings it ever changes are the No Portrait + Pixel Border switches, and only when you click **Turn on** (with Undo).
+It **never modifies BetterBlizzFrames' files**. BBF is an optional dependency: when installed, this addon loads after it and follows its layout. It only changes BBF settings when you click **Set up** (with Undo), and only the unit frame ones listed under Settings.
 
 ## Install
 
@@ -85,7 +85,7 @@ Open **Options → AddOns → LivingPortraits** (or type `/lp options`):
 - **Box Style** (its own page): distance, talent builds, mirrored target text, tall portraits (player, target & focus, party), border color, thickness and opacity, elite/rare border and icon, the resting icon spot, class resource (combo points under the bars: pixel circles, BetterBlizzFrames' art or none, with alignment, size and colors), plus box and bar sizing.
 - **Circle Style** (its own page): distance for large and small frames, background, round edge and model size.
 
-The box style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. The **Turn on** button under *BetterBlizzFrames* switches it on for every frame (your other BBF settings stay as they are) and reloads the UI; **Undo** puts back what you had.
+The box style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. The **Set up** button under *BetterBlizzFrames* turns it on for every frame together with the unit frame look Living Portraits is designed for: fonts (2002 for names, Arial Narrow for numbers), Solid health and "Blizzard Retail Bar Crop 2" mana textures, class colors, combo points under the player frame, target-of-target placement, and less clutter around the portrait (reputation color, combat glow, hit text, PvP and leader icons). Everything else in BBF (auras, cast bars, action bars, chat, minimap, dark mode) stays as it is. It reloads the UI; **Undo** puts back what you had.
 
 ## Commands
 
@@ -107,7 +107,7 @@ The box style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. The 
 | `/lp bartextstyle outline_shadow\|outline\|shadow\|thick\|thick_shadow` | Outline and shadow of the left-aligned bar text (default: shadow); the font follows BetterBlizzFrames' unit frame number font |
 | `/lp grow` | Toggle the target's and focus's health and mana growing from empty when they change |
 | `/lp growtime 0.1-2` | How long the grow takes, in seconds (default 0.35) |
-| `/lp bbfsetup` / `/lp bbfundo` | Turn on BBF's No Portrait + Pixel Border mode for every frame / put back your previous BBF settings (reload to apply) |
+| `/lp bbfsetup` / `/lp bbfundo` | Set up BBF for Living Portraits (Pixel Border mode and the unit frame look, see Settings) / put back your previous BBF settings (reload to apply) |
 | `/lp reset` | Restore defaults |
 
 **Box style**

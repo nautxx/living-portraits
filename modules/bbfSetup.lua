@@ -4,13 +4,39 @@ ns.OnLoad(function(saved) db = saved end)
 local PREFIX = ns.PREFIX
 
 -- BBF setup -----------------------------------------------------------------
--- The square style needs BBF's No Portrait + Pixel Border mode on every frame. We write
--- those switches into BBF's saved settings (never its files) and keep a backup for Undo.
--- BBF reads them when it loads, so a UI reload applies them. The rest of BBF stays as is.
+-- One click sets BBF up the way Living Portraits is designed and tested (Jason's own BBF
+-- settings): the No Portrait + Pixel Border mode the box style needs, plus the unit frame look
+-- around it. We write these into BBF's saved settings (never its files) and keep a backup for
+-- Undo. BBF reads them when it loads, so a UI reload applies them. Everything else in BBF
+-- (auras, cast bars, action bars, chat, minimap, dark mode, raid frames) stays as it is.
+-- The fonts and textures named here all ship with BBF (its LibSharedMedia and media folder).
 local BBF_SETUP = {
+    -- Mode: no portraits, pixel borders, on every frame (BBF.HasNoPortrait checks these).
     noPortraitModes = true, noPortraitPixelBorder = true,
     noPortraitPartyOnly = false, -- otherwise only the party frames lose their portraits
     noPortraitSkipPlayer = false, noPortraitSkipTarget = false, noPortraitSkipFocus = false,
+    -- Fonts: names/levels, bar numbers, party.
+    changeUnitFrameFont = true, unitFrameFont = "2002", unitFrameFontSize = 8, unitFrameFontOutline = "",
+    unitFrameFontColor = false, unitFrameFontColorLvl = true, unitFrameFontColorRGB = { 0.953, 1, 0.969, 1 },
+    changeUnitFrameValueFont = true, unitFrameValueFont = "Arial Narrow", unitFrameValueFontSize = 7,
+    unitFrameValueFontOutline = "OUTLINE", unitFrameValueFontColor = true,
+    changePartyFrameFont = true, partyFrameFont = "2002",
+    -- Bar textures and the background behind them.
+    changeUnitFrameHealthbarTexture = true, unitFrameHealthbarTexture = "Solid",
+    changeUnitFrameManabarTexture = true, unitFrameManabarTexture = "Blizzard Retail Bar Crop 2",
+    changeUnitFrameManaBarTextureKeepFancy = true, addUnitFrameBgTexture = true,
+    -- Class colors on health bars and target names.
+    classColorFrames = true, classColorTargetNames = true,
+    -- Combo points under the player frame (our class resource moves and restyles that bar).
+    foreverComboPoints = true, instantComboPoints = true, enableLegacyComboPoints = false,
+    -- Target-of-target and focus-target placement that fits the taller box layout.
+    targetToTScale = 0.97, targetToTXPos = -1, targetToTYPos = 17,
+    focusToTScale = 0.97, focusToTXPos = -1, focusToTYPos = 17,
+    -- Clutter that would sit on or around the portrait box and name row.
+    hideTargetReputationColor = true, hideFocusReputationColor = true, hideCombatGlow = true,
+    hideHitIndicator = true, hidePetHitIndicator = true, hidePvpIcon = true, hidePrestigeBadge = true,
+    hideGroupIndicator = true, hidePlayerLeaderIcon = true, hideTargetLeaderIcon = true,
+    hideFocusLeaderIcon = true, hidePlayerGuideIcon = true,
 }
 local NO_VALUE = "<nil>" -- backup marker: BBF had never saved this key
 
@@ -26,11 +52,28 @@ local function ShowReloadPopup()
     StaticPopup_Show("LIVING_PORTRAITS_RELOAD")
 end
 
+-- Values can be tables (colors): compare them field by field, and never hand BBF our table.
+local function Same(a, b)
+    if type(a) ~= "table" or type(b) ~= "table" then return a == b end
+    for k, v in pairs(a) do if b[k] ~= v then return false end end
+    for k in pairs(b) do if a[k] == nil then return false end end
+    return true
+end
+
+local function Copy(v)
+    if type(v) ~= "table" then return v end
+    local t = {}
+    for k, x in pairs(v) do t[k] = x end
+    return t
+end
+
 local function BBFSetupOn()
     local bdb = BetterBlizzFramesDB
     if type(bdb) ~= "table" then return false end
     for k, v in pairs(BBF_SETUP) do
-        if (bdb[k] or false) ~= v then return false end
+        local cur = bdb[k]
+        if cur == nil and v == false then cur = false end
+        if not Same(cur, v) then return false end
     end
     return true
 end
@@ -39,17 +82,20 @@ end
 local function ApplyBBFSetup()
     local bdb = BetterBlizzFramesDB
     if not BBF or type(bdb) ~= "table" then return "BetterBlizzFrames isn't loaded." end
-    if BBFSetupOn() then return "BBF's Pixel Border mode is already on." end
-    if not db.bbfBackup then -- keep the first backup: it holds the settings from before us
-        local backup = {}
-        for k in pairs(BBF_SETUP) do
-            if bdb[k] == nil then backup[k] = NO_VALUE else backup[k] = bdb[k] end
+    if BBFSetupOn() then return "BetterBlizzFrames is already set up." end
+    -- Keep the first backup (it holds the settings from before us), adding keys a newer
+    -- preset touches that an older one didn't.
+    local backup = db.bbfBackup or {}
+    for k in pairs(BBF_SETUP) do
+        if backup[k] == nil then
+            if bdb[k] == nil then backup[k] = NO_VALUE else backup[k] = Copy(bdb[k]) end
         end
-        db.bbfBackup = backup
     end
-    for k, v in pairs(BBF_SETUP) do bdb[k] = v end
+    db.bbfBackup = backup
+    for k, v in pairs(BBF_SETUP) do bdb[k] = Copy(v) end
     ShowReloadPopup()
-    return "Turned on BBF's No Portrait + Pixel Border mode. Reload the UI to apply it."
+    return "Set up BetterBlizzFrames (Pixel Border mode, fonts, bar textures, class colors, combo points, "
+        .. "target-of-target, less clutter). Reload the UI to apply it."
 end
 
 local function UndoBBFSetup()
@@ -57,7 +103,7 @@ local function UndoBBFSetup()
     if not backup then return "Nothing to undo." end
     if type(bdb) ~= "table" then return "BetterBlizzFrames isn't loaded." end
     for k, v in pairs(backup) do
-        if v == NO_VALUE then bdb[k] = nil else bdb[k] = v end
+        if v == NO_VALUE then bdb[k] = nil else bdb[k] = Copy(v) end
     end
     db.bbfBackup = nil
     ShowReloadPopup()
