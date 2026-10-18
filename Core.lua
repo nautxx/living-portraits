@@ -954,8 +954,9 @@ end
 -- easy to miss. Both colors are settings. nil for normal units, other frames, or a secret
 -- classification.
 local ELITE_COLOR_KEY = { elite = "eliteColor", worldboss = "eliteColor", rare = "rareColor", rareelite = "rareColor" }
+-- The icon always takes it; the borders only with Elite Border on.
 local function EliteColor(unit)
-    if not (db.eliteBorder and UNITS[unit].elite and UnitExists(unit)) then return end
+    if not (UNITS[unit].elite and UnitExists(unit)) then return end
     local key = ELITE_COLOR_KEY[Safe(UnitClassification(unit)) or ""]
     if key then return HexRGB(db[key], defaults[key]) end
 end
@@ -963,7 +964,7 @@ end
 local function ApplyBorders(unit, manaBar, hpBar)
     local r, g, b, a = BorderRGBA()
     local er, eg, eb = EliteColor(unit) -- elite/rare: box and bars all get its color
-    if er then r, g, b = er, eg, eb end
+    if er and db.eliteBorder then r, g, b = er, eg, eb end
     local size = BorderSize()
     local sq = squares[unit]
     if sq then
@@ -977,7 +978,8 @@ local function ApplyBorders(unit, manaBar, hpBar)
     ColorEdges(hpBar and hpBar.BBFBlackBorder, r, g, b, a, boxSide)
     -- Mana's top edge is the same line as health's bottom edge (spacing 0).
     ColorEdges(manaBar and manaBar.BBFBlackBorder, r, g, b, a, boxSide, db.barSpacing == 0 and EDGE_TOP or nil)
-    -- The elite icon matches the border (here, not in the name row: this also runs in combat).
+    -- The elite icon takes the elite/rare color even with Elite Border off (here, not in the
+    -- name row: this also runs in combat).
     local elite = EliteIcon(unit)
     if elite then TintElite(elite, er, eg, eb) end
 end
@@ -2108,7 +2110,7 @@ BuildOptions = function()
     Check({ "mirrorTarget" }, "Mirror Target Text", "Target and focus: name and talent build next to the portrait, level on the outer edge, mirroring the player frame.")
 
     Header("Elite and rare")
-    Check({ "eliteBorder" }, "Elite Border", "Target and focus: the portrait and bar borders turn gold for elites and bosses, silver for rares.")
+    Check({ "eliteBorder" }, "Elite Border", "Target and focus: the portrait and bar borders turn gold for elites and bosses, silver for rares. The elite icon uses these colors either way.")
     for _, c in ipairs({ { "eliteColor", "Elite Border Color", "Border color for elite and boss targets." },
                          { "rareColor", "Rare Border Color", "Border color for rare and rare elite targets." } }) do
         local get, set, default = Path({ c[1] })
