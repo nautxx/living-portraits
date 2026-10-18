@@ -289,7 +289,6 @@ local function LayoutPartyIcons(unit)
     end
 end
 
-ns.Pin = Pin
 ns.Mirrored = Mirrored
 ns.EliteIcon = EliteIcon
 ns.EliteInRow = EliteInRow

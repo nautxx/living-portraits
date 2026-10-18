@@ -23,10 +23,14 @@ local RESOURCE_MODES = ns.RESOURCE_MODES
 local RESOURCE_ALIGN = ns.RESOURCE_ALIGN
 local Resource = ns.Resource
 local ResourceDebug = ns.ResourceDebug
-local ApplyBBFSetup = ns.ApplyBBFSetup
-local UndoBBFSetup = ns.UndoBBFSetup
+local AskBBFSetup = ns.AskBBFSetup
+local AskUndo = ns.AskUndo
 local OpenOptions = ns.OpenOptions
 local NotifyOptions = ns.NotifyOptions
+local PROFILES = ns.PROFILES
+local AskLoadProfile = ns.AskLoadProfile
+local ShowExport = ns.ShowExport
+local ShowImport = ns.ShowImport
 local REST_MODES = ns.REST_MODES
 
 -- Slash command: /lp --------------------------------------------------------
@@ -51,7 +55,8 @@ local function PrintStatus()
 end
 
 local function PrintHelp()
-    print("  /lp options  |  /lp bbfsetup (set up BetterBlizzFrames for Living Portraits)  |  /lp bbfundo")
+    print("  /lp options  |  /lp bbfsetup (turn on BetterBlizzFrames' Pixel Border mode)  |  /lp bbfundo (undo setup / profile)")
+    print("  /lp profile [name] (load a built-in profile: Living Portraits + BetterBlizzFrames)  |  /lp export  |  /lp import")
     print("  /lp toggle  |  /lp vignette  |  /lp zoom 0-1  |  /lp grow  |  /lp growtime 0.1-2  |  /lp reset")
     print("  /lp style box|circle  |  /lp bg 0-1  |  /lp extend 0-30 [large|small]  |  /lp split 0.4-0.85")
     print("  /lp namerow 0-24 [large|tot|party]  |  /lp gap 0-20  |  /lp barspacing 0-10  |  /lp alignmana  |  /lp build  |  /lp tall [player|target|party]  |  /lp surname  |  /lp mirror  |  /lp eliteborder  |  /lp eliteicon top|bottom|center|level|hidden")
@@ -176,10 +181,26 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
         if not OpenOptions() then print("  The settings panel isn't available on this client.") end
         return
     elseif cmd == "bbfsetup" then
-        print("  " .. ApplyBBFSetup())
+        local msg = AskBBFSetup()
+        if msg then print("  " .. msg) end
+        return
+    elseif cmd == "profile" then
+        if not arg then
+            local names = {}
+            for _, p in ipairs(PROFILES) do names[#names + 1] = p.name end
+            print("  Profiles: " .. table.concat(names, ", ") .. ". /lp profile <name> loads one.")
+            return
+        end
+        local msg = AskLoadProfile(arg)
+        if msg then print("  " .. msg) end
+        return
+    elseif cmd == "export" or cmd == "import" then
+        local msg = (cmd == "export" and ShowExport or ShowImport)()
+        if msg then print("  " .. msg) end
         return
     elseif cmd == "bbfundo" then
-        print("  " .. UndoBBFSetup())
+        local msg = AskUndo()
+        if msg then print("  " .. msg) end
         return
     elseif cmd == "debug" then
         DebugUnit(arg or "target")
@@ -289,9 +310,9 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
         local newValue = not db.units[list[1]]
         for _, unit in ipairs(list) do db.units[unit] = newValue end
     elseif cmd == "reset" then
-        local backup = db.bbfBackup -- keep BBF's Undo
+        local backup, full, lp, welcomed = db.bbfBackup, db.bbfBackupFull, db.lpBackup, db.welcomed -- keep Undo, no welcome again
         wipe(db); CopyDefaults(defaults, db); db.version = SETTINGS_VERSION
-        db.bbfBackup = backup
+        db.bbfBackup, db.bbfBackupFull, db.lpBackup, db.welcomed = backup, full, lp, welcomed
     else
         PrintStatus()
         PrintHelp()

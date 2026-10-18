@@ -10,8 +10,7 @@
 -- what other files use. The .toc order is the load order: a file copies an earlier file's
 -- exports into locals at the top, and calls into later files go through `ns` at call time.
 
-local ADDON_NAME, ns = ...
-ns.ADDON_NAME = ADDON_NAME
+local _, ns = ...
 ns.PREFIX = "Living|cff00c0ffPortraits|r " -- chat prefix
 
 -- Bump when a default changes in a way saved settings should pick up (see MigrateSettings).
@@ -130,7 +129,11 @@ local function AnySecret(...)
     return false
 end
 
+-- BBF's No Portrait mode is on for the unit. BBF.HasNoPortrait ignores Classic Frames, but with
+-- that on BBF draws its classic round portrait instead (it builds Classic Frames first).
 local function BBFHidesPortrait(unit)
+    local bdb = BetterBlizzFramesDB
+    if type(bdb) == "table" and bdb.classicFrames then return false end
     return BBF and BBF.HasNoPortrait and BBF.HasNoPortrait(unit)
 end
 

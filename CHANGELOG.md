@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.9.0 (2026-10-18)
+
+### Features
+- **Profiles:** load a whole look, Living Portraits and BetterBlizzFrames settings together, in one click, from the new **Profiles** page (Options → AddOns → Living Portraits → Profiles):
+  - **Starter:** a clean starting point. Square box portraits with the gold/silver elite border, full names, no talent builds and Blizzard's bar text, on BetterBlizzFrames' own Starter profile with Pixel Border mode.
+  - **Naut:** the author's full look. BetterBlizzFrames' Bodify profile with Pixel Border mode and his unit frame look: fonts, textures, class colors, combo points under the player frame, target-of-target placement, less clutter.
+  - **BlizzFrames:** living portraits in the round portrait, on BetterBlizzFrames' Forever profile (its Classic Frames look), with bigger player, target and focus models.
+  - **Export / Import:** your setup as a text string, to copy to another PC or share.
+
+  Loading or importing replaces both addons' settings; **Undo** puts them back. `/lp profile starter|naut|blizzframes`, `/lp export`, `/lp import`.
+- **Welcome on a fresh install:** if BetterBlizzFrames isn't set up for the box portraits yet, Living Portraits offers Starter or Naut once (or recommends BetterBlizzFrames when it isn't installed).
+
+- **One confirmation:** loading a profile, importing, turning on Pixel Border mode and Undo each ask once (what it overwrites, and that it reloads), then reload right away on Yes. Profile buttons show their names in class colors.
+- **Addon list icon** for Living Portraits.
+
+### Changes
+- **Pixel Border mode** (was *Set up BetterBlizzFrames*, on the Profiles page, `/lp bbfsetup`) only turns on the No Portrait + Pixel Border switches the box style needs and keeps the rest of your BetterBlizzFrames settings. The unit frame look moved into the Naut profile.
+- README: a Profiles section (what each profile sets up, the overwrite and Undo note, sharing) with screenshots of the BlizzFrames profile.
+
+### Fixes
+- **Pixel Border mode** now turns off BetterBlizzFrames' Classic Frames, which overrides it: with Classic Frames on, the frames stayed classic. Living Portraits also treats Classic Frames as "portraits shown" (circle style) instead of laying out boxes BetterBlizzFrames isn't drawing.
+
 ## 0.8.1 (2026-10-18)
 
 ### Changes

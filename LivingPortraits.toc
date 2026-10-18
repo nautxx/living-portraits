@@ -1,8 +1,9 @@
 ## Interface: 16001
 ## Title: Living|cff00c0ffPortraits|r
 ## Notes: Live 3D breathing portraits for Blizzard unit frames. A companion addon for BetterBlizzFrames.
+## IconTexture: Interface\ICONS\INV_Misc_NotePicture1b
 ## Author: Jason
-## Version: 0.8.1
+## Version: 0.9.0
 ## OptionalDeps: BetterBlizzFrames
 ## SavedVariables: LivingPortraitsDB
 
@@ -20,6 +21,7 @@ modules\classResource.lua
 modules\editMode.lua
 modules\surnames.lua
 modules\bbfSetup.lua
+modules\profiles.lua
 Refresh.lua
 Options.lua
 Slash.lua

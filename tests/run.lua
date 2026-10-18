@@ -59,6 +59,8 @@ local function newFrame(kind, parent, level)
     function f:SetScript(name, fn) self[name] = fn end
     function f:HookScript(name, fn) self.scripts[name] = fn end
     function f:SetUnit(unit) self.unit = unit end
+    function f:SetText(t) self.text = t end
+    function f:GetText() return rawget(self, "text") end
     function f:CreateTexture()
         local t = newTexture()
         local list = rawget(self, "textures") or {}
@@ -227,10 +229,24 @@ Settings = {
 }
 SettingsPanel = { GetLayout = function() return { AddInitializer = function() end } end }
 function CreateSettingsListSectionHeaderInitializer(text) return { header = text } end
-function CreateSettingsButtonInitializer(name, _, click) buttons[name] = click; return {} end
+local buttonInits = {}
+function CreateSettingsButtonInitializer(name, text, click)
+    buttons[name] = click
+    local i = { name = name, text = text, click = click }
+    function i:InitFrame(frame) frame.Button.text = self.text; frame.Button.shown = true end
+    function i:Resetter() end
+    buttonInits[name] = i
+    return i
+end
 MinimalSliderWithSteppersMixin = { Label = { Right = 2 } }
 StaticPopupDialogs = {}
-function StaticPopup_Show(which) popupShown = which end
+local popupData, popupText
+function StaticPopup_Show(which, text, _, data) popupShown = which; popupText = text; popupData = data end
+-- Press Yes on our confirmation dialog (the action runs and the UI reloads)
+local function confirmYes()
+    assert(popupShown == "LIVING_PORTRAITS_CONFIRM", "no confirmation dialog shown")
+    StaticPopupDialogs.LIVING_PORTRAITS_CONFIRM.OnAccept(nil, popupData)
+end
 local reloaded = false
 function ReloadUI() reloaded = true end
 -- Addon list: the pre-rename addon can be installed next to us
@@ -1171,50 +1187,250 @@ do
     slash("reset")
 end
 
--- Setting up BBF from our panel (Pixel Border mode + the unit frame look), with Undo
+-- Turning on BBF's Pixel Border mode from our panel: just the mode switches, the rest of BBF
+-- stays; a full backup for Undo
 do
-    BBF = {}
-    BetterBlizzFramesDB = { noPortraitModes = false, noPortraitSkipTarget = true, unitFrameFont = "Friz Quadrata TT",
-        unitFrameFontColorRGB = { 1, 1, 1, 1 }, darkModeUi = true }
+    BBF = { ProfileData = {}, OldImportProfile = function() error("no profile should be loaded") end }
+    BetterBlizzFramesDB = { noPortraitModes = false, noPortraitSkipTarget = true, classicFrames = true,
+        myOwnSetting = "keep me", unitFrameFont = "Morpheus", auraBlacklist = { [1] = { id = 1 } } }
     local bdb = BetterBlizzFramesDB
-    local oldColor = bdb.unitFrameFontColorRGB
-    buttons["Set up BetterBlizzFrames"]()
-    check("BBF setup turns on No Portrait + Pixel Border", bdb.noPortraitModes == true and bdb.noPortraitPixelBorder == true)
-    check("BBF setup includes every frame", bdb.noPortraitSkipTarget == false and bdb.noPortraitPartyOnly == false)
-    check("BBF setup applies the unit frame look", bdb.unitFrameFont == "2002" and bdb.unitFrameValueFont == "Arial Narrow"
-        and bdb.unitFrameHealthbarTexture == "Solid" and bdb.classColorFrames == true and bdb.foreverComboPoints == true
-        and bdb.targetToTYPos == 17 and bdb.hideTargetReputationColor == true)
-    check("BBF setup copies color tables (never hands BBF ours)", bdb.unitFrameFontColorRGB[2] == 1
-        and bdb.unitFrameFontColorRGB ~= oldColor)
-    check("BBF setup leaves BBF's other settings alone", bdb.darkModeUi == true)
-    check("BBF setup offers a reload", popupShown == "LIVING_PORTRAITS_RELOAD")
-    local backup = LivingPortraitsDB.bbfBackup
-    check("BBF setup backs up the old values", backup and backup.noPortraitModes == false and backup.noPortraitSkipTarget == true
-        and backup.unitFrameFont == "Friz Quadrata TT" and backup.unitFrameFontColorRGB[1] == 1)
-    popupShown = nil
-    buttons["Set up BetterBlizzFrames"]()
-    check("already set up: nothing to do", popupShown == nil)
-    bdb.unitFrameFont = "Morpheus" -- changed in BBF after the setup
-    buttons["Set up BetterBlizzFrames"]()
-    check("applying again keeps the original backup", LivingPortraitsDB.bbfBackup.unitFrameFont == "Friz Quadrata TT"
-        and bdb.unitFrameFont == "2002")
-    -- A backup from an older setup (mode only) gets the newer keys added, not overwritten
-    LivingPortraitsDB.bbfBackup = { noPortraitModes = false }
-    bdb.unitFrameFont, bdb.classColorFrames = "Skurri", nil
-    buttons["Set up BetterBlizzFrames"]()
-    check("older backup: newer keys added from the current values", LivingPortraitsDB.bbfBackup.noPortraitModes == false
-        and LivingPortraitsDB.bbfBackup.unitFrameFont == "Skurri" and LivingPortraitsDB.bbfBackup.classColorFrames == "<nil>")
-    LivingPortraitsDB.bbfBackup = nil
-    bdb.noPortraitModes, bdb.noPortraitSkipTarget, bdb.unitFrameFont, bdb.classColorFrames = false, true, "Friz Quadrata TT", nil
-    bdb.noPortraitPixelBorder = nil
-    buttons["Set up BetterBlizzFrames"]()
+    buttons["Pixel Border mode"](); confirmYes()
+    check("Pixel Border mode: No Portrait + Pixel Border on every frame", bdb.noPortraitModes == true
+        and bdb.noPortraitPixelBorder == true and bdb.noPortraitSkipTarget == false and bdb.noPortraitPartyOnly == false)
+    check("Pixel Border mode: Classic Frames off (it wins over No Portrait)", bdb.classicFrames == false)
+    check("Pixel Border mode: the rest of BBF stays", bdb.myOwnSetting == "keep me" and bdb.unitFrameFont == "Morpheus"
+        and bdb.auraBlacklist[1].id == 1 and bdb.foreverComboPoints == nil)
+    check("Pixel Border mode: asks first (it reloads), then reloads", reloaded == true
+        and popupText:find("reload the UI", 1, true) ~= nil)
+    reloaded = false
+    local full = LivingPortraitsDB.bbfBackupFull
+    check("Pixel Border mode: backs up all of BBF's settings", full and full.noPortraitModes == false
+        and full.classicFrames == true and full.auraBlacklist ~= bdb.auraBlacklist)
+    buttons["Pixel Border mode"](); confirmYes()
+    check("applying again keeps the original backup", LivingPortraitsDB.bbfBackupFull.noPortraitModes == false)
     slash("reset")
-    check("/lp reset keeps BBF's Undo", LivingPortraitsDB.bbfBackup ~= nil)
-    buttons["Undo BetterBlizzFrames setup"]()
-    check("Undo restores BBF's values", bdb.noPortraitModes == false and bdb.noPortraitSkipTarget == true
-        and bdb.unitFrameFont == "Friz Quadrata TT")
-    check("Undo removes keys BBF never had", bdb.noPortraitPixelBorder == nil and bdb.classColorFrames == nil)
-    check("Undo clears the backup", LivingPortraitsDB.bbfBackup == nil)
+    check("/lp reset keeps BBF's Undo", LivingPortraitsDB.bbfBackupFull ~= nil)
+    buttons["Undo setup / profile"](); confirmYes()
+    check("Undo puts BBF's settings back", bdb.noPortraitModes == false and bdb.classicFrames == true
+        and bdb.noPortraitPixelBorder == nil and bdb.myOwnSetting == "keep me")
+    check("Undo clears the backup", LivingPortraitsDB.bbfBackupFull == nil)
+
+    -- A v0.8.0/0.8.1 backup (only the keys that setup changed) is honored by Undo
+    LivingPortraitsDB.bbfBackup = { noPortraitModes = "<nil>", unitFrameFont = "Friz Quadrata TT" }
+    bdb.noPortraitModes, bdb.unitFrameFont = true, "2002"
+    buttons["Undo setup / profile"](); confirmYes()
+    check("Undo with an older backup restores those keys", bdb.noPortraitModes == nil and bdb.unitFrameFont == "Friz Quadrata TT"
+        and LivingPortraitsDB.bbfBackup == nil)
+    BBF, BetterBlizzFramesDB = nil, nil
+end
+
+RAID_CLASS_COLORS = { PALADIN = { r = 0.957, g = 0.549, b = 0.729, colorStr = "fff48cba" } }
+-- Profiles: Living Portraits + BBF settings together. Built-in "Naut", export/import strings.
+do
+    -- Stand-ins for BBF's LibSerialize/LibDeflate (registry-backed, reversible)
+    local stash = {}
+    local libs = {
+        LibDeflate = {
+            CompressDeflate = function(_, str) return "Z" .. str end,
+            DecompressDeflate = function(_, str) return str:sub(1, 1) == "Z" and str:sub(2) or nil end,
+            EncodeForPrint = function(_, str) return str end,
+            DecodeForPrint = function(_, str) return str end,
+        },
+        ["LibSerialize-BB"] = {
+            Serialize = function(_, t) stash[#stash + 1] = ns.DeepCopy(t); return "S" .. #stash end,
+            Deserialize = function(_, str)
+                local t = stash[tonumber(str:match("^S(%d+)$") or "")]
+                return t ~= nil, t and ns.DeepCopy(t)
+            end,
+        },
+    }
+    LibStub = { GetLibrary = function(_, name) return libs[name] end }
+    BBF = {
+        ProfileData = { { name = "Starter", importString = "!BBFs!BBF" }, { name = "Bodify", importString = "!BBFb!BBF" } },
+        OldImportProfile = function(str)
+            if str == "!BBFs!BBF" then return { starterKey = true, classicFrames = true } end
+            return { darkModeUi = true, classicFrames = true, unitFrameFont = "Friz Quadrata TT" }
+        end,
+    }
+    BetterBlizzFramesDB = { myOwnSetting = "keep me", unitFrameFont = "Morpheus" }
+    local bdb = BetterBlizzFramesDB
+    LivingPortraitsDB.zoom = 0.5
+    LivingPortraitsDB.barText = "percent"
+    check("built-in profiles: Starter, Naut, BlizzFrames", ns.PROFILES[1].name == "Starter" and ns.PROFILES[2].name == "Naut"
+        and ns.PROFILES[3].name == "BlizzFrames")
+    -- The profile row: Blizzard's button row with no name (its button sits where labels start),
+    -- our own buttons to its right for further profiles
+    table.insert(ns.PROFILES, { name = "Pal", desc = "Test." })
+    local rowInit = buttonInits[""]
+    check("profile row: Blizzard's button row with no name, the first profile on its button", rowInit
+        and rowInit.text == "Starter")
+    local row = newFrame("Frame", nil, 3)
+    row.Button = newFrame("Button", row, 4)
+    row.Button.h = 26
+    rowInit:InitFrame(row)
+    local pal = row.lpProfileButtons and row.lpProfileButtons[2]
+    local nautBtn = row.lpProfileButtons and row.lpProfileButtons[2]
+    pal = row.lpProfileButtons and row.lpProfileButtons[4]
+    check("profile row: Naut's button next to Starter's, its name in paladin pink", nautBtn
+        and nautBtn.text == "|cfff48cbaNaut|r" and nautBtn.anchor[2] == row.Button)
+    check("profile row: more profiles get buttons to its right", pal and pal.text == "Pal" and pal.anchor[2] == row.lpProfileButtons[3]
+        and pal.anchor[1] == "LEFT" and pal.anchor[3] == "RIGHT" and pal.shown and row.Button.w == 120)
+    rowInit:Resetter(row)
+    check("profile row: recycled row gets the stock button back", not pal.shown and row.Button.w == 200)
+    table.remove(ns.PROFILES)
+
+    -- Load: asks first, then replaces both addons' settings
+    popupShown = nil
+    row.lpProfileButtons[2].OnClick(row.lpProfileButtons[2])
+    check("loading a profile asks first", popupShown == "LIVING_PORTRAITS_CONFIRM" and LivingPortraitsDB.zoom == 0.5)
+    check("the confirmation names the profile (class colored), says it overwrites BBF's settings and reloads",
+        popupText:find("apply the |cfff48cbaNaut|r profile", 1, true) ~= nil
+        and popupText:find("overwrite all of your BetterBlizzFrames", 1, true) ~= nil
+        and popupText:find("reload the UI", 1, true) ~= nil and popupText:find("Are you sure", 1, true) ~= nil)
+    reloaded = false
+    confirmYes()
+    check("Naut: Living Portraits settings are Jason's (the rest defaults)", LivingPortraitsDB.barText == "max"
+        and LivingPortraitsDB.zoom == 1 and LivingPortraitsDB.resourceRadius == 5 and LivingPortraitsDB.version == ns.SETTINGS_VERSION)
+    check("Naut: BBF gets Bodify, then the setup on top", bdb.darkModeUi == true and bdb.classicFrames == false
+        and bdb.noPortraitPixelBorder == true and bdb.unitFrameFont == "2002" and bdb.myOwnSetting == nil)
+    check("Naut: the resting Zzz and glow stay on (Bodify hides them)", bdb.hidePlayerRestAnimation == false
+        and bdb.hidePlayerRestGlow == false)
+    check("Naut: Yes reloads right away (no second popup)", reloaded == true)
+    reloaded = false
+    check("Naut: both addons backed up", LivingPortraitsDB.lpBackup and LivingPortraitsDB.lpBackup.zoom == 0.5
+        and LivingPortraitsDB.lpBackup.barText == "percent" and LivingPortraitsDB.bbfBackupFull.myOwnSetting == "keep me")
+    check("Naut: the backups aren't inside the backup", LivingPortraitsDB.lpBackup.lpBackup == nil)
+    check("/lp profile lists and loads by name (asks first)", (function()
+        popupShown = nil; slash("profile naut"); return popupShown == "LIVING_PORTRAITS_CONFIRM" and popupText:find("Naut", 1, true) ~= nil
+    end)())
+
+    -- Undo: both addons back
+    buttons["Undo setup / profile"](); confirmYes()
+    check("Undo after Naut: BBF back", bdb.myOwnSetting == "keep me" and bdb.darkModeUi == nil)
+
+    -- Starter: BBF's own Starter profile with Pixel Border mode, our defaults
+    LivingPortraitsDB.zoom = 0.5
+    ns.LoadProfile("Starter")
+    check("Starter: BBF's Starter profile with Pixel Border mode on top", bdb.starterKey == true and bdb.classicFrames == false
+        and bdb.noPortraitPixelBorder == true and bdb.unitFrameFont == nil and bdb.myOwnSetting == nil)
+    check("Starter: bar texture switches on, realm names kept", bdb.changeUnitFrameHealthbarTexture == true
+        and bdb.changeUnitFrameManabarTexture == true and bdb.removeRealmNames == false and bdb.unitFrameHealthbarTexture == nil
+        and bdb.hidePlayerRestAnimation == false and bdb.hidePlayerRestGlow == false)
+    check("Starter: Jason's starter choices", LivingPortraitsDB.eliteBorder == true and LivingPortraitsDB.tallPortraits.player == false
+        and LivingPortraitsDB.tallPortraits.target == false and LivingPortraitsDB.tallPortraits.party == false
+        and LivingPortraitsDB.hideSurname == false and LivingPortraitsDB.showBuild == false
+        and LivingPortraitsDB.barText == "default")
+    check("Starter: everything else at the defaults", LivingPortraitsDB.zoom == 1 and LivingPortraitsDB.barTextStyle == "shadow")
+    buttons["Undo setup / profile"](); confirmYes()
+
+    -- BlizzFrames: BBF's Forever profile as it is, circle style with bigger large models
+    BBF.ProfileData[#BBF.ProfileData + 1] = { name = "Forever", importString = "!BBFf!BBF" }
+    local oldImport = BBF.OldImportProfile
+    BBF.OldImportProfile = function(str) if str == "!BBFf!BBF" then return { foreverKey = true, classicFrames = true } end return oldImport(str) end
+    ns.LoadProfile("blizzframes")
+    check("BlizzFrames: BBF's Forever profile, nothing on top", bdb.foreverKey == true and bdb.classicFrames == true
+        and bdb.noPortraitModes == nil and bdb.myOwnSetting == nil)
+    check("BlizzFrames: circle style, large models 0.9, the rest of sizes default", LivingPortraitsDB.style == "circle"
+        and LivingPortraitsDB.sizes.large.inset == 0.9 and LivingPortraitsDB.sizes.large.cam == 0.85
+        and LivingPortraitsDB.sizes.small.inset == 0.80 and LivingPortraitsDB.barText == "default")
+    buttons["Undo setup / profile"](); confirmYes()
+    BBF.OldImportProfile = oldImport
+    table.remove(BBF.ProfileData)
+    check("Undo after a profile: Living Portraits settings back", LivingPortraitsDB.zoom == 0.5
+        and LivingPortraitsDB.barText == "percent" and LivingPortraitsDB.lpBackup == nil)
+    check("Undo after a profile: BBF settings back", bdb.myOwnSetting == "keep me" and bdb.unitFrameFont == "Morpheus"
+        and bdb.darkModeUi == nil)
+
+    -- Export, then import on "another PC"
+    LivingPortraitsDB.resourceAlign = "left"
+    bdb.auraWhitelist = { [10060] = { id = 10060 } }
+    buttons["Export profile"]()
+    local str = popupData
+    check("export shows a profile string", popupShown == "LIVING_PORTRAITS_EXPORT" and type(str) == "string"
+        and str:sub(1, 5) == "!LP1!")
+    LivingPortraitsDB.resourceAlign, LivingPortraitsDB.zoom = "center", 1
+    BetterBlizzFramesDB = { other = true }
+    bdb = BetterBlizzFramesDB
+    check("import: a bad string is refused, nothing changes", ns.ImportProfile("hello"):find("isn't") ~= nil
+        and LivingPortraitsDB.resourceAlign == "center" and LivingPortraitsDB.lpBackup == nil)
+    check("import: a damaged string is refused", ns.ImportProfile("!LP1!S99") ~= nil and LivingPortraitsDB.lpBackup == nil)
+    buttons["Import profile"]()
+    check("import asks for the string", popupShown == "LIVING_PORTRAITS_IMPORT")
+    local fakeDialog = { GetEditBox = function() return { GetText = function() return "  " .. str .. "\n" end } end }
+    reloaded = false
+    StaticPopupDialogs.LIVING_PORTRAITS_IMPORT.OnAccept(fakeDialog)
+    check("import: accepting reloads right away", reloaded == true)
+    reloaded = false
+    check("import: Living Portraits settings from the string", LivingPortraitsDB.resourceAlign == "left"
+        and LivingPortraitsDB.zoom == 0.5)
+    check("import: BBF settings from the string", bdb.myOwnSetting == "keep me" and bdb.auraWhitelist[10060].id == 10060
+        and bdb.other == nil)
+    check("import: backups kept for Undo, never imported", LivingPortraitsDB.lpBackup.resourceAlign == "center"
+        and BetterBlizzFramesDB ~= nil and LivingPortraitsDB.bbfBackupFull.other == true)
+
+    -- Imported settings are checked against the defaults' shape
+    stash[#stash + 1] = { format = 1, lp = { zoom = "big", barText = "max", units = { player = false, bogus = true },
+        notASetting = 1, sizes = 5, lpBackup = { zoom = 0 } } }
+    ns.ImportProfile("!LP1!ZS" .. #stash)
+    check("import: wrong types and unknown keys dropped", LivingPortraitsDB.zoom == 1 and LivingPortraitsDB.barText == "max"
+        and LivingPortraitsDB.units.player == false and LivingPortraitsDB.units.bogus == nil
+        and LivingPortraitsDB.notASetting == nil and type(LivingPortraitsDB.sizes) == "table"
+        and LivingPortraitsDB.lpBackup.zoom ~= 0)
+
+    buttons["Undo setup / profile"](); confirmYes()
+
+    -- A built-in profile can be a friend's export string
+    LivingPortraitsDB.resourceAlign = "left"
+    local friendString = ns.ExportString()
+    LivingPortraitsDB.resourceAlign = "center"
+    table.insert(ns.PROFILES, { name = "Friend", desc = "Test.", string = friendString })
+    local msg = ns.LoadProfile("friend")
+    check("a profile stored as an export string loads like an import", LivingPortraitsDB.resourceAlign == "left"
+        and msg:find("Loaded the Friend profile", 1, true) ~= nil)
+    table.remove(ns.PROFILES)
+    buttons["Undo setup / profile"](); confirmYes()
+    LibStub, BBF, BetterBlizzFramesDB = nil, nil, nil
+    check("export without BBF's libraries says so", ns.ShowExport():find("BetterBlizzFrames") ~= nil)
+    LivingPortraitsDB.units.player = true
+end
+
+-- First run: a fresh install offers the BBF setup once (or recommends BBF without it)
+do
+    local printed = {}
+    local oldPrint = print
+    print = function(msg) printed[#printed + 1] = tostring(msg) end
+    BBF = { HasNoPortrait = function() return false end }
+    BetterBlizzFramesDB = {}
+    LivingPortraitsDB.welcomed = nil
+    popupShown = nil
+    ns.CheckFirstRun()
+    local welcome = StaticPopupDialogs.LIVING_PORTRAITS_WELCOME
+    check("first run: BBF not set up, Starter and Naut are offered", popupShown == "LIVING_PORTRAITS_WELCOME"
+        and welcome.button1 == "Starter" and welcome.button3 == "Naut" and welcome.OnAccept and welcome.OnAlt)
+    popupShown = nil
+    ns.CheckFirstRun()
+    check("first run: only once", popupShown == nil and LivingPortraitsDB.welcomed == true)
+    slash("reset")
+    check("first run: /lp reset doesn't bring the welcome back", LivingPortraitsDB.welcomed == true)
+    LivingPortraitsDB.welcomed = nil
+    BBF.HasNoPortrait = function() return true end
+    ns.CheckFirstRun()
+    check("first run: already set up, nothing shown", popupShown == nil and LivingPortraitsDB.welcomed == true)
+    LivingPortraitsDB.welcomed = nil
+    BBF, BetterBlizzFramesDB = nil, nil
+    ns.CheckFirstRun()
+    check("first run: no BBF, a chat note recommends it", popupShown == nil and printed[#printed]
+        and printed[#printed]:find("BetterBlizzFrames") ~= nil)
+    print = oldPrint
+end
+
+-- BBF's Classic Frames draws its round portrait even with No Portrait on: no box style then
+do
+    BBF = { HasNoPortrait = function() return true end }
+    BetterBlizzFramesDB = { classicFrames = true }
+    check("Classic Frames on: BBF shows portraits", not ns.BBFHidesPortrait("player"))
+    BetterBlizzFramesDB.classicFrames = false
+    check("Classic Frames off: No Portrait decides", ns.BBFHidesPortrait("player") == true)
     BBF, BetterBlizzFramesDB = nil, nil
 end
 

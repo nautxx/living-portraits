@@ -33,6 +33,7 @@ local CheckResourceBar = ns.CheckResourceBar
 local UpdateEditMode = ns.UpdateEditMode
 local HookEditMode = ns.HookEditMode
 local CheckOldAddon = ns.CheckOldAddon
+local CheckFirstRun = ns.CheckFirstRun
 
 -- unit -> GUID and visible/connected code at the last refresh, so the ticker only refreshes on change
 local lastGuid, lastCode = {}, {}
@@ -213,6 +214,7 @@ f:SetScript("OnEvent", function(self, event, arg1)
         C_Timer.After(0.5, RefreshAll)
         if not ns.ticker then ns.ticker = C_Timer.NewTicker(0.5, Tick) end
         CheckOldAddon()
+        C_Timer.After(3, CheckFirstRun) -- after BBF settles and the loading screen
     elseif event == "UI_SCALE_CHANGED" or event == "DISPLAY_SIZE_CHANGED" then
         C_Timer.After(0.1, RefreshAll)
     elseif event == "PLAYER_TARGET_CHANGED" then

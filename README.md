@@ -4,7 +4,7 @@ Live 3D animated portraits for World of Warcraft unit frames. Your character bre
 
 > Formerly **BBF Animated Portraits**. Upgrading? Delete the old `BBF_AnimatedPortraits` folder from AddOns (if it's still enabled, Living Portraits offers to disable it for you); settings start fresh under the new name. `/bap` still works as an alias for `/lp`.
 
-> **Status:** v0.8.1, public test release. Tested in game on the **WoW Forever beta**, with and without BetterBlizzFrames. See [CHANGELOG](CHANGELOG.md).
+> **Status:** v0.9.0, public test release. Tested in game on the **WoW Forever beta**, with and without BetterBlizzFrames. See [CHANGELOG](CHANGELOG.md).
 
 ## Best with BetterBlizzFrames
 
@@ -15,7 +15,7 @@ Living Portraits works on its own, but it's built to be used with [BetterBlizzFr
 | Style | Circle: the model inside Blizzard's round portrait | **Box**: a pixel-bordered box beside the bars (shown below), or circle if you keep BBF's portraits |
 | Bars and names | Blizzard's default layout | Resized so the box and bars line up, name and level in one row |
 | Extras | Bar text (`350 (462)` or `350 (76%)`) | Also talent builds, tall portraits, mirrored target text, gold/silver elite and rare borders, combo points under the bars and Edit Mode outlines that fit the portrait (box style only) |
-| Setup | Nothing to do | One click: **Set up** in the settings panel (or `/lp bbfsetup`) sets BBF up for Living Portraits: Pixel Border mode plus the matching unit frame look |
+| Setup | Nothing to do | One click: load a [profile](#profiles) (**Starter**, **Naut** or **BlizzFrames**; offered on first login), or just turn on BBF's Pixel Border mode |
 
 ## Screenshots
 
@@ -41,22 +41,44 @@ Combo points sit under the player's bars as pixel-bordered circles in the border
 
 <img src="docs/screenshots/class-resource.png" alt="Player frame with five empty pixel-bordered combo point circles under the mana bar, aligned right, and the resting Zzz after the name" width="328">
 
+## Profiles
+
+A profile is a whole look in one click: Living Portraits' settings **and** the BetterBlizzFrames settings that go with it. Pick one on the **Profiles** page (Options → AddOns → LivingPortraits → Profiles), from the welcome popup on your first login, or with `/lp profile <name>`.
+
+| Profile | Look | BetterBlizzFrames base |
+|---|---|---|
+| **Starter** | A clean starting point: square box portraits with the gold/silver elite border, full names, no talent builds, Blizzard's bar text | BBF's own Starter profile, with Pixel Border mode |
+| **Naut** | The author's setup: tall box portraits with talent builds and `350 (462)` bar text, class resource circles, and his fonts, textures, class colors and target-of-target placement (the screenshots above) | BBF's Bodify profile, with Pixel Border mode |
+| **BlizzFrames** | Living portraits in the round portrait, with bigger player, target and focus models | BBF's Forever profile (its Classic Frames look) |
+
+BlizzFrames, the round portraits on BetterBlizzFrames' Classic Frames:
+
+| Player | Target |
+|---|---|
+| <img src="docs/screenshots/blizzframes-player.png" alt="Player frame in the BlizzFrames profile: a living portrait in the round classic portrait with the bronze dragon ring, level 18 badge and the resting Zzz" width="330"> | <img src="docs/screenshots/blizzframes-target.png" alt="Target frame in the BlizzFrames profile: a living portrait in the round classic portrait with the bronze dragon ring, mirrored on the right" width="330"> |
+
+**Loading a profile overwrites all of your Living Portraits and BetterBlizzFrames settings** with the profile's, then reloads the UI. It asks first, and **Undo** on the Profiles page puts your previous settings back.
+
+**Share your own:** **Export** turns your Living Portraits and BetterBlizzFrames settings into a text string; **Import** loads one, on another PC or from a friend (needs BetterBlizzFrames).
+
 ## How it works
 
 Instead of the flat 2D portrait, a live `PlayerModel` of the unit is drawn in one of two styles:
 
 - **Box** (when BBF's No Portrait / Pixel Border mode is on): a box with BBF's 1px border beside the health and mana bars. The model fills it exactly.
-- **Circle** (Blizzard's frames, or BBF with portraits): the model sits behind the frame's border ring, with a soft round edge so its square corners don't show.
+- **Circle** (Blizzard's frames, or BBF with portraits, including its Classic Frames mode): the model sits behind the frame's border ring, with a soft round edge so its square corners don't show.
 
 In Edit Mode, the box style's selection outline, snap guide lines and click area cover the portrait box too, and the sample party frames shown while solo get empty boxes of the right size.
 
 If the model can't load (unit out of range, not zoned in yet, or offline), the circle style steps aside and the normal portrait shows; the box style keeps an empty box so the bars stay lined up, and the model appears when they're back in range.
 
-It **never modifies BetterBlizzFrames' files**. BBF is an optional dependency: when installed, this addon loads after it and follows its layout. It only changes BBF settings when you click **Set up** (with Undo), and only the unit frame ones listed under Settings.
+It **never modifies BetterBlizzFrames' files**. BBF is an optional dependency: when installed, this addon loads after it and follows its layout. It only changes BBF settings when you load a profile or turn on Pixel Border mode (both with Undo).
 
 ## Install
 
 Download `LivingPortraits-<version>.zip` from the repo's Releases and unzip it into `World of Warcraft/<client>/Interface/AddOns/`.
+
+On the first login, Living Portraits offers the **Starter** or **Naut** [profile](#profiles) to set BetterBlizzFrames up for the box portraits (one click, with Undo on the Profiles page). Everything else already starts at the recommended settings.
 
 Or from source:
 
@@ -78,6 +100,7 @@ ln -s ~/GitHub/Main/living-portraits \
 
 Open **Options → AddOns → LivingPortraits** (or type `/lp options`):
 
+- **Profiles** (its own page, first): Starter, Naut and BlizzFrames, Export and Import (see [Profiles](#profiles)), the Pixel Border mode switch and Undo.
 - **General:** turn it on/off, hide surnames, box or circle style, and which frames get a living portrait.
 - **Camera:** zoom (both styles). Face distance is on each style's page.
 - **Bar text:** Blizzard/BBF's own, or left-aligned `current (max)` / `current (percent)` that's always shown.
@@ -85,7 +108,7 @@ Open **Options → AddOns → LivingPortraits** (or type `/lp options`):
 - **Box Style** (its own page): distance, talent builds, mirrored target text, tall portraits (player, target & focus, party), border color, thickness and opacity, elite/rare border and icon, the resting icon spot, class resource (combo points under the bars: pixel circles, BetterBlizzFrames' art or none, with alignment, size and colors), plus box and bar sizing.
 - **Circle Style** (its own page): distance for large and small frames, background, round edge and model size.
 
-The box style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. The **Set up** button under *BetterBlizzFrames* turns it on for every frame together with the unit frame look Living Portraits is designed for: fonts (2002 for names, Arial Narrow for numbers), Solid health and "Blizzard Retail Bar Crop 2" mana textures, class colors, combo points under the player frame, target-of-target placement, and less clutter around the portrait (reputation color, combat glow, hit text, PvP and leader icons). Everything else in BBF (auras, cast bars, action bars, chat, minimap, dark mode) stays as it is. It reloads the UI; **Undo** puts back what you had.
+The box style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. Starter and Naut turn it on, or use **Pixel Border mode → Turn on** on the *Profiles* page, which only flips those switches (and Classic Frames off) and keeps the rest of your BBF settings. Both ask first and reload the UI; **Undo** puts your previous settings back.
 
 ## Commands
 
@@ -107,7 +130,9 @@ The box style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. The 
 | `/lp bartextstyle outline_shadow\|outline\|shadow\|thick\|thick_shadow` | Outline and shadow of the left-aligned bar text (default: shadow); the font follows BetterBlizzFrames' unit frame number font |
 | `/lp grow` | Toggle the target's and focus's health and mana growing from empty when they change |
 | `/lp growtime 0.1-2` | How long the grow takes, in seconds (default 0.35) |
-| `/lp bbfsetup` / `/lp bbfundo` | Set up BBF for Living Portraits (Pixel Border mode and the unit frame look, see Settings) / put back your previous BBF settings (reload to apply) |
+| `/lp profile [name]` | Load a built-in profile (Living Portraits + BetterBlizzFrames settings; asks first, then reloads): `starter`, `naut` or `blizzframes`. No name lists them |
+| `/lp export` / `/lp import` | Show your profile as a string to copy / paste a profile string to load it (reloads; needs BetterBlizzFrames) |
+| `/lp bbfsetup` / `/lp bbfundo` | Turn on BBF's No Portrait + Pixel Border mode for every frame, keeping your other BBF settings / undo that or a profile load: put back your previous BBF and Living Portraits settings (both ask first, then reload) |
 | `/lp reset` | Restore defaults |
 
 **Box style**
@@ -160,6 +185,7 @@ The box style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. The 
 - **Target-of-target placement:** when the target or focus layout would run into its target-of-target (for example with Edit Mode's small focus frame), the ToT frame is moved down just enough to clear it, and put back when you switch to circle style or turn the addon off.
 - **No layout changes in combat:** WoW blocks resizing unit-frame bars mid-fight, so box-style layout changes made in combat (settings, BBF re-layouts) are skipped and apply on the next refresh, such as a target change or `/lp refresh`. That's also why the build line stays reserved on NPC targets.
 - **BBF's spec / healer icon portraits** are covered by the 3D model while it shows.
+- **BBF's Classic Frames** (the BlizzFrames profile): the model draws above the classic ring and dragon art, so a little of its square can show past the ring on some characters.
 - **Class resource:** only rogue and druid combo points exist on WoW Forever as far as we can tell (Blizzard's own displays define nothing else), so warlock, mage and paladin show nothing until the game adds those resources.
 
 ## Feedback
