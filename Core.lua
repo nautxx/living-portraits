@@ -229,12 +229,18 @@ local function Clamp(v, lo, hi) return math.max(lo, math.min(hi, v)) end
 
 -- GUID ("none" without a unit) and a visibility/connection code. Two plain values, so the
 -- ticker can compare them without building a string per unit every tick.
+-- The code includes the unit frame's own visibility: a refresh while the frame was hidden
+-- (party frames during a dungeon's loading screen or as the group forms) only hides the
+-- square box, and nothing else re-runs it when the frame shows (the circle style has a
+-- container OnShow hook, the square style doesn't).
 local function UnitState(unit)
     if not UnitExists(unit) then return "none", 0 end
     local guid = Safe(UnitGUID(unit)) or "?"
     local hidden = Safe(UnitIsVisible(unit)) == false and 1 or 0
     local offline = Safe(UnitIsConnected(unit)) == false and 2 or 0
-    return guid, hidden + offline
+    local uf = UnitFrameOf(unit)
+    local frameHidden = not (uf and uf:IsVisible()) and 4 or 0
+    return guid, hidden + offline + frameHidden
 end
 
 local function MarkState(unit)
@@ -938,7 +944,9 @@ local function DeactivateSquare(unit)
     if squares[unit] then squares[unit].box:Hide() end
 end
 
-local function ActivateSquare(unit, unitFrame, hpPos, manaPos)
+-- empty: the unit is out of view range (not zoned in yet) or offline, so there's no model to
+-- load. The box still shows (border and backing, no model) so its bars line up with the rest.
+local function ActivateSquare(unit, unitFrame, hpPos, manaPos, empty)
     local sq = squares[unit] or CreateSquare(unit, unitFrame)
     if not PlaceSquare(sq, hpPos, manaPos) then
         sq.box:Hide()
@@ -948,6 +956,8 @@ local function ActivateSquare(unit, unitFrame, hpPos, manaPos)
     sq.bg:SetShown(db.squareBg > 0)
     sq.box:Show() -- show first, then load (see circle Refresh)
     sq.model:ClearModel()
+    sq.model:SetShown(not empty)
+    if empty then return true end
     sq.model:SetUnit(unit)
     ApplyCamera(sq.model, "square")
     return true
@@ -1048,7 +1058,7 @@ end
 
 -- Square style, where BBF has removed the round portrait. Returns false when the bars
 -- haven't been laid out yet (retries shortly; the ticker keeps trying meanwhile).
-local function RefreshSquare(unit, unitFrame)
+local function RefreshSquare(unit, unitFrame, empty)
     local hpPos, manaPos, manaBar, hpBar = GetBarFrames(unit)
     if db.style ~= "square" or not hpPos then
         DeactivateSquare(unit)
@@ -1057,7 +1067,7 @@ local function RefreshSquare(unit, unitFrame)
     end
     LayoutBars(unit, hpPos, manaPos, manaBar, hpBar)
     if not InCombatLockdown() then LayoutNameRow(unit, hpPos) end
-    if not ActivateSquare(unit, unitFrame, hpPos, manaPos) then
+    if not ActivateSquare(unit, unitFrame, hpPos, manaPos, empty) then
         RetryRefresh(unit) -- bars not laid out yet, or their positions are secret
         return false
     end
@@ -1125,14 +1135,18 @@ Refresh = function(unit)
         -- Turned off by the user: hand the bars, texts and names back to BBF.
         HideAll(p, unit)
         RestoreBars(unit)
-    elseif not unitFrame or not unitFrame:IsVisible() or not UnitExists(unit)
-       or Safe(UnitIsVisible(unit)) == false or Safe(UnitIsConnected(unit)) == false then
-        -- Transient (no target yet, frame hidden, out of range): just hide the portrait and
-        -- keep our bar/name layout pinned, so a target switch can't leave BBF's layout behind.
+    elseif not unitFrame or not unitFrame:IsVisible() or not UnitExists(unit) then
+        -- Transient (no target yet, frame hidden): just hide the portrait and keep our
+        -- bar/name layout pinned, so a target switch can't leave BBF's layout behind.
         HideAll(p, unit)
     elseif BBFHidesPortrait(unit) then
         if p then Deactivate(p) end
-        RefreshSquare(unit, unitFrame) -- on failure it schedules its own retry; the ticker leaves it alone
+        -- Out of view range (not zoned in yet) or offline: no model, but the same layout as
+        -- everyone else, or this frame's bars wouldn't line up with the others.
+        local away = Safe(UnitIsVisible(unit)) == false or Safe(UnitIsConnected(unit)) == false
+        RefreshSquare(unit, unitFrame, away) -- on failure it schedules its own retry; the ticker leaves it alone
+    elseif Safe(UnitIsVisible(unit)) == false or Safe(UnitIsConnected(unit)) == false then
+        HideAll(p, unit) -- circle: Blizzard's 2D portrait stands in until they're in range
     else
         DeactivateSquare(unit)
         RestoreBars(unit)
