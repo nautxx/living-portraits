@@ -66,6 +66,7 @@ Open **Options → AddOns → LivingPortraits** (or type `/lp options`):
 
 - **General:** turn it on/off, hide surnames, box or circle style, and which frames get a living portrait.
 - **Camera:** zoom (both styles). Face distance is on each style's page.
+- **Bar text:** Blizzard/BBF's own, or left-aligned `current (max)` / `current (percent)` that's always shown.
 - **Target bars:** the grow-from-empty animation (target and focus) and its speed.
 - **Box Style** (its own page): distance, talent builds, mirrored target text, tall portraits (player, target & focus, party), border color, thickness and opacity, elite/rare border and icon, plus box and bar sizing.
 - **Circle Style** (its own page): distance for large and small frames, background, round edge and model size.
@@ -100,6 +101,7 @@ The box style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. The 
 | `/lp build` | Toggle talent builds (points per tree, like `2/8/0`) on the player, target and focus |
 | `/lp tall [player\|target\|party]` | Toggle tall portraits per group: a taller rectangle, with the build on its own line above the name on player, target and focus (off: square, build next to the level). On by default for all three. No group toggles player + target/focus together |
 | `/lp mirror` | Mirror the target and focus text to match the player frame: name and build next to the portrait, level on the outer edge |
+| `/lp bartext default\|max\|percent` | Health and mana text on the player, target, focus and party bars: Blizzard/BBF's own (default), or left-aligned and always shown as `350 (462)` (max) or `350 (76%)` (percent) |
 | `/lp eliteborder` | Toggle the gold (elite, boss) and silver (rare) portrait and bar borders on the target and focus (on by default) |
 | `/lp elitecolor RRGGBB` / `/lp rarecolor RRGGBB` | Border colors for elite/boss (default `ffc71a`, gold) and rare (default `c7ccdb`, silver) targets |
 | `/lp eliteicon top\|bottom\|center\|level\|hidden` | Where the target/focus elite icon goes: the portrait's outer top corner, outer bottom corner, bottom center (default), next to the level, or hidden |

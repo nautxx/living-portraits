@@ -58,6 +58,9 @@ local defaults = {
     tallPortraits = { player = true, target = true, party = true },
     hideSurname = true, -- first names only on our frames (/lp surname)
     mirrorTarget = true, -- square: target/focus text mirrors the player's (/lp mirror)
+    -- Health/mana text on player, target, focus and party bars, left-aligned and always shown:
+    -- "default" (Blizzard/BBF's text), "max" = "350 (462)", "percent" = "350 (76%)" (/lp bartext).
+    barText     = "default",
     borderColor = "ff000000", -- square: box + bar border color, ARGB hex like the settings swatch (/lp bordercolor)
     borderAlpha = 1,      -- square: border opacity (/lp borderalpha)
     borderSize  = 1,      -- square: border thickness: 1 thin, 2 medium, 3 heavy (/lp bordersize)
@@ -1811,8 +1814,114 @@ local function UpdateSurnames(apply)
     end
 end
 
+-- Bar text ------------------------------------------------------------------
+-- Our own left-aligned "current (max)" / "current (percent)" text on health and mana bars,
+-- always shown (whatever the Status Text setting or mouseover). Blizzard's bars call
+-- UpdateTextStringWithValues on every value change; our post-hook writes our text and hides
+-- Blizzard's/BBF's text regions on that bar (they re-show them each update, before us).
+-- Values can be secret (instances, PvP): they only go to AbbreviateNumbers and
+-- SetFormattedText (both take secrets from addon code), never compared or used in math;
+-- percent comes from UnitHealthPercent/UnitPowerPercent with Blizzard's 0-100 curve.
+local BAR_TEXT_MODES = { default = true, max = true, percent = true }
+local UpdateBarTexts
+do -- scoped: Core.lua's main chunk is near Lua's 200-local limit
+local BAR_TEXT_UNITS = { "player", "target", "focus", "party1", "party2", "party3", "party4" }
+
+local function BarTextOn(unit)
+    return db and db.enabled and db.units[unit] and db.barText ~= "default" and BAR_TEXT_MODES[db.barText]
+end
+
+-- Blizzard's/BBF's text regions on a bar (center, left, right, dead...), on the bar or its parent.
+local function EachBlizzardText(bar, keys, fn)
+    for _, holder in ipairs({ bar, bar:GetParent() }) do
+        for _, key in ipairs(keys) do
+            local t = holder and holder[key]
+            if type(t) == "table" and t.Hide and t ~= bar.bapText then fn(t) end
+        end
+    end
+end
+
+local function NumberText(v)
+    if AbbreviateNumbers then return AbbreviateNumbers(v) end
+    return v
+end
+
+local function SetBarText(unit, bar, isHealth, value, valueMax)
+    local keys = isHealth and HP_TEXT_KEYS or MANA_TEXT_KEYS
+    local fs = bar.bapText
+    if not BarTextOn(unit) then
+        if fs then fs:Hide() end
+        return
+    end
+    if not fs then
+        local ref
+        EachBlizzardText(bar, keys, function(t) ref = ref or (t.GetFont and t) end)
+        fs = ((ref and ref:GetParent()) or bar):CreateFontString(nil, "OVERLAY")
+        fs:SetFontObject(TextStatusBarText)
+        -- Centered on the visible bar: BBF's bordered frame, not the fill (1px taller and
+        -- offset), same reference CenterBarTexts uses for Blizzard's texts.
+        fs:SetPoint("LEFT", bar.BBFPositionFrame or bar, "LEFT", 4, 0)
+        fs:SetJustifyH("LEFT")
+        bar.bapText, bar.bapTextRef = fs, ref
+    end
+    -- Follow Blizzard's/BBF's number font and color live (BBF: "Change unit frame number
+    -- font"), so changing it there changes ours too. Only re-set when it differs.
+    local ref = bar.bapTextRef
+    if ref then
+        local font, size, flags = ref:GetFont()
+        if font and (font ~= fs.bapFont or size ~= fs.bapSize or flags ~= fs.bapFlags) then
+            fs:SetFont(font, size, flags)
+            fs.bapFont, fs.bapSize, fs.bapFlags = font, size, flags
+        end
+        fs:SetTextColor(ref:GetTextColor())
+    end
+    local cur = NumberText(value)
+    if db.barText == "percent" then
+        local curve = CurveConstants and CurveConstants.ScaleTo100
+        local pct
+        if isHealth and UnitHealthPercent then pct = UnitHealthPercent(unit, true, curve)
+        elseif not isHealth and UnitPowerPercent then pct = UnitPowerPercent(unit, nil, false, curve) end
+        if pct then fs:SetFormattedText("%s (%.0f%%)", cur, pct) else fs:SetFormattedText("%s", cur) end
+    else
+        fs:SetFormattedText("%s (%s)", cur, NumberText(valueMax))
+    end
+    fs:Show()
+    EachBlizzardText(bar, keys, function(t) t:Hide() end)
+end
+
+-- Hook each bar once; then (re)draw from the bar's current values, so a setting change shows
+-- right away. Turning it off hides ours; Blizzard's text comes back on its next update, and
+-- toggling the statusText CVar (as BBF does) makes Blizzard redraw it now.
+function UpdateBarTexts(fromSetting)
+    if not db then return end
+    for _, unit in ipairs(BAR_TEXT_UNITS) do
+        local hpBar, manaBar = Lookup(unit, "bars")
+        for _, info in ipairs({ { hpBar, true }, { manaBar, false } }) do
+            local bar, isHealth = info[1], info[2]
+            if bar and bar.UpdateTextStringWithValues then
+                if not bar.bapTextHook and BarTextOn(unit) then
+                    bar.bapTextHook = true
+                    hooksecurefunc(bar, "UpdateTextStringWithValues", function(self, _, value, _, valueMax)
+                        SetBarText(unit, self, isHealth, value, valueMax)
+                    end)
+                end
+                if bar.bapTextHook then
+                    local _, valueMax = bar:GetMinMaxValues()
+                    SetBarText(unit, bar, isHealth, bar:GetValue(), valueMax)
+                end
+            end
+        end
+    end
+    if fromSetting and db.barText == "default" and C_CVar and C_CVar.GetCVar("statusText") == "1" then
+        C_CVar.SetCVar("statusText", "0")
+        C_CVar.SetCVar("statusText", "1")
+    end
+end
+end -- bar text
+
 AfterRefreshAll = function()
     UpdateBuild()
+    UpdateBarTexts()
     UpdateSurnames(true)
 end
 
@@ -2050,6 +2159,19 @@ BuildOptions = function()
     Header("Camera")
     Slider({ "zoom" }, "Zoom", "1 = head and shoulders; lower shows more of the body. Both styles.", 0, 1, 0.05)
 
+    Header("Bar text")
+    local barGet, barSet, barDefault = Path({ "barText" })
+    Settings.CreateDropdown(category, Register("barText", "Bar Text", barDefault, barGet, function(v)
+        barSet(v)
+        UpdateBarTexts(true)
+    end), function()
+        local c = Settings.CreateControlTextContainer()
+        c:Add("default", "Default (Blizzard / BBF)")
+        c:Add("max", "Current (max), left")
+        c:Add("percent", "Current (percent), left")
+        return c:GetData()
+    end, "Health and mana text on the player, target, focus and party bars. The left-aligned formats are always shown, whatever the Status Text setting.")
+
     Header("Target bars")
     Check({ "growBars" }, "Grow on new target", "Health and mana grow from empty when you pick a new target or focus.")
     Slider({ "growTime" }, "Grow time", "Seconds the grow takes.", 0.1, 2, 0.05,
@@ -2208,7 +2330,7 @@ local function PrintHelp()
     print("  /lp toggle  |  /lp vignette  |  /lp zoom 0-1  |  /lp grow  |  /lp growtime 0.1-2  |  /lp reset")
     print("  /lp style box|circle  |  /lp bg 0-1  |  /lp extend 0-30 [large|small]  |  /lp split 0.4-0.85")
     print("  /lp namerow 0-24 [large|tot|party]  |  /lp gap 0-20  |  /lp barspacing 0-10  |  /lp alignmana  |  /lp build  |  /lp tall [player|target|party]  |  /lp surname  |  /lp mirror  |  /lp eliteborder  |  /lp eliteicon top|bottom|center|level|hidden")
-    print("  /lp elitecolor RRGGBB  |  /lp rarecolor RRGGBB")
+    print("  /lp elitecolor RRGGBB  |  /lp rarecolor RRGGBB  |  /lp bartext default|max|percent")
     print("  /lp bordercolor RRGGBB  |  /lp borderalpha 0-1  |  /lp bordersize thin|medium|heavy")
     print("  /lp inset 0.3-1.2 [large|small]  |  /lp cam 0.3-2 [large|small|box]")
     print("  /lp unit player|target|focus|tot|party  |  /lp refresh  |  /lp debug [unit]")
@@ -2330,6 +2452,13 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
         growDebug = not growDebug
         print("  grow debug " .. (growDebug and "on: change targets and watch chat." or "off."))
         return
+    elseif cmd == "bartext" then
+        if not BAR_TEXT_MODES[arg or ""] then
+            print("  /lp bartext default|max|percent  (now " .. tostring(db.barText) .. ")")
+            return
+        end
+        db.barText = arg
+        UpdateBarTexts(true)
     elseif cmd == "eliteicon" then
         local modes = { top = "top", bottom = "bottom", center = "center", level = "level", hidden = "hidden", off = "hidden" }
         if not modes[arg or ""] then
