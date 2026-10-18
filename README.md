@@ -12,9 +12,9 @@ Living Portraits works on its own, but it's built to be used with [BetterBlizzFr
 
 | | Without BBF | With BBF |
 |---|---|---|
-| Style | Circle: the model inside Blizzard's round portrait | **Square**: a pixel-bordered box beside the bars (shown below), or circle if you keep BBF's portraits |
+| Style | Circle: the model inside Blizzard's round portrait | **Box**: a pixel-bordered box beside the bars (shown below), or circle if you keep BBF's portraits |
 | Bars and names | Blizzard's default layout | Resized so the box and bars line up, name and level in one row |
-| Extras | None | Talent builds, tall portraits and mirrored target text (square style only) |
+| Extras | None | Talent builds, tall portraits and mirrored target text (box style only) |
 | Setup | Nothing to do | One click: **Turn on** in the settings panel (or `/lp bbfsetup`) switches on BBF's Pixel Border mode |
 
 ## Screenshots
@@ -33,7 +33,7 @@ Tall portraits with Mirror Target Text, on BetterBlizzFrames' Pixel Border mode.
 
 Instead of the flat 2D portrait, a live `PlayerModel` of the unit is drawn in one of two styles:
 
-- **Square** (when BBF's No Portrait / Pixel Border mode is on): a box with BBF's 1px border beside the health and mana bars. The model fills it exactly.
+- **Box** (when BBF's No Portrait / Pixel Border mode is on): a box with BBF's 1px border beside the health and mana bars. The model fills it exactly.
 - **Circle** (Blizzard's frames, or BBF with portraits): the model sits behind the frame's border ring, with a soft round edge so its square corners don't show.
 
 If the model can't load (unit out of range or offline), the addon steps aside and the normal portrait shows.
@@ -64,13 +64,13 @@ ln -s ~/GitHub/Main/living-portraits \
 
 Open **Options → AddOns → LivingPortraits** (or type `/lp options`):
 
-- **General:** turn it on/off, hide surnames, square or circle style, and which frames get a living portrait.
+- **General:** turn it on/off, hide surnames, box or circle style, and which frames get a living portrait.
 - **Camera:** zoom (both styles). Face distance is on each style's page.
 - **Target bars:** the grow-from-empty animation (target and focus) and its speed.
-- **Square Style** (its own page): distance, talent builds, mirrored target text, tall portraits (player, target & focus, party), border color, thickness and opacity, elite/rare border and icon, plus box and bar sizing.
+- **Box Style** (its own page): distance, talent builds, mirrored target text, tall portraits (player, target & focus, party), border color, thickness and opacity, elite/rare border and icon, plus box and bar sizing.
 - **Circle Style** (its own page): distance for large and small frames, background, round edge and model size.
 
-The square style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. The **Turn on** button under *BetterBlizzFrames* switches it on for every frame (your other BBF settings stay as they are) and reloads the UI; **Undo** puts back what you had.
+The box style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. The **Turn on** button under *BetterBlizzFrames* switches it on for every frame (your other BBF settings stay as they are) and reloads the UI; **Undo** puts back what you had.
 
 ## Commands
 
@@ -84,16 +84,16 @@ The square style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. T
 | `/lp options` | Open the settings panel |
 | `/lp toggle` | Turn living portraits on/off |
 | `/lp unit <group>` | Toggle a frame group: `player`, `target`, `focus`, `tot`, `party` |
-| `/lp style square\|circle` | Square box beside the bars (needs BBF's No Portrait / Pixel Border) or round portrait |
+| `/lp style box\|circle` | Box beside the bars (needs BBF's No Portrait / Pixel Border) or round portrait |
 | `/lp surname` | First names only (hide surnames) on the player, target, focus, target-of-target and party frames |
 | `/lp zoom 0-1` | Camera zoom (1 = head and shoulders, lower = more body) |
-| `/lp cam 0.3-2 [large\|small\|square]` | Camera distance (lower = closer, bigger face) |
+| `/lp cam 0.3-2 [large\|small\|box]` | Camera distance (lower = closer, bigger face) |
 | `/lp grow` | Toggle the target's and focus's health and mana growing from empty when they change |
 | `/lp growtime 0.1-2` | How long the grow takes, in seconds (default 0.35) |
 | `/lp bbfsetup` / `/lp bbfundo` | Turn on BBF's No Portrait + Pixel Border mode for every frame / put back your previous BBF settings (reload to apply) |
 | `/lp reset` | Restore defaults |
 
-**Square style**
+**Box style**
 
 | Command | Effect |
 |---|---|
@@ -136,7 +136,7 @@ The square style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. T
 
 - **Talent builds** only show for players within inspect range (about 30 yards), and the game may refuse to share enemy players' talents. NPCs never show one.
 - **Target-of-target placement:** when the target or focus layout would run into its target-of-target (for example with Edit Mode's small focus frame), the ToT frame is moved down just enough to clear it, and put back when you switch to circle style or turn the addon off.
-- **No layout changes in combat:** WoW blocks resizing unit-frame bars mid-fight, so square-style layout changes made in combat (settings, BBF re-layouts) are skipped and apply on the next refresh, such as a target change or `/lp refresh`. That's also why the build line stays reserved on NPC targets.
+- **No layout changes in combat:** WoW blocks resizing unit-frame bars mid-fight, so box-style layout changes made in combat (settings, BBF re-layouts) are skipped and apply on the next refresh, such as a target change or `/lp refresh`. That's also why the build line stays reserved on NPC targets.
 - **BBF's spec / healer icon portraits** are covered by the 3D model while it shows.
 
 ## Feedback

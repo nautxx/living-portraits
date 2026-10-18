@@ -2001,10 +2001,10 @@ BuildOptions = function()
     local styleGet, styleSet, styleDefault = Path({ "style" })
     Settings.CreateDropdown(category, Register("style", "Style", styleDefault, styleGet, styleSet), function()
         local c = Settings.CreateControlTextContainer()
-        c:Add("square", "Square")
+        c:Add("square", "Box")
         c:Add("circle", "Circle")
         return c:GetData()
-    end, "Square: a box beside the bars (needs BBF's Pixel Border mode, below). Circle: inside the round portrait. Frames where BBF still shows portraits always use the circle.")
+    end, "Box: the portrait in a bordered box beside the bars (needs BBF's Pixel Border mode, below). Circle: inside the round portrait. Frames where BBF still shows portraits always use the circle.")
     for _, g in ipairs({ { "player", "Player Portrait", "player frame" },
                          { "target", "Target Portrait", "target frame" },
                          { "focus", "Focus Portrait", "focus frame" },
@@ -2028,7 +2028,7 @@ BuildOptions = function()
     Header("BetterBlizzFrames")
     layout:AddInitializer(CreateSettingsButtonInitializer("Pixel Border mode", "Turn on",
         function() print(PREFIX .. ApplyBBFSetup()) end,
-        "Turns on BBF's No Portrait + Pixel Border mode on every frame, which the square style needs. Your other BBF settings stay as they are. Reloads the UI.", true))
+        "Turns on BBF's No Portrait + Pixel Border mode on every frame, which the box style needs. Your other BBF settings stay as they are. Reloads the UI.", true))
     layout:AddInitializer(CreateSettingsButtonInitializer("Undo Pixel Border mode", "Undo",
         function() print(PREFIX .. UndoBBFSetup()) end,
         "Puts back the BBF settings you had before turning it on here. Reloads the UI.", true))
@@ -2046,9 +2046,9 @@ BuildOptions = function()
         end
     end
 
-    Page("Square Style")
+    Page("Box Style")
     Header("Camera")
-    Slider({ "sizes", "square", "cam" }, "Distance", "All square portraits. Lower = closer, bigger face.", 0.3, 2, 0.05)
+    Slider({ "sizes", "square", "cam" }, "Distance", "All box portraits. Lower = closer, bigger face.", 0.3, 2, 0.05)
     Slider({ "squareBg" }, "Background", "Dark background behind the model.", 0, 1, 0.05, FormatPercent)
 
     Header("Size and layout")
@@ -2166,7 +2166,7 @@ local function PrintStatus()
         .. "  grow=" .. tostring(db.growBars) .. (" (%.2fs)"):format(db.growTime) .. "  units=" .. (#on > 0 and table.concat(on, ",") or "none"))
     local Q = db.sizes.square
     print(("  circle large: inset=%.2f cam=%.2f   small: inset=%.2f cam=%.2f"):format(L.inset, L.cam, S.inset, S.cam))
-    print(("  square: cam=%.2f bg=%.2f gap=%d alignmana=%s split=%.2f  extend: large=%d small=%d"):format(
+    print(("  box: cam=%.2f bg=%.2f gap=%d alignmana=%s split=%.2f  extend: large=%d small=%d"):format(
         Q.cam, db.squareBg, db.squareGap, tostring(db.alignMana), db.hpShare, db.stackExtra.large, db.stackExtra.small))
     print(("  name rows: large=%d tot=%d party=%d   build=%s tall=%s hidesurnames=%s"):format(db.nameRow.large,
         db.nameRow.tot, db.nameRow.party, tostring(db.showBuild), ("player=%s target=%s party=%s"):format(tostring(db.tallPortraits.player),
@@ -2176,11 +2176,11 @@ end
 local function PrintHelp()
     print("  /lp options  |  /lp bbfsetup (turn on BBF's Pixel Border mode)  |  /lp bbfundo")
     print("  /lp toggle  |  /lp vignette  |  /lp zoom 0-1  |  /lp grow  |  /lp growtime 0.1-2  |  /lp reset")
-    print("  /lp style square|circle  |  /lp bg 0-1  |  /lp extend 0-30 [large|small]  |  /lp split 0.4-0.85")
+    print("  /lp style box|circle  |  /lp bg 0-1  |  /lp extend 0-30 [large|small]  |  /lp split 0.4-0.85")
     print("  /lp namerow 0-24 [large|tot|party]  |  /lp gap 0-20  |  /lp barspacing 0-10  |  /lp alignmana  |  /lp build  |  /lp tall [player|target|party]  |  /lp surname  |  /lp mirror  |  /lp eliteborder  |  /lp eliteicon top|bottom|center|level|hidden")
     print("  /lp elitecolor RRGGBB  |  /lp rarecolor RRGGBB")
     print("  /lp bordercolor RRGGBB  |  /lp borderalpha 0-1  |  /lp bordersize thin|medium|heavy")
-    print("  /lp inset 0.3-1.2 [large|small]  |  /lp cam 0.3-2 [large|small|square]")
+    print("  /lp inset 0.3-1.2 [large|small]  |  /lp cam 0.3-2 [large|small|box]")
     print("  /lp unit player|target|focus|tot|party  |  /lp refresh  |  /lp debug [unit]")
     print("  circle: /lp circlebg 0-1  |  /lp vignette  |  /lp calibrate  |  /lp offset player|target|focus|tot|party x y")
 end
@@ -2278,6 +2278,7 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
     for word in (msg or ""):lower():gmatch("%S+") do args[#args + 1] = word end
     local cmd, arg, size = args[1], args[2], args[3]
     local val = tonumber(arg)
+    if size == "box" then size = "square" end -- the box style's camera (stored as "square")
     if size and not db.sizes[size] then size = nil end
 
     if cmd == "options" or cmd == "config" then
@@ -2334,7 +2335,8 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
         local x, y = tonumber(args[3]), tonumber(args[4])
         if x and y then db.offsets[arg] = { Clamp(x, -10, 10), Clamp(y, -10, 10) } end
         print(("  offset %s = %s, %s"):format(arg, tostring(db.offsets[arg][1]), tostring(db.offsets[arg][2])))
-    elseif cmd == "style" and (arg == "square" or arg == "circle") then
+    elseif cmd == "style" and (arg == "box" or arg == "square" or arg == "circle") then
+        if arg == "box" then arg = "square" end -- shown as "Box", stored as "square" (older name)
         db.style = arg
     elseif cmd == "extend" and val then
         SetEach(db.stackExtra, size, Clamp(val, 0, 30))
