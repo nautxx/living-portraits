@@ -6,12 +6,13 @@ local GROUPS = ns.GROUPS
 local PREFIX = ns.PREFIX
 local QueueRefreshAll = ns.QueueRefreshAll
 local UpdateBarTexts = ns.UpdateBarTexts
-local ApplyBBFSetup = ns.ApplyBBFSetup
-local UndoBBFSetup = ns.UndoBBFSetup
 local PROFILES = ns.PROFILES
 local AskLoadProfile = ns.AskLoadProfile
 local ShowExport = ns.ShowExport
 local ShowImport = ns.ShowImport
+local ProfileTitle = ns.ProfileTitle
+local AskBBFSetup = ns.AskBBFSetup
+local AskUndo = ns.AskUndo
 
 -- Settings panel ------------------------------------------------------------
 -- Options > AddOns > Living Portraits. Proxy settings read and write db directly,
@@ -50,15 +51,7 @@ end
 -- SettingsListElementTemplate can't be used: it never runs its OnLoad, Init errored in game.)
 -- One row for now: wrap it when there are more profiles than fit.
 local PROFILE_BUTTON_GAP, PROFILE_BUTTON_WIDTH, STOCK_BUTTON_WIDTH = 6, 120, 200
--- A profile's name, in its class's color when it has one (like BBF's streamer profiles).
-local function ProfileTitle(p)
-    local c = p.class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[p.class]
-    if not c then return p.name end
-    if type(c.colorStr) == "string" then return "|c" .. c.colorStr .. p.name .. "|r" end -- Blizzard's exact hex
-    return ("|cff%02x%02x%02x%s|r"):format(math.floor(c.r * 255 + 0.5), math.floor(c.g * 255 + 0.5),
-        math.floor(c.b * 255 + 0.5), p.name)
-end
-local PROFILE_NOTE = " Overwrites all of your BetterBlizzFrames and Living Portraits settings with the profile's; Undo puts them back. Reloads the UI."
+local PROFILE_NOTE = " Overwrites all of your BetterBlizzFrames and Living Portraits settings with the profile's and reloads the UI (it asks first); Undo puts them back."
 local function ProfileButtonsInitializer(say)
     local first = PROFILES[1]
     local initializer = CreateSettingsButtonInitializer("", ProfileTitle(first), function() say(AskLoadProfile(first.name)) end,
@@ -223,12 +216,12 @@ local function BuildOptions()
 
     Header("BetterBlizzFrames")
     layout:AddInitializer(CreateSettingsButtonInitializer("Pixel Border mode", "Turn on",
-        function() print(PREFIX .. ApplyBBFSetup()) end,
+        function() Say(AskBBFSetup()) end,
         "Turns on BBF's No Portrait + Pixel Border mode on every frame (and Classic Frames off), which the box style needs, and keeps the rest of your BBF settings. For a whole look, load a profile above. Reloads the UI.", true))
 
     Header("Undo")
     layout:AddInitializer(CreateSettingsButtonInitializer("Undo setup / profile", "Undo",
-        function() print(PREFIX .. UndoBBFSetup()) end,
+        function() Say(AskUndo()) end,
         "Puts back the Living Portraits and BBF settings you had before loading or importing a profile, or turning on Pixel Border mode here. Reloads the UI.", true))
 
     Page("Box Style")

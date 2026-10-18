@@ -23,8 +23,8 @@ local RESOURCE_MODES = ns.RESOURCE_MODES
 local RESOURCE_ALIGN = ns.RESOURCE_ALIGN
 local Resource = ns.Resource
 local ResourceDebug = ns.ResourceDebug
-local ApplyBBFSetup = ns.ApplyBBFSetup
-local UndoBBFSetup = ns.UndoBBFSetup
+local AskBBFSetup = ns.AskBBFSetup
+local AskUndo = ns.AskUndo
 local OpenOptions = ns.OpenOptions
 local NotifyOptions = ns.NotifyOptions
 local PROFILES = ns.PROFILES
@@ -181,7 +181,8 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
         if not OpenOptions() then print("  The settings panel isn't available on this client.") end
         return
     elseif cmd == "bbfsetup" then
-        print("  " .. ApplyBBFSetup())
+        local msg = AskBBFSetup()
+        if msg then print("  " .. msg) end
         return
     elseif cmd == "profile" then
         if not arg then
@@ -198,7 +199,8 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
         if msg then print("  " .. msg) end
         return
     elseif cmd == "bbfundo" then
-        print("  " .. UndoBBFSetup())
+        local msg = AskUndo()
+        if msg then print("  " .. msg) end
         return
     elseif cmd == "debug" then
         DebugUnit(arg or "target")

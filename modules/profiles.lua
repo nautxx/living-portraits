@@ -15,7 +15,8 @@ local Copy = ns.DeepCopy
 local BaseProfile = ns.BaseProfile
 local BBFLoaded = ns.BBFLoaded
 local WriteBBF = ns.WriteBBF
-local ShowReloadPopup = ns.ShowReloadPopup
+local FinishBBFChange = ns.FinishBBFChange
+local Confirm = ns.Confirm
 
 -- One entry per built-in profile; the panel shows a button each, named after it, in this order.
 -- To add one (a friend's config): name (button, /lp profile <name>), desc (tooltip), class
@@ -112,6 +113,15 @@ local PROFILES = {
 local STRING_PREFIX = "!LP1!" -- format 1
 local LP_SKIP = { bbfBackup = true, bbfBackupFull = true, lpBackup = true, welcomed = true } -- never exported or imported
 
+-- A profile's name, in its class's color when it has one (like BBF's streamer profiles).
+local function ProfileTitle(p)
+    local c = p.class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[p.class]
+    if not c then return p.name end
+    if type(c.colorStr) == "string" then return "|c" .. c.colorStr .. p.name .. "|r" end -- Blizzard's exact hex
+    return ("|cff%02x%02x%02x%s|r"):format(math.floor(c.r * 255 + 0.5), math.floor(c.g * 255 + 0.5),
+        math.floor(c.b * 255 + 0.5), p.name)
+end
+
 local function FindProfile(name)
     name = name and name:lower()
     for _, p in ipairs(PROFILES) do
@@ -164,21 +174,21 @@ local function ApplyLP(lp)
     ns.LoadSettings() -- every file keeps the same table
 end
 
--- Both return a line for chat.
+-- Both return a line for chat. reload: reload right away (after a confirmation), else ask.
 local Import -- below
 
-local function LoadProfile(name)
+local function LoadProfile(name, reload)
     local p = FindProfile(name)
     if not p then return "No profile named " .. tostring(name) .. "." end
-    if p.string then return (Import(p.string, p.name)) end
+    if p.string then return (Import(p.string, p.name, reload)) end
     ApplyLP(p.lp)
     local bbfNote = ""
     if BBFLoaded() then
         local base = p.bbfBase and BaseProfile(p.bbfBase)
         WriteBBF(base, p.bbf)
         if p.bbfBase and not base then bbfNote = " (BetterBlizzFrames' " .. p.bbfBase .. " profile wasn't found)" end
-        ShowReloadPopup()
-        return "Loaded the " .. p.name .. " profile" .. bbfNote .. ". Reload the UI to apply it."
+        FinishBBFChange(reload)
+        return "Loaded the " .. p.name .. " profile" .. bbfNote .. "." .. (reload and "" or " Reload the UI to apply it.")
     end
     ns.RefreshAll()
     return "Loaded the " .. p.name .. " profile (Living Portraits only: BetterBlizzFrames isn't loaded)."
@@ -192,7 +202,7 @@ local function ExportString()
 end
 
 -- name: a built-in profile stored as an export string (for the chat line).
-function Import(str, name)
+function Import(str, name, reload)
     local deflate, serialize = Libs()
     if not deflate then return "Import needs BetterBlizzFrames loaded." end
     str = type(str) == "string" and str:gsub("%s", "") or ""
@@ -208,8 +218,8 @@ function Import(str, name)
     local what = name and ("Loaded the " .. name .. " profile") or "Imported the profile"
     if type(data.bbf) == "table" and BBFLoaded() then
         WriteBBF(data.bbf)
-        ShowReloadPopup()
-        return what .. ". Reload the UI to apply it."
+        FinishBBFChange(reload)
+        return what .. "." .. (reload and "" or " Reload the UI to apply it.")
     end
     ns.RefreshAll()
     return what .. " (Living Portraits only)."
@@ -224,13 +234,6 @@ end
 
 local function Dialogs()
     if not StaticPopupDialogs then return false end
-    StaticPopupDialogs.LIVING_PORTRAITS_LOAD_PROFILE = StaticPopupDialogs.LIVING_PORTRAITS_LOAD_PROFILE or {
-        text = "Load the %s profile?\n\nThis overwrites all of your BetterBlizzFrames and Living Portraits settings with the profile's. Undo on the Profiles page puts them back.",
-        button1 = ACCEPT or "Accept",
-        button2 = CANCEL or "Cancel",
-        OnAccept = function(_, name) print(ns.PREFIX .. LoadProfile(name)) end,
-        timeout = 0, whileDead = true, hideOnEscape = true,
-    }
     StaticPopupDialogs.LIVING_PORTRAITS_EXPORT = StaticPopupDialogs.LIVING_PORTRAITS_EXPORT or {
         text = "Your Living Portraits + BetterBlizzFrames profile. Copy it with Ctrl+C (Cmd+C on a Mac) to share.",
         hasEditBox = true, editBoxWidth = 350, maxLetters = 0,
@@ -246,7 +249,7 @@ local function Dialogs()
         timeout = 0, whileDead = true, hideOnEscape = true,
     }
     StaticPopupDialogs.LIVING_PORTRAITS_IMPORT = StaticPopupDialogs.LIVING_PORTRAITS_IMPORT or {
-        text = "Paste a Living Portraits profile string.\n\nThis overwrites all of your BetterBlizzFrames and Living Portraits settings with the string's. Undo on the Profiles page puts them back.",
+        text = "Living|cff00c0ffPortraits|r:\n\nPaste a profile string. Importing it will overwrite all of your BetterBlizzFrames and Living Portraits settings with the string's and reload the UI (Undo on the Profiles page puts them back).",
         hasEditBox = true, editBoxWidth = 350, maxLetters = 0,
         button1 = ACCEPT or "Accept",
         button2 = CANCEL or "Cancel",
@@ -256,10 +259,10 @@ local function Dialogs()
             eb:SetText("")
             eb:SetFocus()
         end,
-        OnAccept = function(self) print(ns.PREFIX .. Import(EditBoxOf(self):GetText())) end,
+        OnAccept = function(self) print(ns.PREFIX .. Import(EditBoxOf(self):GetText(), nil, true)) end,
         EditBoxOnEnterPressed = function(eb)
             local dialog = eb:GetParent()
-            print(ns.PREFIX .. Import(eb:GetText()))
+            print(ns.PREFIX .. Import(eb:GetText(), nil, true))
             dialog:Hide()
         end,
         EditBoxOnEscapePressed = function(eb) eb:GetParent():Hide() end,
@@ -272,8 +275,8 @@ end
 local function AskLoadProfile(name)
     local p = FindProfile(name)
     if not p then return "No profile named " .. tostring(name) .. "." end
-    if not Dialogs() then return LoadProfile(p.name) end
-    StaticPopup_Show("LIVING_PORTRAITS_LOAD_PROFILE", p.name, nil, p.name)
+    return Confirm("This action will overwrite all of your BetterBlizzFrames and Living Portraits settings, apply the "
+        .. ProfileTitle(p) .. " profile and reload the UI.", function() return LoadProfile(p.name, true) end)
 end
 
 local function ShowExport()
@@ -290,6 +293,7 @@ local function ShowImport()
 end
 
 ns.PROFILES = PROFILES
+ns.ProfileTitle = ProfileTitle
 ns.LoadProfile = LoadProfile
 ns.AskLoadProfile = AskLoadProfile
 ns.ExportString = ExportString

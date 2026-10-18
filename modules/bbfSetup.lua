@@ -32,6 +32,28 @@ local function ShowReloadPopup()
     StaticPopup_Show("LIVING_PORTRAITS_RELOAD")
 end
 
+-- After writing BBF's settings: reload now (the user already said yes to a dialog that says it
+-- reloads), or ask (direct calls).
+local function FinishBBFChange(reload)
+    if reload then ReloadUI() else ShowReloadPopup() end
+end
+
+-- One confirmation for everything that overwrites settings, like BBF's own: our name, what it does
+-- (and that it reloads the UI), then Yes / No. Yes runs onYes. Returns nil when the dialog shows,
+-- or onYes's chat line when there are no dialogs (it runs right away then).
+local CONFIRM_TITLE = "Living|cff00c0ffPortraits|r:\n\n"
+local function Confirm(text, onYes)
+    if not (StaticPopupDialogs and StaticPopup_Show) then return onYes() end
+    StaticPopupDialogs.LIVING_PORTRAITS_CONFIRM = StaticPopupDialogs.LIVING_PORTRAITS_CONFIRM or {
+        text = "%s",
+        button1 = YES or "Yes",
+        button2 = NO or "No",
+        OnAccept = function(_, onAccept) local msg = onAccept(); if msg then print(PREFIX .. msg) end end,
+        timeout = 0, whileDead = true, hideOnEscape = true,
+    }
+    StaticPopup_Show("LIVING_PORTRAITS_CONFIRM", CONFIRM_TITLE .. text .. "\n\nAre you sure you want to continue?", nil, onYes)
+end
+
 -- Deep copy (BBF's settings nest: aura lists, colors). Never hand BBF our own tables.
 local function Copy(v)
     if type(v) ~= "table" then return v end
@@ -76,17 +98,17 @@ local function WriteBBF(base, overlay)
     for k, v in pairs(overlay or {}) do bdb[k] = Copy(v) end
 end
 
--- Both return a line for chat.
-local function ApplyBBFSetup()
+-- Both return a line for chat. reload: reload right away (after a confirmation), else ask.
+local function ApplyBBFSetup(reload)
     if not BBFLoaded() then return "BetterBlizzFrames isn't loaded." end
     WriteBBF(nil, BBF_MODE)
-    ShowReloadPopup()
-    return "Turned on BetterBlizzFrames' Pixel Border mode for every frame. Reload the UI to apply it."
+    FinishBBFChange(reload)
+    return "Turned on BetterBlizzFrames' Pixel Border mode for every frame." .. (reload and "" or " Reload the UI to apply it.")
 end
 
 -- Undo Pixel Border mode and/or a loaded profile (modules/profiles.lua): BBF's settings and our own
 -- go back to how they were before the first one.
-local function UndoBBFSetup()
+local function UndoBBFSetup(reload)
     local bdb, full, keys, lp = BetterBlizzFramesDB, db.bbfBackupFull, db.bbfBackup, db.lpBackup
     if not (full or keys or lp) then return "Nothing to undo." end
     if (full or keys) and type(bdb) ~= "table" then return "BetterBlizzFrames isn't loaded." end
@@ -105,8 +127,23 @@ local function UndoBBFSetup()
         db.welcomed = welcomed
         ns.LoadSettings() -- migrate and fill in defaults; every file keeps the same table
     end
-    if full or keys then ShowReloadPopup() else ns.RefreshAll() end
-    return "Put back your previous settings." .. ((full or keys) and " Reload the UI to apply them." or "")
+    if full or keys then FinishBBFChange(reload) else ns.RefreshAll() end
+    return "Put back your previous settings." .. ((full or keys) and not reload and " Reload the UI to apply them." or "")
+end
+
+-- Panel and slash entry points: confirm first (nil = the dialog took over).
+local function AskBBFSetup()
+    if not BBFLoaded() then return "BetterBlizzFrames isn't loaded." end
+    return Confirm("This action will turn on BetterBlizzFrames' No Portrait + Pixel Border mode for every frame, "
+        .. "turn off its Classic Frames and reload the UI. Your other BetterBlizzFrames settings stay.",
+        function() return ApplyBBFSetup(true) end)
+end
+
+local function AskUndo()
+    if not (db.bbfBackupFull or db.bbfBackup or db.lpBackup) then return "Nothing to undo." end
+    return Confirm("This action will put back the BetterBlizzFrames and Living Portraits settings you had before "
+        .. "loading a profile or turning on Pixel Border mode, and reload the UI.",
+        function() return UndoBBFSetup(true) end)
 end
 
 -- Old install ---------------------------------------------------------------
@@ -143,6 +180,10 @@ ns.BaseProfile = BaseProfile
 ns.BBFLoaded = BBFLoaded
 ns.WriteBBF = WriteBBF
 ns.ShowReloadPopup = ShowReloadPopup
+ns.FinishBBFChange = FinishBBFChange
+ns.Confirm = Confirm
+ns.AskBBFSetup = AskBBFSetup
+ns.AskUndo = AskUndo
 ns.ApplyBBFSetup = ApplyBBFSetup
 ns.UndoBBFSetup = UndoBBFSetup
 -- First run --------------------------------------------------------------------
@@ -175,8 +216,8 @@ local function CheckFirstRun()
         button1 = "Starter",
         button2 = LATER or "Not now",
         button3 = "Naut",
-        OnAccept = function() print(PREFIX .. ns.LoadProfile("Starter")) end,
-        OnAlt = function() print(PREFIX .. ns.LoadProfile("Naut")) end,
+        OnAccept = function() print(PREFIX .. ns.LoadProfile("Starter", true)) end,
+        OnAlt = function() print(PREFIX .. ns.LoadProfile("Naut", true)) end,
         timeout = 0, whileDead = true, hideOnEscape = true,
     }
     StaticPopup_Show("LIVING_PORTRAITS_WELCOME")
