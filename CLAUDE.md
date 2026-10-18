@@ -123,6 +123,9 @@ BBF code that touches portraits (read only, for compatibility):
 - [ ] Dungeons: no Lua errors from the target grow (secret bar style, seen in Wailing Caverns before 2026-10-17's fix)
 - [ ] Dungeons: party portraits appear as each member zones in (frame-visibility re-check)
 - [ ] Party member not loaded in / offline: empty box, bars line up with the other party frames
+- [ ] Elite/rare target: elite icon sits beside the level, not on the name or box (mirrored and not)
+- [ ] Tall party: box grows up beside the name, role/leader icons and name still clear; toggles via panel and `/lp tall party`
+- [ ] Tall migration: an install with tall off before v11 keeps player/target square
 
 ## Conventions
 - One step per commit; test in game before starting the next step.
