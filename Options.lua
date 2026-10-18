@@ -58,7 +58,7 @@ local function ProfileTitle(p)
     return ("|cff%02x%02x%02x%s|r"):format(math.floor(c.r * 255 + 0.5), math.floor(c.g * 255 + 0.5),
         math.floor(c.b * 255 + 0.5), p.name)
 end
-local PROFILE_NOTE = " Replaces your Living Portraits and BetterBlizzFrames settings; Undo puts them back. Reloads the UI."
+local PROFILE_NOTE = " Overwrites all of your BetterBlizzFrames and Living Portraits settings with the profile's; Undo puts them back. Reloads the UI."
 local function ProfileButtonsInitializer(say)
     local first = PROFILES[1]
     local initializer = CreateSettingsButtonInitializer("", ProfileTitle(first), function() say(AskLoadProfile(first.name)) end,
@@ -108,8 +108,8 @@ local function BuildOptions()
     Settings.RegisterVerticalLayoutCategory("Living|cff00c0ffPortraits|r")
     local layout = SettingsPanel:GetLayout(category)
 
-    local function Header(text)
-        layout:AddInitializer(CreateSettingsListSectionHeaderInitializer(text))
+    local function Header(text, tooltip)
+        layout:AddInitializer(CreateSettingsListSectionHeaderInitializer(text, tooltip))
     end
     local function Register(var, name, default, get, set)
         var = "LivingPortraits_" .. var
@@ -210,7 +210,7 @@ local function BuildOptions()
     -- means it couldn't (no BBF, no dialogs).
     local function Say(msg) if msg then print(PREFIX .. msg) end end
     Page("Profiles")
-    Header("Profiles")
+    Header("Profiles", "Loading a profile overwrites all of your BetterBlizzFrames and Living Portraits settings with the profile's. Undo (at the bottom of this page) puts them back.")
     layout:AddInitializer(ProfileButtonsInitializer(Say))
 
     Header("Import / Export")
@@ -219,7 +219,7 @@ local function BuildOptions()
         "A text string with your Living Portraits and BetterBlizzFrames settings, to share or to copy to another PC.", true))
     layout:AddInitializer(CreateSettingsButtonInitializer("Import profile", "Import",
         function() Say(ShowImport()) end,
-        "Paste a profile string. Replaces your Living Portraits and BetterBlizzFrames settings; Undo puts them back. Reloads the UI.", true))
+        "Paste a profile string. Overwrites all of your BetterBlizzFrames and Living Portraits settings with the string's; Undo puts them back. Reloads the UI.", true))
 
     Header("BetterBlizzFrames")
     layout:AddInitializer(CreateSettingsButtonInitializer("Pixel Border mode", "Turn on",

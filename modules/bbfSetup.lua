@@ -169,7 +169,7 @@ local function CheckFirstRun()
     end
     StaticPopupDialogs.LIVING_PORTRAITS_WELCOME = StaticPopupDialogs.LIVING_PORTRAITS_WELCOME or {
         text = "Welcome to Living Portraits!\n\nThe box portraits need BetterBlizzFrames set up. Pick a starting "
-            .. "point (it replaces your BetterBlizzFrames settings and reloads the UI):\n\n"
+            .. "point. It overwrites all of your BetterBlizzFrames settings and reloads the UI:\n\n"
             .. "Starter: BetterBlizzFrames' Starter profile with Pixel Border mode.\n"
             .. "Naut: the author's full look.\n\nUndo: Options > AddOns > Living Portraits > Profiles.",
         button1 = "Starter",

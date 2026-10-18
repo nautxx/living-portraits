@@ -1283,6 +1283,8 @@ do
     row.lpProfileButtons[2].OnClick(row.lpProfileButtons[2])
     check("loading a profile asks first", popupShown == "LIVING_PORTRAITS_LOAD_PROFILE" and popupData == "Naut"
         and LivingPortraitsDB.zoom == 0.5)
+    check("loading a profile warns that it overwrites BBF's settings",
+        StaticPopupDialogs.LIVING_PORTRAITS_LOAD_PROFILE.text:find("overwrites all of your BetterBlizzFrames", 1, true) ~= nil)
     StaticPopupDialogs.LIVING_PORTRAITS_LOAD_PROFILE.OnAccept(nil, popupData)
     check("Naut: Living Portraits settings are Jason's (the rest defaults)", LivingPortraitsDB.barText == "max"
         and LivingPortraitsDB.zoom == 1 and LivingPortraitsDB.resourceRadius == 5 and LivingPortraitsDB.version == ns.SETTINGS_VERSION)

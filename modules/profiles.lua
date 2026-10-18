@@ -225,7 +225,7 @@ end
 local function Dialogs()
     if not StaticPopupDialogs then return false end
     StaticPopupDialogs.LIVING_PORTRAITS_LOAD_PROFILE = StaticPopupDialogs.LIVING_PORTRAITS_LOAD_PROFILE or {
-        text = "Load the %s profile? It replaces your Living Portraits and BetterBlizzFrames settings (Undo puts them back).",
+        text = "Load the %s profile?\n\nThis overwrites all of your BetterBlizzFrames and Living Portraits settings with the profile's. Undo on the Profiles page puts them back.",
         button1 = ACCEPT or "Accept",
         button2 = CANCEL or "Cancel",
         OnAccept = function(_, name) print(ns.PREFIX .. LoadProfile(name)) end,
@@ -246,7 +246,7 @@ local function Dialogs()
         timeout = 0, whileDead = true, hideOnEscape = true,
     }
     StaticPopupDialogs.LIVING_PORTRAITS_IMPORT = StaticPopupDialogs.LIVING_PORTRAITS_IMPORT or {
-        text = "Paste a Living Portraits profile string. It replaces your Living Portraits and BetterBlizzFrames settings (Undo puts them back).",
+        text = "Paste a Living Portraits profile string.\n\nThis overwrites all of your BetterBlizzFrames and Living Portraits settings with the string's. Undo on the Profiles page puts them back.",
         hasEditBox = true, editBoxWidth = 350, maxLetters = 0,
         button1 = ACCEPT or "Accept",
         button2 = CANCEL or "Cancel",
