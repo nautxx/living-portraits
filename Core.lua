@@ -120,6 +120,9 @@ local function TargetUnit(frameName, offset)
             local m = TargetMain(f)
             return AsText(m and m.Name), AsText(m and m.LevelText), AsText(f.bbfName)
         end,
+        -- Elite/rare marker: BBF's No Portrait mode turns Blizzard's portrait dragon into a
+        -- 15px icon (nameplate elite atlas).
+        elite    = function(f) local c = f.TargetFrameContainer; return c and c.BossPortraitFrameTexture end,
     }
 end
 
@@ -742,14 +745,24 @@ local STATUS_ICON_ROOM = 18 -- icon (~15 px) + gaps, kept free after the name
 -- small "z" sat below the name's baseline).
 local REST_X, REST_Y = 2, 6
 
+-- Target/focus elite icon. BBF centers it on the health bar's top-right corner, which is now
+-- where the name ends and our box begins (on the name and the model). It goes beside the
+-- level instead, on the side facing the name ("14 [elite] ... Name"), like classic's elite
+-- level. Room is kept free whether or not it shows (it changes per target).
+local function EliteIcon(unit)
+    return UNITS[unit].elite and Lookup(unit, "elite")
+end
+local ELITE_ROOM = 17 -- icon (15) + gap
+
 local function LayoutNameRow(unit, hpPos)
     local name, level, bbfName = Lookup(unit, "texts")
     if not (name or level or bbfName) then return end
     local row = hpPos.bapRow or 0
     local combat, rest = StatusIcons(unit)
+    local elite = EliteIcon(unit)
     if row <= 0 then
         RestorePoints(name); RestorePoints(level); RestorePoints(bbfName)
-        RestorePoints(combat); RestorePoints(rest)
+        RestorePoints(combat); RestorePoints(rest); RestorePoints(elite)
         return
     end
     local y = row / 2
@@ -760,7 +773,8 @@ local function LayoutNameRow(unit, hpPos)
         local lw = level and level:IsShown() and TextWidth(level)
         local bt = buildTexts[unit]
         local bw = bt and bt.bapInline and bt:IsShown() and TextWidth(bt)
-        return math.max(w - 2 - (lw and lw + 4 or 0) - (bw and bw + 6 or 0) - (combat and STATUS_ICON_ROOM or 0), 10)
+        return math.max(w - 2 - (lw and lw + 4 or 0) - (bw and bw + 6 or 0) - (combat and STATUS_ICON_ROOM or 0)
+            - (elite and ELITE_ROOM or 0), 10)
     end
     if Mirrored(unit) then
         PinText(name,    "RIGHT", hpPos, "TOPRIGHT", -1, y, "RIGHT", nameMax)
@@ -770,6 +784,13 @@ local function LayoutNameRow(unit, hpPos)
         PinText(name,    "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT", nameMax)
         PinText(bbfName, "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT", nameMax)
         PinText(level,   "RIGHT", hpPos, "TOPRIGHT", -1, y, "RIGHT")
+    end
+    if elite and level then
+        if Mirrored(unit) then
+            PinText(elite, "LEFT", level, "RIGHT", 2, 0)
+        else
+            PinText(elite, "RIGHT", level, "LEFT", -2, 0)
+        end
     end
     -- Status icons just after the name (whichever name text BBF shows), room reserved in nameMax.
     local shown = bbfName and bbfName:IsShown() and bbfName or name
@@ -913,6 +934,7 @@ local function RestoreBars(unit)
     hpPos.bapRow = nil
     local name, level, bbfName = Lookup(unit, "texts")
     RestorePoints(name); RestorePoints(level); RestorePoints(bbfName)
+    if UNITS[unit].elite then RestorePoints(Lookup(unit, "elite")) end
     if UNITS[unit].icons then
         local role, leader, guide, disconnect = Lookup(unit, "icons")
         RestorePoints(role); RestorePoints(leader); RestorePoints(guide); RestorePoints(disconnect)
@@ -1533,11 +1555,11 @@ local function UpdateBuildFor(unit)
     elseif above then
         fs:SetPoint("LEFT", hpPos, "TOPLEFT", 1, row + extra / 2)
         fs:SetJustifyH("LEFT")
-    elseif mirror then -- between the level (outer edge) and the name
-        fs:SetPoint("LEFT", level, "RIGHT", 4, 0)
+    elseif mirror then -- between the level (outer edge) and the name, past the elite icon
+        fs:SetPoint("LEFT", level, "RIGHT", 4 + (EliteIcon(unit) and ELITE_ROOM or 0), 0)
         fs:SetJustifyH("LEFT")
     else
-        fs:SetPoint("RIGHT", level, "LEFT", -4, 0)
+        fs:SetPoint("RIGHT", level, "LEFT", -4 - (EliteIcon(unit) and ELITE_ROOM or 0), 0)
         fs:SetJustifyH("RIGHT")
     end
     fs:SetText(text or "")
