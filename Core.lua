@@ -707,12 +707,30 @@ local function Mirrored(unit)
     return db.mirrorTarget and UNITS[unit].side == "RIGHT"
 end
 
+-- The player's status icons: combat (crossed swords) and the resting Zzz. BBF's No Portrait
+-- mode puts them where the portrait used to be, which is now our box: right on the face.
+-- Blizzard shows only one at a time (PlayerFrame_UpdateStatus), so both share one slot
+-- just after the name.
+local function StatusIcons(unit)
+    if unit ~= "player" then return end
+    local f = PlayerFrame and PlayerFrame.PlayerFrameContent
+    local c = f and f.PlayerFrameContentContextual
+    if c then return c.AttackIcon, c.PlayerRestLoop end
+end
+local STATUS_ICON_ROOM = 18 -- icon (~15 px) + gaps, kept free after the name
+-- The Zzz frame is scaled 0.5 by BBF (offsets are in its scale) and its art overhangs the
+-- frame by 5 units per side. Tuned in game: 3 px closer to the name and 3 px up (the
+-- small "z" sat below the name's baseline).
+local REST_X, REST_Y = 2, 6
+
 local function LayoutNameRow(unit, hpPos)
     local name, level, bbfName = Lookup(unit, "texts")
     if not (name or level or bbfName) then return end
     local row = hpPos.bapRow or 0
+    local combat, rest = StatusIcons(unit)
     if row <= 0 then
         RestorePoints(name); RestorePoints(level); RestorePoints(bbfName)
+        RestorePoints(combat); RestorePoints(rest)
         return
     end
     local y = row / 2
@@ -723,7 +741,7 @@ local function LayoutNameRow(unit, hpPos)
         local lw = level and level:IsShown() and TextWidth(level)
         local bt = buildTexts[unit]
         local bw = bt and bt.bapInline and bt:IsShown() and TextWidth(bt)
-        return math.max(w - 2 - (lw and lw + 4 or 0) - (bw and bw + 6 or 0), 10)
+        return math.max(w - 2 - (lw and lw + 4 or 0) - (bw and bw + 6 or 0) - (combat and STATUS_ICON_ROOM or 0), 10)
     end
     if Mirrored(unit) then
         PinText(name,    "RIGHT", hpPos, "TOPRIGHT", -1, y, "RIGHT", nameMax)
@@ -733,6 +751,12 @@ local function LayoutNameRow(unit, hpPos)
         PinText(name,    "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT", nameMax)
         PinText(bbfName, "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT", nameMax)
         PinText(level,   "RIGHT", hpPos, "TOPRIGHT", -1, y, "RIGHT")
+    end
+    -- Status icons just after the name (whichever name text BBF shows), room reserved in nameMax.
+    local shown = bbfName and bbfName:IsShown() and bbfName or name
+    if shown then
+        if combat then PinText(combat, "LEFT", shown, "RIGHT", 3, 0) end
+        if rest then PinText(rest, "LEFT", shown, "RIGHT", REST_X, REST_Y) end
     end
 end
 
