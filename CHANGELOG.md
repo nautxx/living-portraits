@@ -12,6 +12,9 @@
   Loading or importing replaces both addons' settings; **Undo** puts them back. `/lp profile starter|naut|blizzframes`, `/lp export`, `/lp import`.
 - **Welcome on a fresh install:** if BetterBlizzFrames isn't set up for the box portraits yet, Living Portraits offers Starter or Naut once (or recommends BetterBlizzFrames when it isn't installed).
 
+- **One confirmation:** loading a profile, importing, turning on Pixel Border mode and Undo each ask once (what it overwrites, and that it reloads), then reload right away on Yes. Profile buttons show their names in class colors.
+- **Addon list icon** for Living Portraits.
+
 ### Changes
 - **Pixel Border mode** (was *Set up BetterBlizzFrames*, on the Profiles page, `/lp bbfsetup`) only turns on the No Portrait + Pixel Border switches the box style needs and keeps the rest of your BetterBlizzFrames settings. The unit frame look moved into the Naut profile.
 - README: a Profiles section (what each profile sets up, the overwrite and Undo note, sharing) with screenshots of the BlizzFrames profile.
