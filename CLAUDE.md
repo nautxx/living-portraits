@@ -118,6 +118,9 @@ BBF code that touches portraits (read only, for compatibility):
 - [ ] Classic Frames mode in BBF: the model stays aligned
 - [ ] No Lua errors (`/console scriptErrors 1`)
 - [x] Battlegrounds: no Lua errors, target bars stay visible after the grow (2 BGs on v0.2.1, 2026-10-16)
+- [ ] Dungeons: no Lua errors from the target grow (secret bar style, seen in Wailing Caverns before 2026-10-17's fix)
+- [ ] Dungeons: party portraits appear as each member zones in (frame-visibility re-check)
+- [ ] Party member not loaded in / offline: empty box, bars line up with the other party frames
 
 ## Conventions
 - One step per commit; test in game before starting the next step.
