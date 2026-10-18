@@ -276,6 +276,22 @@ check("old saved inset migrated to new default", LivingPortraitsDB.sizes.small.i
 check("settings version recorded", LivingPortraitsDB.version == ns.SETTINGS_VERSION)
 check("defaults applied", LivingPortraitsDB.enabled == true and LivingPortraitsDB.sizes.large.inset == 0.80)
 
+-- v13: Jason's settings became the defaults. Old defaults move, picked values stay, dev keys go.
+do
+    local current = LivingPortraitsDB
+    LivingPortraitsDB = { version = 12, eliteIcon = "center", eliteBorder = true, restIcon = "name",
+        barText = "percent", resourceAlign = "left", resourceRadius = 6, comboRadius = 5, comboPoints = "pixel" }
+    ns.LoadSettings()
+    local m = LivingPortraitsDB
+    check("v13: untouched old defaults move to the new ones", m.eliteIcon == "bottom" and m.eliteBorder == false
+        and m.restIcon == "corner" and m.resourceRadius == 5)
+    check("v13: values someone picked stay", m.barText == "percent" and m.resourceAlign == "left")
+    check("v13: class resource dev keys dropped", m.comboRadius == nil and m.comboPoints == nil)
+    check("fresh defaults are Jason's settings", ns.defaults.barText == "max" and ns.defaults.barTextStyle == "shadow")
+    LivingPortraitsDB = current
+    ns.LoadSettings()
+end
+
 fire("PLAYER_ENTERING_WORLD")
 check("models created lazily, only for units on screen (4 of 9)", #models == 4)
 check("player model shown", shownFor("player"))
@@ -582,12 +598,9 @@ bn:SetText(string.rep("x", 40))
 check("long name stops short of the level and the status icon room", bn.w == math.ceil(123 - 2 - (12 + 4) - 18) + 1)
 check("player box sits left of the health bar", box and box.anchor[1] == "TOPRIGHT" and box.anchor[3] == "TOPLEFT")
 
--- Resting Zzz: after the name by default, or on the portrait box's top-right corner
+-- Resting Zzz: on the portrait box's top-right corner by default, or after the name
 local rp = playerRestIcon.points[1]
-check("rest icon after the name by default", LivingPortraitsDB.restIcon == "name" and rp[1] == "LEFT" and rp[2] == bn and rp[3] == "RIGHT")
-slash("resticon corner")
-rp = playerRestIcon.points[1]
-check("/lp resticon corner: centered on the box's top-right corner", #playerRestIcon.points == 1
+check("rest icon on the box's top-right corner by default", LivingPortraitsDB.restIcon == "corner" and #playerRestIcon.points == 1
     and rp[1] == "CENTER" and rp[2] == box and rp[3] == "TOPRIGHT")
 check("combat icon stays after the name", playerCombatIcon.points[1][2] == bn)
 playerRestIcon:SetPoint("CENTER", PlayerFrame, "TOPLEFT", 40, -30) -- Blizzard/BBF re-place it
@@ -805,6 +818,11 @@ do
 
     slash("refresh")
     check("class resource defaults to pixel circles", LivingPortraitsDB.resource == "pixel")
+    local row0 = comboBar.anchor[2]
+    check("class resource defaults: right-aligned, radius 5", row0 and row0.anchor[1] == "TOPRIGHT"
+        and LivingPortraitsDB.resourceRadius == 5)
+    slash("resourcealign center") -- the checks below were written for these
+    slash("resourcesize 6")
     local row = comboBar.anchor[2]
     check("pixel row sits under the mana bar's border", row and row.anchor and row.anchor[1] == "TOP"
         and row.anchor[2] == manaPos and row.anchor[3] == "BOTTOM" and row.anchor[5] == -(1 + 3))
@@ -1153,25 +1171,49 @@ do
     slash("reset")
 end
 
--- Turning on BBF's Pixel Border mode from our panel, with Undo
+-- Setting up BBF from our panel (Pixel Border mode + the unit frame look), with Undo
 do
     BBF = {}
-    BetterBlizzFramesDB = { noPortraitModes = false, noPortraitSkipTarget = true, unitFrameFont = 2002 }
+    BetterBlizzFramesDB = { noPortraitModes = false, noPortraitSkipTarget = true, unitFrameFont = "Friz Quadrata TT",
+        unitFrameFontColorRGB = { 1, 1, 1, 1 }, darkModeUi = true }
     local bdb = BetterBlizzFramesDB
-    buttons["Pixel Border mode"]()
+    local oldColor = bdb.unitFrameFontColorRGB
+    buttons["Set up BetterBlizzFrames"]()
     check("BBF setup turns on No Portrait + Pixel Border", bdb.noPortraitModes == true and bdb.noPortraitPixelBorder == true)
     check("BBF setup includes every frame", bdb.noPortraitSkipTarget == false and bdb.noPortraitPartyOnly == false)
-    check("BBF setup leaves other BBF settings alone", bdb.unitFrameFont == 2002)
+    check("BBF setup applies the unit frame look", bdb.unitFrameFont == "2002" and bdb.unitFrameValueFont == "Arial Narrow"
+        and bdb.unitFrameHealthbarTexture == "Solid" and bdb.classColorFrames == true and bdb.foreverComboPoints == true
+        and bdb.targetToTYPos == 17 and bdb.hideTargetReputationColor == true)
+    check("BBF setup copies color tables (never hands BBF ours)", bdb.unitFrameFontColorRGB[2] == 1
+        and bdb.unitFrameFontColorRGB ~= oldColor)
+    check("BBF setup leaves BBF's other settings alone", bdb.darkModeUi == true)
     check("BBF setup offers a reload", popupShown == "LIVING_PORTRAITS_RELOAD")
     local backup = LivingPortraitsDB.bbfBackup
-    check("BBF setup backs up the old values", backup and backup.noPortraitModes == false and backup.noPortraitSkipTarget == true)
-    buttons["Pixel Border mode"]()
-    check("applying twice keeps the original backup", LivingPortraitsDB.bbfBackup.noPortraitModes == false)
+    check("BBF setup backs up the old values", backup and backup.noPortraitModes == false and backup.noPortraitSkipTarget == true
+        and backup.unitFrameFont == "Friz Quadrata TT" and backup.unitFrameFontColorRGB[1] == 1)
+    popupShown = nil
+    buttons["Set up BetterBlizzFrames"]()
+    check("already set up: nothing to do", popupShown == nil)
+    bdb.unitFrameFont = "Morpheus" -- changed in BBF after the setup
+    buttons["Set up BetterBlizzFrames"]()
+    check("applying again keeps the original backup", LivingPortraitsDB.bbfBackup.unitFrameFont == "Friz Quadrata TT"
+        and bdb.unitFrameFont == "2002")
+    -- A backup from an older setup (mode only) gets the newer keys added, not overwritten
+    LivingPortraitsDB.bbfBackup = { noPortraitModes = false }
+    bdb.unitFrameFont, bdb.classColorFrames = "Skurri", nil
+    buttons["Set up BetterBlizzFrames"]()
+    check("older backup: newer keys added from the current values", LivingPortraitsDB.bbfBackup.noPortraitModes == false
+        and LivingPortraitsDB.bbfBackup.unitFrameFont == "Skurri" and LivingPortraitsDB.bbfBackup.classColorFrames == "<nil>")
+    LivingPortraitsDB.bbfBackup = nil
+    bdb.noPortraitModes, bdb.noPortraitSkipTarget, bdb.unitFrameFont, bdb.classColorFrames = false, true, "Friz Quadrata TT", nil
+    bdb.noPortraitPixelBorder = nil
+    buttons["Set up BetterBlizzFrames"]()
     slash("reset")
     check("/lp reset keeps BBF's Undo", LivingPortraitsDB.bbfBackup ~= nil)
-    buttons["Undo Pixel Border mode"]()
-    check("Undo restores BBF's values", bdb.noPortraitModes == false and bdb.noPortraitSkipTarget == true)
-    check("Undo removes keys BBF never had", bdb.noPortraitPixelBorder == nil and bdb.noPortraitPartyOnly == nil)
+    buttons["Undo BetterBlizzFrames setup"]()
+    check("Undo restores BBF's values", bdb.noPortraitModes == false and bdb.noPortraitSkipTarget == true
+        and bdb.unitFrameFont == "Friz Quadrata TT")
+    check("Undo removes keys BBF never had", bdb.noPortraitPixelBorder == nil and bdb.classColorFrames == nil)
     check("Undo clears the backup", LivingPortraitsDB.bbfBackup == nil)
     BBF, BetterBlizzFramesDB = nil, nil
 end

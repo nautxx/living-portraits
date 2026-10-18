@@ -4,7 +4,7 @@ Live 3D animated portraits for World of Warcraft unit frames. Your character bre
 
 > Formerly **BBF Animated Portraits**. Upgrading? Delete the old `BBF_AnimatedPortraits` folder from AddOns (if it's still enabled, Living Portraits offers to disable it for you); settings start fresh under the new name. `/bap` still works as an alias for `/lp`.
 
-> **Status:** v0.8.0, public test release. Tested in game on the **WoW Forever beta**, with and without BetterBlizzFrames. See [CHANGELOG](CHANGELOG.md).
+> **Status:** v0.8.1, public test release. Tested in game on the **WoW Forever beta**, with and without BetterBlizzFrames. See [CHANGELOG](CHANGELOG.md).
 
 ## Best with BetterBlizzFrames
 
@@ -15,7 +15,7 @@ Living Portraits works on its own, but it's built to be used with [BetterBlizzFr
 | Style | Circle: the model inside Blizzard's round portrait | **Box**: a pixel-bordered box beside the bars (shown below), or circle if you keep BBF's portraits |
 | Bars and names | Blizzard's default layout | Resized so the box and bars line up, name and level in one row |
 | Extras | Bar text (`350 (462)` or `350 (76%)`) | Also talent builds, tall portraits, mirrored target text, gold/silver elite and rare borders, combo points under the bars and Edit Mode outlines that fit the portrait (box style only) |
-| Setup | Nothing to do | One click: **Turn on** in the settings panel (or `/lp bbfsetup`) switches on BBF's Pixel Border mode |
+| Setup | Nothing to do | One click: **Set up** in the settings panel (or `/lp bbfsetup`) sets BBF up for Living Portraits: Pixel Border mode plus the matching unit frame look |
 
 ## Screenshots
 
@@ -37,7 +37,7 @@ Elite and boss targets get a gold portrait and bar border, rares a silver one (b
 
 ### Class resource
 
-Combo points sit under the player's bars as pixel-bordered circles in the border color (or BetterBlizzFrames' own art, or hidden), lined up left, center or right of the mana bar, with your choice of size and color. The resting Zzz can sit after your name, as here, or over the portrait's top-right corner:
+Combo points sit under the player's bars as pixel-bordered circles in the border color (or BetterBlizzFrames' own art, or hidden), lined up left, center or right of the mana bar, with your choice of size and color. The resting Zzz can sit after your name, as here, or over the portrait's top-right corner (the default):
 
 <img src="docs/screenshots/class-resource.png" alt="Player frame with five empty pixel-bordered combo point circles under the mana bar, aligned right, and the resting Zzz after the name" width="328">
 
@@ -52,7 +52,7 @@ In Edit Mode, the box style's selection outline, snap guide lines and click area
 
 If the model can't load (unit out of range, not zoned in yet, or offline), the circle style steps aside and the normal portrait shows; the box style keeps an empty box so the bars stay lined up, and the model appears when they're back in range.
 
-It **never modifies BetterBlizzFrames' files**. BBF is an optional dependency: when installed, this addon loads after it and follows its layout. The only BBF settings it ever changes are the No Portrait + Pixel Border switches, and only when you click **Turn on** (with Undo).
+It **never modifies BetterBlizzFrames' files**. BBF is an optional dependency: when installed, this addon loads after it and follows its layout. It only changes BBF settings when you click **Set up** (with Undo), and only the unit frame ones listed under Settings.
 
 ## Install
 
@@ -85,7 +85,7 @@ Open **Options → AddOns → LivingPortraits** (or type `/lp options`):
 - **Box Style** (its own page): distance, talent builds, mirrored target text, tall portraits (player, target & focus, party), border color, thickness and opacity, elite/rare border and icon, the resting icon spot, class resource (combo points under the bars: pixel circles, BetterBlizzFrames' art or none, with alignment, size and colors), plus box and bar sizing.
 - **Circle Style** (its own page): distance for large and small frames, background, round edge and model size.
 
-The box style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. The **Turn on** button under *BetterBlizzFrames* switches it on for every frame (your other BBF settings stay as they are) and reloads the UI; **Undo** puts back what you had.
+The box style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. The **Set up** button under *BetterBlizzFrames* turns it on for every frame together with the unit frame look Living Portraits is designed for: fonts (2002 for names, Arial Narrow for numbers), Solid health and "Blizzard Retail Bar Crop 2" mana textures, class colors, combo points under the player frame, target-of-target placement, and less clutter around the portrait (reputation color, combat glow, hit text, PvP and leader icons). Everything else in BBF (auras, cast bars, action bars, chat, minimap, dark mode) stays as it is. It reloads the UI; **Undo** puts back what you had.
 
 ## Commands
 
@@ -103,11 +103,11 @@ The box style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. The 
 | `/lp surname` | First names only (hide surnames) on the player, target, focus, target-of-target and party frames |
 | `/lp zoom 0-1` | Camera zoom (1 = head and shoulders, lower = more body) |
 | `/lp cam 0.3-2 [large\|small\|box]` | Camera distance (lower = closer, bigger face) |
-| `/lp bartext default\|max\|percent` | Health and mana text on the player, target, focus and party bars: Blizzard/BBF's own (default), or left-aligned and always shown as `350 (462)` (max) or `350 (76%)` (percent) |
-| `/lp bartextstyle outline_shadow\|outline\|shadow\|thick\|thick_shadow` | Outline and shadow of the left-aligned bar text (default: thin outline + shadow); the font follows BetterBlizzFrames' unit frame number font |
+| `/lp bartext default\|max\|percent` | Health and mana text on the player, target, focus and party bars: Blizzard/BBF's own, or left-aligned and always shown as `350 (462)` (max, the default) or `350 (76%)` (percent) |
+| `/lp bartextstyle outline_shadow\|outline\|shadow\|thick\|thick_shadow` | Outline and shadow of the left-aligned bar text (default: shadow); the font follows BetterBlizzFrames' unit frame number font |
 | `/lp grow` | Toggle the target's and focus's health and mana growing from empty when they change |
 | `/lp growtime 0.1-2` | How long the grow takes, in seconds (default 0.35) |
-| `/lp bbfsetup` / `/lp bbfundo` | Turn on BBF's No Portrait + Pixel Border mode for every frame / put back your previous BBF settings (reload to apply) |
+| `/lp bbfsetup` / `/lp bbfundo` | Set up BBF for Living Portraits (Pixel Border mode and the unit frame look, see Settings) / put back your previous BBF settings (reload to apply) |
 | `/lp reset` | Restore defaults |
 
 **Box style**
@@ -117,9 +117,9 @@ The box style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. The 
 | `/lp build` | Toggle talent builds (points per tree, like `2/8/0`) on the player, target and focus |
 | `/lp tall [player\|target\|party]` | Toggle tall portraits per group: a taller rectangle, with the build on its own line above the name on player, target and focus (off: square, build next to the level). On by default for all three. No group toggles player + target/focus together |
 | `/lp mirror` | Mirror the target and focus text to match the player frame: name and build next to the portrait, level on the outer edge |
-| `/lp eliteborder` | Toggle the gold (elite, boss) and silver (rare) portrait and bar borders on the target and focus (on by default) |
+| `/lp eliteborder` | Toggle the gold (elite, boss) and silver (rare) portrait and bar borders on the target and focus (off by default) |
 | `/lp elitecolor RRGGBB` / `/lp rarecolor RRGGBB` | Border colors for elite/boss (default `ffc71a`, gold) and rare (default `c7ccdb`, silver) targets |
-| `/lp eliteicon top\|bottom\|center\|level\|hidden` | Where the target/focus elite icon goes: the portrait's outer top corner, outer bottom corner, bottom center (default), next to the level, or hidden |
+| `/lp eliteicon top\|bottom\|center\|level\|hidden` | Where the target/focus elite icon goes: the portrait's outer top corner, outer bottom corner (default), bottom center, next to the level, or hidden |
 | `/lp bordercolor RRGGBB` | Color of the 1px lines around the portrait box and the bars (default `000000`, black) |
 | `/lp bordersize thin\|medium\|heavy` | Thickness of those lines: 1, 2 or 3px (default thin) |
 | `/lp borderalpha 0-1` | Opacity of those lines (default 1). Below 1, the box and bars close up so no gap shows where a line was |
@@ -130,10 +130,10 @@ The box style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. The 
 | `/lp alignmana` | Toggle lining up the mana bar with the health bar next to the box |
 | `/lp gap 0-20` | Space between the box and the bars (1 = borders share one line) |
 | `/lp barspacing 0-10` | Space between health and mana (0 = borders share one line) |
-| `/lp resticon name\|corner` | Where the player's resting Zzz goes: after the name (default) or over the portrait box's top-right corner |
+| `/lp resticon name\|corner` | Where the player's resting Zzz goes: after the name or over the portrait box's top-right corner (default) |
 | `/lp resource pixel\|bbf\|none` | Class resource under the player's bars: pixel-bordered circles (default; gems for soul shards), BetterBlizzFrames' own combo point art, or hidden |
-| `/lp resourcealign left\|center\|right` | Line the class resource up with the mana bar's left edge, middle (default) or right edge |
-| `/lp resourcesize 2-16` | Circle radius inside the border (default 6); also scales BetterBlizzFrames' combo points |
+| `/lp resourcealign left\|center\|right` | Line the class resource up with the mana bar's left edge, middle or right edge (default) |
+| `/lp resourcesize 2-16` | Circle radius inside the border (default 5); also scales BetterBlizzFrames' combo points |
 | `/lp resourcecolor [combo\|shards\|arcane\|holy] RRGGBB` | Filled color per resource (defaults: red, purple, blue, gold); no resource = your class's |
 
 **Circle style**

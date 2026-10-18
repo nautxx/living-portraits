@@ -15,7 +15,7 @@ ns.ADDON_NAME = ADDON_NAME
 ns.PREFIX = "Living|cff00c0ffPortraits|r " -- chat prefix
 
 -- Bump when a default changes in a way saved settings should pick up (see MigrateSettings).
-local SETTINGS_VERSION = 12
+local SETTINGS_VERSION = 13
 
 local defaults = {
     enabled  = true,
@@ -36,29 +36,29 @@ local defaults = {
     growBars    = true, -- new target: health and mana grow from empty to their value
     growTime    = 0.35, -- seconds the grow takes (/lp growtime)
     showBuild   = true, -- square: talent build ("2/8/0") on the player, target and focus (/lp build)
-    eliteBorder = true, -- square: target/focus box border gold for elite/boss, silver for rare (/lp eliteborder)
+    eliteBorder = false, -- square: target/focus box border gold for elite/boss, silver for rare (/lp eliteborder)
     eliteColor  = "ffffc71a", -- square: elite/boss border color, ARGB hex like the settings swatch (/lp elitecolor)
     rareColor   = "ffc7ccdb", -- square: rare/rare elite border color (/lp rarecolor)
     -- Square: where the target/focus elite icon goes: "top"/"bottom" (outer corner of the
     -- portrait box), "center" (bottom center of the box), "level" (beside the level), "hidden".
-    eliteIcon   = "center",
+    eliteIcon   = "bottom",
     -- Square: the box grows upward by a line (the talent build's, above the name), per group:
     -- player, target (target + focus), party. ToT stays square (/lp tall [group]).
     tallPortraits = { player = true, target = true, party = true },
     hideSurname = true, -- first names only on our frames (/lp surname)
     mirrorTarget = true, -- square: target/focus text mirrors the player's (/lp mirror)
-    restIcon    = "name", -- square: resting Zzz after the player's name, or "corner" of the portrait box (/lp resticon)
+    restIcon    = "corner", -- square: resting Zzz on the portrait box's top-right corner, or "name" (after it) (/lp resticon)
     -- Health/mana text on player, target, focus and party bars, left-aligned and always shown:
     -- "default" (Blizzard/BBF's text), "max" = "350 (462)", "percent" = "350 (76%)" (/lp bartext).
-    barText     = "default",
-    -- Its look: "outline_shadow" (default), "outline", "shadow", "thick", "thick_shadow" (/lp bartextstyle).
-    barTextStyle = "outline_shadow",
+    barText     = "max",
+    -- Its look: "shadow" (default), "outline_shadow", "outline", "thick", "thick_shadow" (/lp bartextstyle).
+    barTextStyle = "shadow",
     -- Square: the player's class resource (rogue/druid combo points, warlock shards, mage arcane
     -- charges, paladin holy charges) under the bars: "pixel" (our circles, bordered like the box)
     -- "bbf" (rogue/druid: BBF's own combo point art there) or "none" (hidden) (/lp resource).
     resource       = "pixel",
-    resourceAlign  = "center", -- under the mana bar: "left", "center" or "right" (/lp resourcealign)
-    resourceRadius = 6,        -- circle radius in px inside the border (/lp resourcesize)
+    resourceAlign  = "right",  -- under the mana bar: "left", "center" or "right" (/lp resourcealign)
+    resourceRadius = 5,        -- circle radius in px inside the border (/lp resourcesize)
     -- A filled circle's color per resource, ARGB hex (/lp resourcecolor [combo|shards|arcane|holy] RRGGBB).
     resourceColors = { combo = "ffe62e2e", shards = "ffa15cff", arcane = "ff4db8ff", holy = "ffffd633" },
     borderColor = "ff000000", -- square: box + bar border color, ARGB hex like the settings swatch (/lp bordercolor)
@@ -173,6 +173,19 @@ local function MigrateSettings()
     if version < 12 then
         -- v12: drop keys from removed experiments (model facing/shift, mirror angle, build row).
         db.shift, db.facing, db.mirrorAngle, db.mirrorShift, db.buildRow = nil, nil, nil, nil, nil
+    end
+    if version < 13 then
+        -- v13: Jason's settings became the defaults. Every install saved the old defaults on its
+        -- first load, so move a key only while it still holds the old default (a value someone
+        -- picked stays). Also drop the class resource's dev-build keys (comboPoints and co.).
+        local OLD = {
+            barText = "default", barTextStyle = "outline_shadow", eliteIcon = "center", eliteBorder = true,
+            restIcon = "name", resourceAlign = "center", resourceRadius = 6,
+        }
+        for key, old in pairs(OLD) do
+            if db[key] == old then db[key] = defaults[key] end
+        end
+        db.comboPoints, db.comboAlign, db.comboRadius, db.comboColor = nil, nil, nil, nil
     end
     db.version = SETTINGS_VERSION
 end

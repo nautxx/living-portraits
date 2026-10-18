@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.8.1 (2026-10-18)
+
+### Changes
+- **New defaults** (Jason's own setup): bar text `350 (462)` with a shadow, elite icon on the portrait's bottom corner, elite/rare borders off, resting Zzz on the portrait's corner, class resource right-aligned at radius 5. Existing installs move to these only where a setting still has the old default; anything you changed stays.
+
+### Features
+- **Set up BetterBlizzFrames in one click:** the settings button (was *Turn on Pixel Border mode*, `/lp bbfsetup`) now also applies the unit frame look Living Portraits is designed for: fonts, bar textures, class colors, combo points under the player frame, target-of-target placement, and less clutter around the portrait. Auras, cast bars, action bars, chat, minimap and dark mode are left alone. **Undo** puts everything back.
+
 ## 0.8.0 (2026-10-18)
 
 ### Features

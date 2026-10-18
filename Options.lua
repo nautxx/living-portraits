@@ -81,7 +81,7 @@ local function BuildOptions()
         c:Add("square", "Box")
         c:Add("circle", "Circle")
         return c:GetData()
-    end, "Box: the portrait in a bordered box beside the bars (needs BBF's Pixel Border mode, below). Circle: inside the round portrait. Frames where BBF still shows portraits always use the circle.")
+    end, "Box: the portrait in a bordered box beside the bars (needs BBF's Pixel Border mode: Set up BetterBlizzFrames, below). Circle: inside the round portrait. Frames where BBF still shows portraits always use the circle.")
     for _, g in ipairs({ { "player", "Player Portrait", "player frame" },
                          { "target", "Target Portrait", "target frame" },
                          { "focus", "Focus Portrait", "focus frame" },
@@ -129,12 +129,12 @@ local function BuildOptions()
         function(v) return ("%.2fs"):format(v) end)
 
     Header("BetterBlizzFrames")
-    layout:AddInitializer(CreateSettingsButtonInitializer("Pixel Border mode", "Turn on",
+    layout:AddInitializer(CreateSettingsButtonInitializer("Set up BetterBlizzFrames", "Set up",
         function() print(PREFIX .. ApplyBBFSetup()) end,
-        "Turns on BBF's No Portrait + Pixel Border mode on every frame, which the box style needs. Your other BBF settings stay as they are. Reloads the UI.", true))
-    layout:AddInitializer(CreateSettingsButtonInitializer("Undo Pixel Border mode", "Undo",
+        "Sets BBF up the way Living Portraits is designed for: No Portrait + Pixel Border mode on every frame (the box style needs it), unit frame fonts, bar textures, class colors, combo points under the player frame, target-of-target placement, and hides clutter around the portrait (reputation color, combat glow, hit text, PvP and leader icons). Auras, cast bars, action bars, chat, minimap and dark mode stay as they are. Reloads the UI.", true))
+    layout:AddInitializer(CreateSettingsButtonInitializer("Undo BetterBlizzFrames setup", "Undo",
         function() print(PREFIX .. UndoBBFSetup()) end,
-        "Puts back the BBF settings you had before turning it on here. Reloads the UI.", true))
+        "Puts back the BBF settings you had before setting it up here. Reloads the UI.", true))
 
     -- Each style's settings on its own page under the main entry (falls back to sections on
     -- the main page if the client has no subcategories). Each style's camera distance lives
