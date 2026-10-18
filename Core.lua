@@ -26,7 +26,7 @@ local CORNERS  = "Interface\\AddOns\\" .. ADDON_NAME .. "\\media\\corners"
 -- would show as a square, so they fade out with it.
 
 -- Bump when a default changes in a way saved settings should pick up (see MigrateSettings).
-local SETTINGS_VERSION = 10
+local SETTINGS_VERSION = 11
 
 local defaults = {
     enabled  = true,
@@ -47,7 +47,9 @@ local defaults = {
     growBars    = true, -- new target: health and mana grow from empty to their value
     growTime    = 0.35, -- seconds the grow takes (/lp growtime)
     showBuild   = true, -- square: talent build ("2/8/0") on the player, target and focus (/lp build)
-    tallPortraits = true, -- square: player/target/focus box grows upward by a line for the build (/lp tall)
+    -- Square: the box grows upward by a line (the talent build's, above the name), per group:
+    -- player, target (target + focus), party. ToT stays square (/lp tall [group]).
+    tallPortraits = { player = true, target = true, party = false },
     hideSurname = false, -- first names only on our frames (/lp surname)
     mirrorTarget = false, -- square: target/focus text mirrors the player's (/lp mirror)
     borderColor = "ff000000", -- square: box + bar border color, ARGB hex like the settings swatch (/lp bordercolor)
@@ -295,6 +297,11 @@ local function MigrateSettings()
     end
     if version < 10 then
         db.offsets = nil                -- v10: measured centering offsets
+    end
+    if version < 11 and type(db.tallPortraits) ~= "table" then
+        -- v11: tall per group. Keep the old switch for player/target/focus; party is new (off).
+        local on = db.tallPortraits ~= false
+        db.tallPortraits = { player = on, target = on, party = false }
     end
     db.version = SETTINGS_VERSION
 end
@@ -982,10 +989,15 @@ end
 -- their size and spot. Reserved even with no build to show (NPC targets): bars can't be
 -- re-laid out in combat, so the layout can't change per target. Off: square box, and the
 -- build sits next to the level.
+-- Party (no name row, no build) just gets the same taller box beside the name above its bars.
 local BUILD_LINE = 9
-local TALL_UNITS = { player = true, target = true, focus = true }
+local TALL_GROUP = {
+    player = "player", target = "target", focus = "target",
+    party1 = "party", party2 = "party", party3 = "party", party4 = "party",
+}
 local function BuildLine(unit)
-    if not (TALL_UNITS[unit] and db.tallPortraits) then return 0 end -- independent of showBuild
+    local group = TALL_GROUP[unit]
+    if not (group and db.tallPortraits[group]) then return 0 end -- independent of showBuild
     return BUILD_LINE
 end
 
@@ -996,7 +1008,7 @@ local function PlaceSquare(sq, hpPos, manaPos)
     local top, bottom = Safe(hpPos:GetTop()), Safe(bottomRef:GetBottom())
     if not top or not bottom then return false end
     local row = hpPos.bapRow or 0 -- the name row sits above the health bar, inside the box
-    local extra = row > 0 and BuildLine(sq.unit) or 0 -- the build line sits above the name row
+    local extra = BuildLine(sq.unit) -- the build line sits above the name row (party: above the bars)
     local scale = hpPos:GetEffectiveScale() / box:GetEffectiveScale()
     local size = (top + row - bottom) * scale
     if size <= 0 then return false end
@@ -1929,7 +1941,10 @@ BuildOptions = function()
     Check({ "alignMana" }, "Align mana bar", "Line the mana bar up with the health bar next to the box.")
     Check({ "showBuild" }, "Show Talent Build", "Points per talent tree (like 2/8/0) on the player, target and focus frames. Other players need to be within inspect range (about 30 yards); NPCs show nothing.")
     Check({ "mirrorTarget" }, "Mirror Target Text", "Target and focus: name and talent build next to the portrait, level on the outer edge, mirroring the player frame.")
-    Check({ "tallPortraits" }, "Tall portraits", "Player, target and focus: the portrait grows into a taller rectangle, with a line above the name for the talent build. Off: square portraits, build next to the level.")
+    local TALL_TIP = "The portrait grows into a taller rectangle. Player, target and focus: with a line above the name for the talent build (off: square, build next to the level)."
+    Check({ "tallPortraits", "player" }, "Tall portraits: player", TALL_TIP)
+    Check({ "tallPortraits", "target" }, "Tall portraits: target & focus", TALL_TIP)
+    Check({ "tallPortraits", "party" }, "Tall portraits: party", TALL_TIP)
     Slider({ "squareGap" }, "Gap to bars", "Space between the box and the bars (1 = borders share one line).", 0, 20, 1)
     Slider({ "barSpacing" }, "Bar spacing", "Space between health and mana (0 = borders share one line).", 0, 10, 1)
 
@@ -2003,14 +2018,15 @@ local function PrintStatus()
     print(("  square: cam=%.2f bg=%.2f gap=%d alignmana=%s split=%.2f  extend: large=%d small=%d"):format(
         Q.cam, db.squareBg, db.squareGap, tostring(db.alignMana), db.hpShare, db.stackExtra.large, db.stackExtra.small))
     print(("  name rows: large=%d tot=%d party=%d   build=%s tall=%s hidesurnames=%s"):format(db.nameRow.large,
-        db.nameRow.tot, db.nameRow.party, tostring(db.showBuild), tostring(db.tallPortraits), tostring(db.hideSurname)))
+        db.nameRow.tot, db.nameRow.party, tostring(db.showBuild), ("player=%s target=%s party=%s"):format(tostring(db.tallPortraits.player),
+        tostring(db.tallPortraits.target), tostring(db.tallPortraits.party)), tostring(db.hideSurname)))
 end
 
 local function PrintHelp()
     print("  /lp options  |  /lp bbfsetup (turn on BBF's Pixel Border mode)  |  /lp bbfundo")
     print("  /lp toggle  |  /lp vignette  |  /lp zoom 0-1  |  /lp grow  |  /lp growtime 0.1-2  |  /lp reset")
     print("  /lp style square|circle  |  /lp bg 0-1  |  /lp extend 0-30 [large|small]  |  /lp split 0.4-0.85")
-    print("  /lp namerow 0-24 [large|tot|party]  |  /lp gap 0-20  |  /lp barspacing 0-10  |  /lp alignmana  |  /lp build  |  /lp tall  |  /lp surname  |  /lp mirror")
+    print("  /lp namerow 0-24 [large|tot|party]  |  /lp gap 0-20  |  /lp barspacing 0-10  |  /lp alignmana  |  /lp build  |  /lp tall [player|target|party]  |  /lp surname  |  /lp mirror")
     print("  /lp bordercolor RRGGBB  |  /lp borderalpha 0-1  |  /lp bordersize thin|medium|heavy")
     print("  /lp inset 0.3-1.2 [large|small]  |  /lp cam 0.3-2 [large|small|square]")
     print("  /lp unit player|target|focus|tot|party  |  /lp refresh  |  /lp debug [unit]")
@@ -2092,7 +2108,7 @@ end
 -- On/off settings: command -> db key.
 local SLASH_TOGGLES = {
     toggle = "enabled", vignette = "vignette", grow = "growBars", alignmana = "alignMana",
-    build = "showBuild", tall = "tallPortraits", surname = "hideSurname", mirror = "mirrorTarget",
+    build = "showBuild", surname = "hideSurname", mirror = "mirrorTarget",
 }
 -- Number settings: command -> { db key, min, max }.
 local SLASH_NUMBERS = {
@@ -2131,6 +2147,20 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
         growDebug = not growDebug
         print("  grow debug " .. (growDebug and "on: change targets and watch chat." or "off."))
         return
+    elseif cmd == "tall" then
+        -- No group: player + target/focus together (party has its own switch).
+        local t = db.tallPortraits
+        local group = arg == "focus" and "target" or arg
+        if group == "player" or group == "target" or group == "party" then
+            t[group] = not t[group]
+        elseif not arg then
+            local on = not (t.player and t.target)
+            t.player, t.target = on, on
+        else
+            print("  /lp tall [player|target|party]")
+            return
+        end
+        print(("  tall: player=%s target=%s party=%s"):format(tostring(t.player), tostring(t.target), tostring(t.party)))
     elseif SLASH_TOGGLES[cmd] then
         local key = SLASH_TOGGLES[cmd]
         db[key] = not db[key]
