@@ -48,6 +48,8 @@ local defaults = {
     growTime    = 0.35, -- seconds the grow takes (/lp growtime)
     showBuild   = true, -- square: talent build ("2/8/0") on the player, target and focus (/lp build)
     eliteBorder = true, -- square: target/focus box border gold for elite/boss, silver for rare (/lp eliteborder)
+    eliteColor  = "ffffc71a", -- square: elite/boss border color, ARGB hex like the settings swatch (/lp elitecolor)
+    rareColor   = "ffc7ccdb", -- square: rare/rare elite border color (/lp rarecolor)
     -- Square: where the target/focus elite icon goes: "top"/"bottom" (outer corner of the
     -- portrait box), "center" (bottom center of the box), "level" (beside the level), "hidden".
     eliteIcon   = "top",
@@ -886,11 +888,16 @@ end
 -- line would draw twice and show darker, so the duplicate edge is hidden.
 local EDGE_RIGHT, EDGE_LEFT, EDGE_TOP = 2, 4, 1
 
-local function BorderRGBA()
-    local hex = db.borderColor
-    if type(hex) ~= "string" or #hex ~= 8 then hex = "ff000000" end
+-- ARGB hex (the settings color swatch's format) -> r, g, b.
+local function HexRGB(hex, fallback)
+    if type(hex) ~= "string" or #hex ~= 8 then hex = fallback end
     local function c(i) return (tonumber(hex:sub(i, i + 1), 16) or 0) / 255 end
-    return c(3), c(5), c(7), db.borderAlpha or 1
+    return c(3), c(5), c(7)
+end
+
+local function BorderRGBA()
+    local r, g, b = HexRGB(db.borderColor, "ff000000")
+    return r, g, b, db.borderAlpha or 1
 end
 
 local function ColorEdges(edges, r, g, b, a, hideA, hideB)
@@ -903,27 +910,26 @@ local function ColorEdges(edges, r, g, b, a, hideA, hideB)
     end
 end
 
--- Elite/rare on target and focus: the box border turns gold (elite, boss) or silver (rare,
+-- Elite/rare on target and focus: the box and bar borders turn gold (elite, boss) or silver (rare,
 -- rare elite), like classic's dragon around the portrait. The small elite icon alone was too
--- easy to miss. nil for normal units, other frames, or a secret classification.
-local ELITE_COLORS = {
-    elite = { 1, 0.78, 0.1 }, worldboss = { 1, 0.78, 0.1 },
-    rare = { 0.78, 0.8, 0.86 }, rareelite = { 0.78, 0.8, 0.86 },
-}
+-- easy to miss. Both colors are settings. nil for normal units, other frames, or a secret
+-- classification.
+local ELITE_COLOR_KEY = { elite = "eliteColor", worldboss = "eliteColor", rare = "rareColor", rareelite = "rareColor" }
 local function EliteColor(unit)
     if not (db.eliteBorder and UNITS[unit].elite and UnitExists(unit)) then return end
-    local c = ELITE_COLORS[Safe(UnitClassification(unit)) or ""]
-    if c then return c[1], c[2], c[3] end
+    local key = ELITE_COLOR_KEY[Safe(UnitClassification(unit)) or ""]
+    if key then return HexRGB(db[key], defaults[key]) end
 end
 
 local function ApplyBorders(unit, manaBar, hpBar)
     local r, g, b, a = BorderRGBA()
+    local er, eg, eb = EliteColor(unit) -- elite/rare: box and bars all get its color
+    if er then r, g, b = er, eg, eb end
     local size = BorderSize()
     local sq = squares[unit]
     if sq then
         LayoutEdges(sq.edges, sq.box, size)
-        local er, eg, eb = EliteColor(unit)
-        if er then ColorEdges(sq.edges, er, eg, eb, a) else ColorEdges(sq.edges, r, g, b, a) end
+        ColorEdges(sq.edges, r, g, b, a)
     end
     LayoutEdges(hpBar and hpBar.BBFBlackBorder, hpBar and hpBar.BBFPositionFrame, size)
     LayoutEdges(manaBar and manaBar.BBFBlackBorder, manaBar and manaBar.BBFPositionFrame, size)
@@ -2025,7 +2031,12 @@ BuildOptions = function()
     Slider({ "borderAlpha" }, "Border Opacity", "Opacity of the 1px lines around the portrait box and the bars.", 0, 1, 0.05, FormatPercent)
     Check({ "alignMana" }, "Align mana bar", "Line the mana bar up with the health bar next to the box.")
     Check({ "showBuild" }, "Show Talent Build", "Points per talent tree (like 2/8/0) on the player, target and focus frames. Other players need to be within inspect range (about 30 yards); NPCs show nothing.")
-    Check({ "eliteBorder" }, "Elite Border", "Target and focus: the portrait border turns gold for elites and bosses, silver for rares.")
+    Check({ "eliteBorder" }, "Elite Border", "Target and focus: the portrait and bar borders turn gold for elites and bosses, silver for rares.")
+    for _, c in ipairs({ { "eliteColor", "Elite Border Color", "Border color for elite and boss targets." },
+                         { "rareColor", "Rare Border Color", "Border color for rare and rare elite targets." } }) do
+        local get, set, default = Path({ c[1] })
+        Settings.CreateColorSwatch(category, Register(c[1], c[2], default, get, set), c[3])
+    end
     local eliteGet, eliteSet, eliteDefault = Path({ "eliteIcon" })
     Settings.CreateDropdown(category, Register("eliteIcon", "Elite Icon", eliteDefault, eliteGet, eliteSet), function()
         local c = Settings.CreateControlTextContainer()
@@ -2123,6 +2134,7 @@ local function PrintHelp()
     print("  /lp toggle  |  /lp vignette  |  /lp zoom 0-1  |  /lp grow  |  /lp growtime 0.1-2  |  /lp reset")
     print("  /lp style square|circle  |  /lp bg 0-1  |  /lp extend 0-30 [large|small]  |  /lp split 0.4-0.85")
     print("  /lp namerow 0-24 [large|tot|party]  |  /lp gap 0-20  |  /lp barspacing 0-10  |  /lp alignmana  |  /lp build  |  /lp tall [player|target|party]  |  /lp surname  |  /lp mirror  |  /lp eliteborder  |  /lp eliteicon top|bottom|center|level|hidden")
+    print("  /lp elitecolor RRGGBB  |  /lp rarecolor RRGGBB")
     print("  /lp bordercolor RRGGBB  |  /lp borderalpha 0-1  |  /lp bordersize thin|medium|heavy")
     print("  /lp inset 0.3-1.2 [large|small]  |  /lp cam 0.3-2 [large|small|square]")
     print("  /lp unit player|target|focus|tot|party  |  /lp refresh  |  /lp debug [unit]")
@@ -2288,6 +2300,8 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
         db.borderSize = BORDER_SIZES[arg]
     elseif cmd == "bordercolor" and arg and arg:match("^%x%x%x%x%x%x$") then
         db.borderColor = "ff" .. arg
+    elseif (cmd == "elitecolor" or cmd == "rarecolor") and arg and arg:match("^%x%x%x%x%x%x$") then
+        db[cmd == "elitecolor" and "eliteColor" or "rareColor"] = "ff" .. arg
     elseif cmd == "inset" and val then
         SetEach(db.sizes, size, Clamp(val, 0.3, 1.2), "inset")
     elseif cmd == "cam" and val then
