@@ -1,6 +1,6 @@
 -- Offline test harness for Living Portraits.
--- Stubs just enough of the WoW API to load Core.lua and exercise its logic.
--- Run from the repo root:  lua5.1 tests/run.lua
+-- Stubs just enough of the WoW API to load the addon and exercise its logic.
+-- Run from the repo root:  luajit tests/run.lua
 -- Not listed in the .toc, so WoW never loads this file.
 
 local realPrint = print
@@ -20,7 +20,7 @@ end
 
 -- Child keys the addon probes; real WoW returns nil when absent, the stub must too.
 local CHILD_KEYS = { "TargetFrameContent", "PlayerFrameContent", "HealthBarContainer",
-    "HealthBar", "ManaBar", "BBFPositionFrame" }
+    "HealthBar", "ManaBar", "BBFPositionFrame", "BossPortraitFrameTexture", "HighLevelTexture" }
 
 local function region(t)
     t = stubIndex(t or {})
@@ -144,6 +144,7 @@ function UnitExists(u) return world.exists[u] end
 function UnitGUID(u) return world.guid[u] or ("G-" .. u) end
 function UnitIsVisible(u) return world.visible[u] ~= false end
 function UnitIsConnected(u) return world.connected[u] ~= false end
+function UnitClassification() return "normal" end
 function issecretvalue() return world.secret end
 -- Players and talents: world.players marks units that are players; talent trees are
 -- 3 groups (11, 12, 13) and configs map to points per group (zero groups left out).
@@ -227,8 +228,12 @@ C_AddOns = {
 BBF = { SetCustomFonts = function() end }
 
 -- Load the addon --------------------------------------------------------------
-local chunk = assert(loadfile("Core.lua"))
-chunk("LivingPortraits", {})
+-- Every file in .toc order, sharing one namespace table like WoW does.
+local ns = {}
+for line in io.lines("LivingPortraits.toc") do
+    local file = line:gsub("\r", ""):gsub("\\", "/")
+    if file:match("%.lua$") then assert(loadfile(file))("LivingPortraits", ns) end
+end
 
 local function fire(event, arg) eventFrame.OnEvent(eventFrame, event, arg) end
 local function slash(msg) SlashCmdList.LIVINGPORTRAITS(msg) end
@@ -252,7 +257,7 @@ fire("ADDON_LOADED", "LivingPortraits")
 local bbfHooked = BBF.SetCustomFonts
 BBF = nil
 check("old saved inset migrated to new default", LivingPortraitsDB.sizes.small.inset == 0.80)
-check("settings version recorded", LivingPortraitsDB.version == 10)
+check("settings version recorded", LivingPortraitsDB.version == ns.SETTINGS_VERSION)
 check("defaults applied", LivingPortraitsDB.enabled == true and LivingPortraitsDB.sizes.large.inset == 0.80)
 
 fire("PLAYER_ENTERING_WORLD")
@@ -285,7 +290,7 @@ check("soft edge hidden too with a clear background (no dark ring)", not vig.sho
 slash("circlebg 1")
 
 -- Centering offset and calibration
-check("measured default offsets applied", LivingPortraitsDB.offsets.tot[1] == -1.3 and LivingPortraitsDB.offsets.tot[2] == 2.2)
+check("measured default offsets applied", LivingPortraitsDB.offsets.tot[1] == -1.3 and LivingPortraitsDB.offsets.tot[2] == 0)
 local defA = modelFor("player").anchor
 check("player portrait uses its measured offset", defA and defA[4] == -0.5 and defA[5] == 0.6)
 slash("offset player 2 -1")
@@ -422,8 +427,13 @@ local function barWithPos(parent, pos, anchor)
     bar.h = pos.h
     bar.anchor = anchor or { "TOPLEFT", parent, "TOPLEFT", 0, 0 }
     bar.baseTop, bar.origY = pos.top, bar.anchor[5]
+    bar.origX = bar.anchor[4]
     local pf = newFrame("Frame", bar, 8)
-    pf.left, pf.right, pf.h = pos.left, pos.right, pos.h
+    pf.h = pos.h
+    -- Left/right follow the bar's x offset; the right edge also follows a width change
+    function pf:GetLeft() return pos.left + (bar.anchor[4] - bar.origX) end
+    function pf:GetWidth() return rawget(self, "w") or (pos.right - pos.left) end
+    function pf:GetRight() return self:GetLeft() + self:GetWidth() end
     function pf:GetTop() return bar.baseTop + (bar.anchor[5] - bar.origY) end
     function pf:GetBottom() return self:GetTop() - self.h end
     function pf:GetCenter() return 0, self:GetTop() - self.h / 2 end
@@ -507,6 +517,10 @@ totContainer.bbfName = rowText()
 -- BBF's No Portrait mode moves the player's portrait container into a hidden frame
 playerContainer.shown = false
 BBF = { HasNoPortrait = function(u) return u == "player" or u == "target" or u == "targettarget" end }
+-- Target text mirrors the player's by default; the layout checks below start unmirrored
+-- (the mirror block under the talent build turns it back on)
+check("target text mirrored by default", LivingPortraitsDB.mirrorTarget == true)
+slash("mirror")
 slash("style square")
 local function squareModel(unit, root)
     for _, m in ipairs(models) do
@@ -872,14 +886,12 @@ do
     BBF, BetterBlizzFramesDB = nil, nil
 end
 
--- Hide surnames on our frames
+-- Hide surnames on our frames (on by default)
 do
     PlayerName:SetText("Naut Sfw")
     PlayerFrame.bbfName:SetText("|cffffffffNaut Sfw|r")
     tick() -- hooks the name texts
-    check("surnames show by default", PlayerName.text == "Naut Sfw")
-    slash("surname")
-    check("/lp surname strips the surname", PlayerName.text == "Naut")
+    check("surnames hidden by default", LivingPortraitsDB.hideSurname == true and PlayerName.text == "Naut")
     check("only the surname goes; BBF's color codes stay", PlayerFrame.bbfName.text == "|cffffffffNaut|r")
     PlayerName:SetText("Naut Sfw") -- Blizzard updates the name
     check("later name updates are stripped too", PlayerName.text == "Naut")
@@ -888,6 +900,9 @@ do
     slash("surname")
     check("turning it off puts the full name back", PlayerName.text == "Naut Sfw"
         and PlayerFrame.bbfName.text == "|cffffffffNaut Sfw|r")
+    slash("surname")
+    check("/lp surname strips the surname", PlayerName.text == "Naut")
+    proxies.LivingPortraits_hideSurname.set(false)
     proxies.LivingPortraits_hideSurname.set(true)
     check("the panel checkbox applies right away, not on the next tick", PlayerName.text == "Naut")
     world.names.target = { "Creeg", "Head" }

@@ -20,8 +20,23 @@ animation, like the character screen, as a **companion addon** to BetterBlizzFra
 | Name | **Living Portraits** (folder `LivingPortraits`, was BBF Animated Portraits until v0.2.1) | "Living portraits" (the Harry Potter-style moving pictures) is unused by other WoW addons and sets it apart from Animated Blizzard Portraits / AlwaysFace. The BBF link lives in the description (`## Notes`), not the name. Rejected: "BetterBlizzPortraits" (reads as an official Bodify addon). In game the name is written as one word and styled like BBF's (`Living|cff00c0ffPortraits|r`: .toc title, settings entry, chat prefix), matching BetterBlizzFrames/Plates in the AddOns list; prose (README, CurseForge) keeps "Living Portraits" with the space for search. The settings list sorts on the raw name, so no leading color code. Slash `/lp`, `/livingportraits`, old `/bap` kept as alias. Renaming the folder means a fresh SavedVariables file: testers' settings reset. |
 | Repo location | `~/GitHub/Main/living-portraits`, symlinked into AddOns as `LivingPortraits` | The beta client folder is temporary. One repo can feed multiple clients. |
 
-## Architecture (Core.lua)
-- **200-local limit:** Lua 5.1 (WoW) allows at most 200 locals in one function, and Core.lua's main chunk counts as one. It hit 205 on 2026-10-18 ("main function has more than 200 local variables", the addon would not load). The talent build and bar text modules are now scoped in `do ... end` blocks with only their outside-used functions declared before them (~184 left in the main chunk). New self-contained code goes in a `do` block the same way; always run `luajit -bl Core.lua` before committing.
+## Architecture
+- **Files** (split from one 2,585-line Core.lua on 2026-10-18, like BBF's `modules/`; the .toc order is the load order):
+
+  | File | Contents |
+  |---|---|
+  | `Core.lua` | `defaults`, `SETTINGS_VERSION`, `MigrateSettings`, `LoadSettings`/`OnLoad`, helpers (`Safe`, `IsSecret`, `Clamp`, `ApplyCamera`, …), shared state (`layers`, `squares`, `buildTexts`), refresh scheduling (`QueueRefresh`, `QueueRefreshAll`, `RetryRefresh`) |
+  | `Units.lua` | `UNITS`, `UNIT_LIST`, `GROUPS`, `PARTY`, `Lookup`, `UnitFrameOf` |
+  | `modules/circle.lua` | circle layers, layering, `RefreshCircle` |
+  | `modules/bars.lua` | bar layout (`LayoutBars`, `GetBarFrames`), bar text centering, pixel border and color helpers |
+  | `modules/nameRow.lua` | `Pin`/`RestorePins`, name row, elite icon/skull, status icons, party icons |
+  | `modules/totClearance.lua` | `ClearTot`/`RestoreTot` |
+  | `modules/box.lua` | box frame, `ApplyBorders`, `RestoreBars`, tall portraits, `RefreshSquare` |
+  | `modules/grow.lua`, `talentBuild.lua`, `barText.lua`, `surnames.lua`, `bbfSetup.lua` | one feature each (`bbfSetup` also holds the old-install check) |
+  | `Refresh.lua` | `Refresh`/`RefreshAll`, ticker, event frame, BBF re-layout hooks (loaded after the modules) |
+  | `Options.lua`, `Slash.lua` | settings panel, `/lp` and `/lp debug` |
+- **Sharing between files:** every file gets the addon namespace (`local _, ns = ...`). What other files use is exported at the bottom (`ns.X = X`); a file copies earlier files' exports into locals at the top (`local Safe = ns.Safe`). A call into a **later** file goes through `ns` at call time (`ns.Refresh(unit)` in Core, `ns.BuildOptions()` in Refresh.lua), since its export doesn't exist yet when the earlier file loads. `db` is nil until `ADDON_LOADED`; each file that needs it keeps its own local via `ns.OnLoad(function(saved) db = saved end)` (`/lp reset` wipes in place, so the reference stays valid). New features go in a new `modules/` file added to the .toc. Before committing, run `luajit -bl` on each file and check that its global reads (`GGET`) are only WoW API: a missing import shows up as a new global read, not a load error.
+- **Tests:** `luajit tests/run.lua` loads the files in .toc order with stubbed WoW API; all checks should pass.
 - `UNITS[unit]` describes each unit in one place: layout groups (`size` large/small, `offset`, `row`, `side`) and frame lookups (`frame()`, then `portrait`/`ring`/`bars`/`texts`, each taking the unit frame). **Add new units here** (and to `UNIT_LIST`, the fixed iteration order). Read lookups with `Lookup(unit, key)` / `UnitFrameOf(unit)`.
 - `GROUPS` maps slash-command names (`player`, `target`, `focus`, `tot`, `party`) to units.
 - **Layering (bottom to top)**, all created by `CreateLayers(unit)`:

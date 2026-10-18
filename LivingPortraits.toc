@@ -7,3 +7,17 @@
 ## SavedVariables: LivingPortraitsDB
 
 Core.lua
+Units.lua
+modules\circle.lua
+modules\bars.lua
+modules\nameRow.lua
+modules\totClearance.lua
+modules\box.lua
+modules\grow.lua
+modules\talentBuild.lua
+modules\barText.lua
+modules\surnames.lua
+modules\bbfSetup.lua
+Refresh.lua
+Options.lua
+Slash.lua
