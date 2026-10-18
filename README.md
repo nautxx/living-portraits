@@ -27,7 +27,13 @@ Tall portraits with Mirror Target Text, on BetterBlizzFrames' Pixel Border mode.
 
 | Player | Target and focus | Party |
 |---|---|---|
-| ![Player frame with a tall living portrait, talent build 2/0/8 above the name](docs/screenshots/player-square.png) | ![Target (talent build 0/0/26) and the small focus frame (1/4/2), both mirrored, with their targets-of-target below](docs/screenshots/target-square.png) | ![Four party frames with tall living portraits, role and leader icons next to each name](docs/screenshots/party-box.png) |
+| <img src="docs/screenshots/player-square.png" alt="Player frame with a tall living portrait, talent build 2/0/11 above the name, the resting Zzz after it, and bar text 412 (412) and 904 (904)" width="312"> | <img src="docs/screenshots/target-square.png" alt="Target Binjuice (0/25/0) and the small focus frame Deady (0/9/0), both mirrored, with bar text and their targets-of-target below" width="559"> | <img src="docs/screenshots/party-box.png" alt="Four party frames with tall living portraits, role and leader icons next to each name" width="228"> |
+
+### Elite and rare targets
+
+Elite and boss targets get a gold portrait and bar border, rares a silver one (both colors are adjustable). The elite icon takes the same color and sits on the portrait; the "??" skull takes the level's spot. Health and mana show as full numbers with the bar text option:
+
+<img src="docs/screenshots/elite-box.png" alt="Lady Sylvanas Windrunner as the target: gold portrait and bar borders, gold elite icon on the portrait&#39;s corner, the boss skull next to her name, and health 1,428,900 (1,428,900)" width="348">
 
 ## How it works
 
