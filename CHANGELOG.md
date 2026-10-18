@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.1 (2026-10-18)
+
+### Changes
+- **Bar text shows full numbers:** `1,428,900 (1,428,900)` instead of `1428 K`, with thousands separators. Still works in dungeons and battlegrounds.
+- README: party frame and elite target screenshots, sharper player and target screenshots, and an Elite and rare targets section.
+
 ## 0.7.0 (2026-10-18)
 
 ### Features
