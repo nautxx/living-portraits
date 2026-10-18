@@ -139,6 +139,17 @@ BBF code that touches portraits (read only, for compatibility):
 - Never edit BBF files. A clean backup of BBF v2.1.7 is at `_classic_beta_/Interface/AddOns_backup/`.
 - Git author: Jason <jrbarnachea@gmail.com>. Remote: `github.com/nautxx/living-portraits` (public; was bbf-animated-portraits, GitHub redirects the old URL).
 
+## Releasing
+
+Day-to-day work happens on `dev`; `main` holds releases.
+
+1. On `dev`: bump `## Version` in the `.toc`, add a `CHANGELOG.md` entry, update the README status, commit and push.
+2. Open a PR from `dev` into `main` and merge it with **Create a merge commit** (squash or rebase would make `dev` and `main` diverge).
+3. On `main`: tag the merge (`git tag -a v<version> -m "v<version>"`), run `tools/package.sh` to build `dist/LivingPortraits-<version>.zip` (only the files WoW needs), and push the tag.
+4. Create the GitHub release from the tag, attach that zip (not GitHub's automatic "Source code" zip, whose folder name WoW won't load), and mark it as a pre-release while testing.
+5. Fast-forward `dev` to `main` (`git merge --ff-only main`) so the next PR starts clean.
+6. `gh` isn't installed, so the PR and the GitHub release are Jason's steps in the browser: give him the PR title/description, then the `releases/new?tag=v<version>` link, the CHANGELOG section and the zip path.
+
 ## Commit messages
 
 Put a Conventional Commits prefix on every commit title: `type: short imperative summary`.

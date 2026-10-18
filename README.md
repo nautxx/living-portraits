@@ -14,7 +14,7 @@ Living Portraits works on its own, but it's built to be used with [BetterBlizzFr
 |---|---|---|
 | Style | Circle: the model inside Blizzard's round portrait | **Box**: a pixel-bordered box beside the bars (shown below), or circle if you keep BBF's portraits |
 | Bars and names | Blizzard's default layout | Resized so the box and bars line up, name and level in one row |
-| Extras | None | Talent builds, tall portraits and mirrored target text (box style only) |
+| Extras | Bar text (`350 (462)` or `350 (76%)`) | Also talent builds, tall portraits, mirrored target text and gold/silver elite and rare borders (box style only) |
 | Setup | Nothing to do | One click: **Turn on** in the settings panel (or `/lp bbfsetup`) switches on BBF's Pixel Border mode |
 
 ## Screenshots
@@ -23,11 +23,11 @@ Switching targets: the bars grow from empty, each player's talent build appears 
 
 ![Cycling player targets: bars grow from empty, talent builds appear, and the portraits animate](docs/screenshots/target-grow.gif)
 
-Tall portraits with Mirror Target Text, on BetterBlizzFrames' Pixel Border mode. The player and target frames mirror each other:
+Tall portraits with Mirror Target Text, on BetterBlizzFrames' Pixel Border mode. The player and target frames mirror each other, and party frames get living portraits too:
 
-| Player | Target and focus |
-|---|---|
-| ![Player frame with a tall living portrait, talent build 2/0/8 above the name](docs/screenshots/player-square.png) | ![Target (talent build 0/0/26) and the small focus frame (1/4/2), both mirrored, with their targets-of-target below](docs/screenshots/target-square.png) |
+| Player | Target and focus | Party |
+|---|---|---|
+| ![Player frame with a tall living portrait, talent build 2/0/8 above the name](docs/screenshots/player-square.png) | ![Target (talent build 0/0/26) and the small focus frame (1/4/2), both mirrored, with their targets-of-target below](docs/screenshots/target-square.png) | ![Four party frames with tall living portraits, role and leader icons next to each name](docs/screenshots/party-box.png) |
 
 ## How it works
 
@@ -36,7 +36,7 @@ Instead of the flat 2D portrait, a live `PlayerModel` of the unit is drawn in on
 - **Box** (when BBF's No Portrait / Pixel Border mode is on): a box with BBF's 1px border beside the health and mana bars. The model fills it exactly.
 - **Circle** (Blizzard's frames, or BBF with portraits): the model sits behind the frame's border ring, with a soft round edge so its square corners don't show.
 
-If the model can't load (unit out of range or offline), the addon steps aside and the normal portrait shows.
+If the model can't load (unit out of range, not zoned in yet, or offline), the circle style steps aside and the normal portrait shows; the box style keeps an empty box so the bars stay lined up, and the model appears when they're back in range.
 
 It **never modifies BetterBlizzFrames' files**. BBF is an optional dependency: when installed, this addon loads after it and follows its layout. The only BBF settings it ever changes are the No Portrait + Pixel Border switches, and only when you click **Turn on** (with Undo).
 
@@ -89,6 +89,8 @@ The box style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. The 
 | `/lp surname` | First names only (hide surnames) on the player, target, focus, target-of-target and party frames |
 | `/lp zoom 0-1` | Camera zoom (1 = head and shoulders, lower = more body) |
 | `/lp cam 0.3-2 [large\|small\|box]` | Camera distance (lower = closer, bigger face) |
+| `/lp bartext default\|max\|percent` | Health and mana text on the player, target, focus and party bars: Blizzard/BBF's own (default), or left-aligned and always shown as `350 (462)` (max) or `350 (76%)` (percent) |
+| `/lp bartextstyle outline_shadow\|outline\|shadow\|thick\|thick_shadow` | Outline and shadow of the left-aligned bar text (default: thin outline + shadow); the font follows BetterBlizzFrames' unit frame number font |
 | `/lp grow` | Toggle the target's and focus's health and mana growing from empty when they change |
 | `/lp growtime 0.1-2` | How long the grow takes, in seconds (default 0.35) |
 | `/lp bbfsetup` / `/lp bbfundo` | Turn on BBF's No Portrait + Pixel Border mode for every frame / put back your previous BBF settings (reload to apply) |
@@ -101,8 +103,6 @@ The box style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. The 
 | `/lp build` | Toggle talent builds (points per tree, like `2/8/0`) on the player, target and focus |
 | `/lp tall [player\|target\|party]` | Toggle tall portraits per group: a taller rectangle, with the build on its own line above the name on player, target and focus (off: square, build next to the level). On by default for all three. No group toggles player + target/focus together |
 | `/lp mirror` | Mirror the target and focus text to match the player frame: name and build next to the portrait, level on the outer edge |
-| `/lp bartext default\|max\|percent` | Health and mana text on the player, target, focus and party bars: Blizzard/BBF's own (default), or left-aligned and always shown as `350 (462)` (max) or `350 (76%)` (percent) |
-| `/lp bartextstyle outline_shadow\|outline\|shadow\|thick\|thick_shadow` | Outline and shadow of the left-aligned bar text (default: thin outline + shadow); the font follows BetterBlizzFrames' unit frame number font |
 | `/lp eliteborder` | Toggle the gold (elite, boss) and silver (rare) portrait and bar borders on the target and focus (on by default) |
 | `/lp elitecolor RRGGBB` / `/lp rarecolor RRGGBB` | Border colors for elite/boss (default `ffc71a`, gold) and rare (default `c7ccdb`, silver) targets |
 | `/lp eliteicon top\|bottom\|center\|level\|hidden` | Where the target/focus elite icon goes: the portrait's outer top corner, outer bottom corner, bottom center (default), next to the level, or hidden |
@@ -152,16 +152,6 @@ Found a bug or have an idea? Open an issue: https://github.com/nautxx/living-por
 |---|---|---|
 | WoW Forever beta | 16001 | Supported |
 | Retail | 120105 | Not yet |
-
-## Releasing
-
-Day-to-day work happens on `dev`; `main` holds releases.
-
-1. On `dev`: bump `## Version` in the `.toc`, add a `CHANGELOG.md` entry, update the README status, commit and push.
-2. Open a PR from `dev` into `main` and merge it with **Create a merge commit** (squash or rebase would make `dev` and `main` diverge).
-3. On `main`: tag the merge (`git tag -a v<version> -m "v<version>"`), run `tools/package.sh` to build `dist/LivingPortraits-<version>.zip` (only the files WoW needs), and push the tag.
-4. Create the GitHub release from the tag, attach that zip (not GitHub's automatic "Source code" zip, whose folder name WoW won't load), and mark it as a pre-release while testing.
-5. Fast-forward `dev` to `main` (`git merge --ff-only main`) so the next PR starts clean.
 
 ## License
 
