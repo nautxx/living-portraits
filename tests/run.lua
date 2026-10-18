@@ -276,6 +276,22 @@ check("old saved inset migrated to new default", LivingPortraitsDB.sizes.small.i
 check("settings version recorded", LivingPortraitsDB.version == ns.SETTINGS_VERSION)
 check("defaults applied", LivingPortraitsDB.enabled == true and LivingPortraitsDB.sizes.large.inset == 0.80)
 
+-- v13: Jason's settings became the defaults. Old defaults move, picked values stay, dev keys go.
+do
+    local current = LivingPortraitsDB
+    LivingPortraitsDB = { version = 12, eliteIcon = "center", eliteBorder = true, restIcon = "name",
+        barText = "percent", resourceAlign = "left", resourceRadius = 6, comboRadius = 5, comboPoints = "pixel" }
+    ns.LoadSettings()
+    local m = LivingPortraitsDB
+    check("v13: untouched old defaults move to the new ones", m.eliteIcon == "bottom" and m.eliteBorder == false
+        and m.restIcon == "corner" and m.resourceRadius == 5)
+    check("v13: values someone picked stay", m.barText == "percent" and m.resourceAlign == "left")
+    check("v13: class resource dev keys dropped", m.comboRadius == nil and m.comboPoints == nil)
+    check("fresh defaults are Jason's settings", ns.defaults.barText == "max" and ns.defaults.barTextStyle == "shadow")
+    LivingPortraitsDB = current
+    ns.LoadSettings()
+end
+
 fire("PLAYER_ENTERING_WORLD")
 check("models created lazily, only for units on screen (4 of 9)", #models == 4)
 check("player model shown", shownFor("player"))
@@ -582,12 +598,9 @@ bn:SetText(string.rep("x", 40))
 check("long name stops short of the level and the status icon room", bn.w == math.ceil(123 - 2 - (12 + 4) - 18) + 1)
 check("player box sits left of the health bar", box and box.anchor[1] == "TOPRIGHT" and box.anchor[3] == "TOPLEFT")
 
--- Resting Zzz: after the name by default, or on the portrait box's top-right corner
+-- Resting Zzz: on the portrait box's top-right corner by default, or after the name
 local rp = playerRestIcon.points[1]
-check("rest icon after the name by default", LivingPortraitsDB.restIcon == "name" and rp[1] == "LEFT" and rp[2] == bn and rp[3] == "RIGHT")
-slash("resticon corner")
-rp = playerRestIcon.points[1]
-check("/lp resticon corner: centered on the box's top-right corner", #playerRestIcon.points == 1
+check("rest icon on the box's top-right corner by default", LivingPortraitsDB.restIcon == "corner" and #playerRestIcon.points == 1
     and rp[1] == "CENTER" and rp[2] == box and rp[3] == "TOPRIGHT")
 check("combat icon stays after the name", playerCombatIcon.points[1][2] == bn)
 playerRestIcon:SetPoint("CENTER", PlayerFrame, "TOPLEFT", 40, -30) -- Blizzard/BBF re-place it
@@ -805,6 +818,11 @@ do
 
     slash("refresh")
     check("class resource defaults to pixel circles", LivingPortraitsDB.resource == "pixel")
+    local row0 = comboBar.anchor[2]
+    check("class resource defaults: right-aligned, radius 5", row0 and row0.anchor[1] == "TOPRIGHT"
+        and LivingPortraitsDB.resourceRadius == 5)
+    slash("resourcealign center") -- the checks below were written for these
+    slash("resourcesize 6")
     local row = comboBar.anchor[2]
     check("pixel row sits under the mana bar's border", row and row.anchor and row.anchor[1] == "TOP"
         and row.anchor[2] == manaPos and row.anchor[3] == "BOTTOM" and row.anchor[5] == -(1 + 3))
