@@ -642,6 +642,78 @@ do
     PlayerFrame.healthbar = nil
 end
 
+-- Edit Mode, party: one Selection around all members (BBF's margins around the party frame:
+-- 27 in on the left, 12 out right, 15 up, 5 down), grown to include each member's box
+do
+    PartyFrame.left, PartyFrame.right, PartyFrame.top, PartyFrame.bottom = 0, 200, 300, 100
+    local sel = newFrame("Frame", PartyFrame, 9)
+    sel.bbfRepositioned = true
+    function sel:SetAllPoints(rel) self.points = { { "ALL", rel } } end
+    for _, key in ipairs({ "TopLeftCorner", "TopRightCorner", "BottomLeftCorner", "BottomRightCorner" }) do
+        local c = rowText()
+        hooksecurefunc(c, "SetPoint", function(self) -- BBF's hook: back on the party frame
+            if self.changing then return end
+            self.changing = true
+            self:ClearAllPoints()
+            self:SetPoint("TOPLEFT", PartyFrame, "TOPLEFT", 27, 15)
+            self.changing = false
+        end)
+        sel[key] = c
+    end
+    PartyFrame.Selection = sel
+    local squaresBefore = { ns.squares.party1, ns.squares.party2 }
+    local function partyBox(i, l, r, t, b)
+        local bx = newFrame("Frame", PartyFrame["MemberFrame" .. i], 8)
+        bx.left, bx.right, bx.top, bx.bottom = l, r, t, b
+        ns.squares["party" .. i] = { box = bx }
+        return bx
+    end
+    local b1 = partyBox(1, 5, 40, 310, 270)
+    local b2 = partyBox(2, 5, 40, 250, 210)
+    ns.UpdateEditMode()
+    local p1, p2 = sel.points[1], sel.points[2]
+    check("edit mode party: left edge 16 past the member boxes, top 15 over the first box",
+        p1[1] == "TOPLEFT" and p1[2] == PartyFrame and p1[4] == 5 - 16 and p1[5] == 310 + 15 - 300)
+    check("edit mode party: right and bottom keep BBF's party margins", p2[4] == 12 and p2[5] == -5)
+    check("edit mode party: corners pinned to the Selection", sel.TopLeftCorner.points[1][2] == sel)
+    b1:Hide()
+    ns.UpdateEditMode() -- the box's OnHide hook does this in game
+    check("edit mode party: first member leaves, top follows the second box", sel.points[1][5] == 15
+        and sel.points[1][4] == 5 - 16)
+    b2:Hide()
+    ns.UpdateEditMode() -- the box's OnHide hook does this in game
+    check("edit mode party: no boxes, Selection and corners back to Blizzard/BBF",
+        sel.points[1][1] == "ALL" and sel.TopLeftCorner.points[1][2] == PartyFrame)
+    ns.squares.party1, ns.squares.party2 = squaresBefore[1], squaresBefore[2]
+    PartyFrame.Selection = false
+end
+
+-- Edit Mode's "Party Frames" option shows party frames solo: they get the box layout with an
+-- empty box (BBF's party bars leave a 2px gap between health and mana; ours share a line)
+do
+    local member = PartyFrame.MemberFrame3
+    local hp = barWithPos(member, { top = 200, h = 12, left = 60, right = 140 })
+    local mana = barWithPos(member, { top = 186, h = 6, left = 60, right = 140 })
+    member.HealthBarContainer, member.ManaBar = { HealthBar = hp }, mana
+    member.PartyMemberOverlay = false
+    local oldHas = BBF.HasNoPortrait
+    BBF.HasNoPortrait = function(u) return oldHas(u) or u == "party3" end
+    local forced = true
+    EditModeManagerFrame = { ArePartyFramesForcedShown = function() return forced end }
+    world.exists.party3 = false
+    slash("refresh")
+    local sq = ns.squares.party3
+    check("edit mode sample party frame: empty box shows", sq and sq.box.shown and not sq.model.shown)
+    check("edit mode sample party frame: bars laid out, health and mana share a line",
+        hp.h == 16 and mana.BBFPositionFrame:GetTop() == hp.BBFPositionFrame:GetBottom() - 1)
+    forced = false
+    slash("refresh")
+    check("edit mode sample party frame: box hides when the sample frames go", not sq.box.shown)
+    BBF.HasNoPortrait = oldHas
+    EditModeManagerFrame = nil
+    member.HealthBarContainer, member.ManaBar = false, false
+end
+
 local function centered(fs, pos) local _, a = fs:GetCenter(); local _, b = pos:GetCenter(); return math.abs(a - b) < 0.5 end
 check("health text vertically centered in its bar", centered(playerHpHolder.LeftText, playerHp.BBFPositionFrame))
 check("mana text vertically centered in its bar", centered(playerMana.ManaBarText, playerMana.BBFPositionFrame))

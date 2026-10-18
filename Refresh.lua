@@ -63,6 +63,14 @@ local function StateChanged(unit)
     return guid ~= lastGuid[unit] or code ~= lastCode[unit]
 end
 
+-- Edit Mode's "Party Frames" option shows all four party frames even solo (Blizzard points the
+-- missing ones at you). They get the box layout with an empty box, like an offline member, so
+-- they show their real size and the bars line up.
+local function EditModeSample(unit)
+    return UNITS[unit].row == "party" and not UnitExists(unit) and EditModeManagerFrame
+        and EditModeManagerFrame.ArePartyFramesForcedShown and EditModeManagerFrame:ArePartyFramesForcedShown()
+end
+
 local function HideAll(p, unit)
     if p then Deactivate(p) end
     DeactivateSquare(unit)
@@ -82,6 +90,9 @@ local function Refresh(unit)
         -- Turned off by the user: hand the bars, texts and names back to BBF.
         HideAll(p, unit)
         RestoreBars(unit)
+    elseif unitFrame and unitFrame:IsVisible() and BBFHidesPortrait(unit) and EditModeSample(unit) then
+        if p then Deactivate(p) end
+        RefreshSquare(unit, unitFrame, true)
     elseif not unitFrame or not unitFrame:IsVisible() or not UnitExists(unit) then
         -- Transient (no target yet, frame hidden): just hide the portrait and keep our
         -- bar/name layout pinned, so a target switch can't leave BBF's layout behind.
@@ -189,6 +200,13 @@ f:SetScript("OnEvent", function(self, event, arg1)
         ns.BuildOptions()
         if EditModeManagerFrame then
             hooksecurefunc(EditModeManagerFrame, "ExitEditMode", function() C_Timer.After(0.1, RefreshAll) end)
+            -- Sample party frames (see EditModeSample) come and go with Edit Mode and its option.
+            hooksecurefunc(EditModeManagerFrame, "EnterEditMode", function() C_Timer.After(0.1, RefreshAll) end)
+        end
+        if PartyFrame and type(PartyFrame.UpdatePartyFrames) == "function" then
+            hooksecurefunc(PartyFrame, "UpdatePartyFrames", function()
+                for _, unit in ipairs(PARTY) do QueueRefresh(unit) end
+            end)
         end
     elseif event == "PLAYER_ENTERING_WORLD" then
         -- small delay so BBF finishes resizing portraits first
