@@ -58,7 +58,7 @@ local function PrintHelp()
     print("  /lp elitecolor RRGGBB  |  /lp rarecolor RRGGBB  |  /lp bartext default|max|percent  |  /lp resticon name|corner")
     print("  /lp bartextstyle outline_shadow|outline|shadow|thick|thick_shadow")
     print("  /lp bordercolor RRGGBB  |  /lp borderalpha 0-1  |  /lp bordersize thin|medium|heavy")
-    print("  /lp resource pixel|bbf  |  /lp resourcealign left|center|right  |  /lp resourcesize 2-16")
+    print("  /lp resource pixel|bbf|none  |  /lp resourcealign left|center|right  |  /lp resourcesize 2-16")
     print("  /lp resourcecolor [combo|shards|arcane|holy] RRGGBB")
     print("  /lp inset 0.3-1.2 [large|small]  |  /lp cam 0.3-2 [large|small|box]")
     print("  /lp unit player|target|focus|tot|party  |  /lp refresh  |  /lp debug [unit]")
@@ -207,7 +207,7 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
         UpdateBarTexts(true)
     elseif cmd == "resource" then
         if not RESOURCE_MODES[arg or ""] then
-            print("  /lp resource pixel|bbf  (now " .. tostring(db.resource) .. ")")
+            print("  /lp resource pixel|bbf|none  (now " .. tostring(db.resource) .. ")")
             return
         end
         db.resource = RESOURCE_MODES[arg]

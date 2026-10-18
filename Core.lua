@@ -55,7 +55,7 @@ local defaults = {
     barTextStyle = "outline_shadow",
     -- Square: the player's class resource (rogue/druid combo points, warlock shards, mage arcane
     -- charges, paladin holy charges) under the bars: "pixel" (our circles, bordered like the box)
-    -- or "bbf" (rogue/druid: BBF's own combo point art there) (/lp resource).
+    -- "bbf" (rogue/druid: BBF's own combo point art there) or "none" (hidden) (/lp resource).
     resource       = "pixel",
     resourceAlign  = "center", -- under the mana bar: "left", "center" or "right" (/lp resourcealign)
     resourceRadius = 6,        -- circle radius in px inside the border (/lp resourcesize)

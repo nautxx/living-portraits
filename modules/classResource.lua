@@ -5,6 +5,7 @@
 --            sized by db.resourceRadius.
 --   "bbf":   rogue/druid: BBF's own combo point art, moved under the bars the same way.
 --            Warlock/mage/paladin: nothing (BBF draws nothing for them here).
+--   "none":  hidden (BBF's bar stays under the bars, see-through and not hoverable).
 --
 -- Rogue/druid: BBF's "Move Combo Points under PlayerFrame" bar (BBF.ComboPointBar, its
 -- foreverComboPoints setting) sits at the top of the player's bottom container, which our
@@ -40,7 +41,7 @@ local RESOURCE_GAP = 3     -- px between the bars' bottom border and the circles
 local RESOURCE_SPACING = 3 -- px between two circles
 local EMPTY_RGBA = { 0.08, 0.08, 0.08, 0.85 } -- an empty circle's fill
 local BBF_POINT_SIZE = 20 -- BBF's combo point frames (BBF_Rogue/DruidComboPointTemplate)
-local RESOURCE_MODES = { pixel = "pixel", bbf = "bbf", moved = "bbf" }
+local RESOURCE_MODES = { pixel = "pixel", bbf = "bbf", none = "none", moved = "bbf", off = "none", hide = "none" }
 -- db.resourceAlign: which edge of the mana bar the circles line up with (point, x direction).
 -- Left/right line the outer circle up with the bar border's outer edge.
 local RESOURCE_ALIGN = { left = { "LEFT", -1 }, center = { "", 0 }, right = { "RIGHT", 1 } }
@@ -56,7 +57,9 @@ local POWER = {
 local hooked      -- the BBF bar we've hooked
 local events      -- UnitPower updates for the classes we draw from UnitPower
 local row         -- holder of our circles; row.dots[i] = { frame, ring, fill }
-local pixelOn     -- our circles are showing (and BBF's bar, if any, is see-through)
+local pixelOn     -- our circles are showing
+local faded       -- BBF's bar is see-through (circles, or none)
+local mouseOff    -- BBF's bar can't be hovered (none: no invisible tooltip)
 local moved       -- we've anchored BBF's bar (hand it back with BBF's own re-anchor)
 local positioning -- our own SetPoint/SetAlpha/SetScale calls, which the hooks ignore
 local bbfScale    -- BBF's own scale for its bar (its Class Resource Scale), put back on hand-back
@@ -171,9 +174,18 @@ local function PaintBar(bar)
 end
 
 local function SetFaded(bar, on)
+    if not on and not faded then return end -- leave BBF's own alpha alone
+    faded = on
     positioning = true
     bar:SetAlpha(on and 0 or 1)
     positioning = false
+end
+
+-- BBF's bar has a tooltip (bbfTooltipMouse); with nothing shown it shouldn't pop up.
+local function SetMouseOff(bar, off)
+    if off == (mouseOff or false) then return end
+    mouseOff = off
+    if bar.bbfTooltipMouse then bar:EnableMouse(not off) end
 end
 
 local function ShowRow(anchor, shown)
@@ -225,10 +237,9 @@ end
 -- Stop drawing ours and make BBF's bar visible again. reanchor: also ask BBF to put it back
 -- (not when BBF is anchoring it itself right now, e.g. moving it to the target frame).
 local function Release(bar, reanchor)
-    if pixelOn then
-        HideRow()
-        SetFaded(bar, false)
-    end
+    HideRow()
+    SetFaded(bar, false)
+    SetMouseOff(bar, false)
     if moved then
         moved = false
         if bbfScale then
@@ -246,10 +257,11 @@ local function ApplyBar(bar, anchor)
     if db.resource == "pixel" then
         ShowRow(anchor, bar:IsShown())
         SetFaded(bar, true)
-    elseif pixelOn then
+    else
         HideRow()
-        SetFaded(bar, false)
+        SetFaded(bar, db.resource == "none")
     end
+    SetMouseOff(bar, db.resource == "none")
     Place(bar, anchor)
     PaintBar(bar)
 end
@@ -271,7 +283,7 @@ local function UpdateBar()
             if not positioning and self == Bar() then bbfScale = Safe(scale) or bbfScale end
         end)
         hooksecurefunc(bar, "SetAlpha", function(self, alpha)
-            if pixelOn and not positioning and self == Bar() and Safe(alpha) ~= 0 then SetFaded(self, true) end
+            if faded and not positioning and self == Bar() and Safe(alpha) ~= 0 then SetFaded(self, true) end
         end)
         -- BBF calls it on every combo point change, after its own fades.
         hooksecurefunc(bar, "UpdatePower", function(self) if self == Bar() then PaintBar(self) end end)

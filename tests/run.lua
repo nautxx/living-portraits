@@ -794,6 +794,8 @@ do
     comboBar.classResourceButtonTable = {}
     for i = 1, 5 do comboBar.classResourceButtonTable[i] = newFrame("Frame", comboBar, 4) end
     function comboBar:UpdatePower() end
+    comboBar.bbfTooltipMouse = true -- BBF gives its player bar a tooltip
+    function comboBar:EnableMouse(v) self.mouse = v end
     local reanchored = 0
     BBF.ComboPointBar = comboBar
     BBF.ReanchorComboPointBar = function() reanchored = reanchored + 1 end
@@ -862,6 +864,13 @@ do
     slash("resourcealign right")
     check("bbf: alignment applies to BBF's bar", comboBar.anchor[1] == "TOPRIGHT" and math.abs(comboBar.anchor[4] - 1 / 0.7) < 0.01)
     slash("resourcealign center")
+    slash("resource none")
+    check("none: nothing shows", comboBar:GetAlpha() == 0 and not row.shown)
+    check("none: BBF's invisible bar can't pop its tooltip", comboBar.mouse == false)
+    comboBar:SetAlpha(1) -- BBF resets its alpha
+    check("none: stays hidden", comboBar:GetAlpha() == 0)
+    slash("resource bbf")
+    check("none -> bbf: BBF's art and tooltip back", comboBar:GetAlpha() == 1 and comboBar.mouse == true)
     slash("resource pixel")
     comboBar.bbfOnTarget = true -- BBF's "Move Resource to TargetFrame"
     comboBar:SetPoint("LEFT", TargetFrame, "RIGHT", -43, 1)
@@ -908,6 +917,9 @@ do
     BetterBlizzFramesDB = nil
     slash("resource bbf")
     check("warlock: the BBF option shows nothing (BBF has no shard bar here)", not row.shown)
+    slash("resource pixel")
+    slash("resource none")
+    check("warlock: none hides the shards", not row.shown)
     slash("resource pixel")
     maxShards = 0
     slash("refresh")
