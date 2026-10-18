@@ -1222,6 +1222,28 @@ local function EndGrow(bar)
     GrowTrace("done", bar.bapGrowName)
 end
 
+-- The grow compares and does math on what the bar and its fill report (orientation, reverse
+-- fill, texture, draw layer, masks). In instances and PvP any of these can come back secret,
+-- and comparing a secret errors (tainted code). The grow is cosmetic: skip or end it then.
+local function AnySecret(...)
+    for i = 1, select("#", ...) do
+        if IsSecret((select(i, ...))) then return true end
+    end
+    return false
+end
+local function BarReadable(bar, fill)
+    if AnySecret(bar:GetWidth(), bar.GetOrientation and bar:GetOrientation(),
+        bar.GetReverseFill and bar:GetReverseFill()) then return false end
+    if AnySecret(fill:GetAtlas(), fill:GetTexture(), fill:GetDesaturation(), fill:GetBlendMode()) then return false end
+    if AnySecret(fill:GetDrawLayer()) then return false end
+    local n = fill.GetNumMaskTextures and fill:GetNumMaskTextures()
+    if IsSecret(n) then return false end
+    for i = 1, n or 0 do
+        if IsSecret(fill:GetMaskTexture(i)) then return false end
+    end
+    return true
+end
+
 -- Copy the fill's current look (BBF/Blizzard texture, class color, desaturation) onto
 -- the overlay. BBF class colors are a desaturated fill with a tint, sometimes set on the
 -- fill texture itself, so read the fill rather than the bar. Re-run every frame: BBF can
@@ -1270,7 +1292,7 @@ local function GrowStep(_, elapsed)
         g.t = g.t + elapsed
         local p = math.min(1, g.t / duration)
         local w = Safe(bar:GetWidth()) -- secret in PvP: stop and show Blizzard's fill
-        if p >= 1 or not w or not bar:IsVisible() then
+        if p >= 1 or not w or not bar:IsVisible() or not BarReadable(bar, g.fill) then
             EndGrow(bar)
         else
             local e = 1 - (1 - p) ^ 3 -- ease-out cubic
@@ -1286,7 +1308,8 @@ end
 
 local function StartGrow(bar, name)
     local fill = bar.GetStatusBarTexture and bar:GetStatusBarTexture()
-    if not (fill and bar:IsVisible()) or (bar.GetOrientation and bar:GetOrientation() == "VERTICAL") then
+    if not (fill and bar:IsVisible()) or IsSecret(fill) or not BarReadable(bar, fill)
+        or (bar.GetOrientation and bar:GetOrientation() == "VERTICAL") then
         GrowTrace(name, "skip: fill", not not fill, "visible", bar:IsVisible())
         return
     end
