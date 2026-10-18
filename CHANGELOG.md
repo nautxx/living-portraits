@@ -10,6 +10,9 @@
 - **Edit Mode:** the player, target, focus and party selection boxes now include the portrait boxes. The red snap guide lines, snapping and clicking follow that outline too.
 - **Edit Mode party frames:** the sample party frames shown while solo get empty portrait boxes of the right size, and their health and mana bars no longer have a gap.
 
+### Changes
+- README: class resource section with a screenshot, plus the new commands and Edit Mode behavior.
+
 ## 0.7.1 (2026-10-18)
 
 ### Changes

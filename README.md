@@ -14,7 +14,7 @@ Living Portraits works on its own, but it's built to be used with [BetterBlizzFr
 |---|---|---|
 | Style | Circle: the model inside Blizzard's round portrait | **Box**: a pixel-bordered box beside the bars (shown below), or circle if you keep BBF's portraits |
 | Bars and names | Blizzard's default layout | Resized so the box and bars line up, name and level in one row |
-| Extras | Bar text (`350 (462)` or `350 (76%)`) | Also talent builds, tall portraits, mirrored target text and gold/silver elite and rare borders (box style only) |
+| Extras | Bar text (`350 (462)` or `350 (76%)`) | Also talent builds, tall portraits, mirrored target text, gold/silver elite and rare borders, combo points under the bars and Edit Mode outlines that fit the portrait (box style only) |
 | Setup | Nothing to do | One click: **Turn on** in the settings panel (or `/lp bbfsetup`) switches on BBF's Pixel Border mode |
 
 ## Screenshots
@@ -35,12 +35,20 @@ Elite and boss targets get a gold portrait and bar border, rares a silver one (b
 
 <img src="docs/screenshots/elite-box.png" alt="Lady Sylvanas Windrunner as the target: gold portrait and bar borders, gold elite icon on the portrait&#39;s corner, the boss skull next to her name, and health 1,428,900 (1,428,900)" width="348">
 
+### Class resource
+
+Combo points sit under the player's bars as pixel-bordered circles in the border color (or BetterBlizzFrames' own art, or hidden), lined up left, center or right of the mana bar, with your choice of size and color. The resting Zzz can sit after your name, as here, or over the portrait's top-right corner:
+
+<img src="docs/screenshots/class-resource.png" alt="Player frame with five empty pixel-bordered combo point circles under the mana bar, aligned right, and the resting Zzz after the name" width="328">
+
 ## How it works
 
 Instead of the flat 2D portrait, a live `PlayerModel` of the unit is drawn in one of two styles:
 
 - **Box** (when BBF's No Portrait / Pixel Border mode is on): a box with BBF's 1px border beside the health and mana bars. The model fills it exactly.
 - **Circle** (Blizzard's frames, or BBF with portraits): the model sits behind the frame's border ring, with a soft round edge so its square corners don't show.
+
+In Edit Mode, the box style's selection outline, snap guide lines and click area cover the portrait box too, and the sample party frames shown while solo get empty boxes of the right size.
 
 If the model can't load (unit out of range, not zoned in yet, or offline), the circle style steps aside and the normal portrait shows; the box style keeps an empty box so the bars stay lined up, and the model appears when they're back in range.
 
