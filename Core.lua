@@ -32,7 +32,7 @@ local defaults = {
     enabled  = true,
     style    = "square", -- "square" (needs BBF No Portrait / Pixel Border) or "circle"
     zoom     = 1,     -- 0..1, 1 = head & shoulders
-    circleBg    = 1,  -- circle: opacity of the dark background inside the ring (0 = clear)
+    circleBg    = 0,  -- circle: opacity of the dark background inside the ring (0 = clear)
     squareBg    = 0,  -- square: opacity of the dark background behind the model (0 = none)
     squareGap   = 1,  -- px between the box and the bars (1 = their borders share one line)
     barSpacing  = 0,  -- px between health and mana (0 = their borders share one line)
@@ -55,9 +55,9 @@ local defaults = {
     eliteIcon   = "top",
     -- Square: the box grows upward by a line (the talent build's, above the name), per group:
     -- player, target (target + focus), party. ToT stays square (/lp tall [group]).
-    tallPortraits = { player = true, target = true, party = false },
-    hideSurname = false, -- first names only on our frames (/lp surname)
-    mirrorTarget = false, -- square: target/focus text mirrors the player's (/lp mirror)
+    tallPortraits = { player = true, target = true, party = true },
+    hideSurname = true, -- first names only on our frames (/lp surname)
+    mirrorTarget = true, -- square: target/focus text mirrors the player's (/lp mirror)
     borderColor = "ff000000", -- square: box + bar border color, ARGB hex like the settings swatch (/lp bordercolor)
     borderAlpha = 1,      -- square: border opacity (/lp borderalpha)
     borderSize  = 1,      -- square: border thickness: 1 thin, 2 medium, 3 heavy (/lp bordersize)
@@ -69,7 +69,7 @@ local defaults = {
         player = { -0.5, 0.6 },
         target = { 0.6, 0.3 },
         focus  = { 0.6, 0.3 }, -- same frame design as target
-        tot    = { -1.3, 2.2 },
+        tot    = { -1.3, 0 },
         party  = { 0, 0 },     -- not measured yet
     },
     bgR = 0.05, bgG = 0.05, bgB = 0.07,

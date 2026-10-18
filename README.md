@@ -98,7 +98,7 @@ The square style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. T
 | Command | Effect |
 |---|---|
 | `/lp build` | Toggle talent builds (points per tree, like `2/8/0`) on the player, target and focus |
-| `/lp tall [player\|target\|party]` | Toggle tall portraits per group: a taller rectangle, with the build on its own line above the name on player, target and focus (off: square, build next to the level). Player and target/focus are on by default, party off. No group toggles player + target/focus together |
+| `/lp tall [player\|target\|party]` | Toggle tall portraits per group: a taller rectangle, with the build on its own line above the name on player, target and focus (off: square, build next to the level). On by default for all three. No group toggles player + target/focus together |
 | `/lp mirror` | Mirror the target and focus text to match the player frame: name and build next to the portrait, level on the outer edge |
 | `/lp eliteborder` | Toggle the gold (elite, boss) and silver (rare) portrait and bar borders on the target and focus (on by default) |
 | `/lp elitecolor RRGGBB` / `/lp rarecolor RRGGBB` | Border colors for elite/boss (default `ffc71a`, gold) and rare (default `c7ccdb`, silver) targets |
