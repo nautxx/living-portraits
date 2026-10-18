@@ -26,7 +26,7 @@ local CORNERS  = "Interface\\AddOns\\" .. ADDON_NAME .. "\\media\\corners"
 -- would show as a square, so they fade out with it.
 
 -- Bump when a default changes in a way saved settings should pick up (see MigrateSettings).
-local SETTINGS_VERSION = 11
+local SETTINGS_VERSION = 12
 
 local defaults = {
     enabled  = true,
@@ -314,6 +314,10 @@ local function MigrateSettings()
         -- Only for the old boolean: a fresh install (no saved value) gets the defaults.
         local on = db.tallPortraits ~= false
         db.tallPortraits = { player = on, target = on, party = false }
+    end
+    if version < 12 then
+        -- v12: drop keys from removed experiments (model facing/shift, mirror angle, build row).
+        db.shift, db.facing, db.mirrorAngle, db.mirrorShift, db.buildRow = nil, nil, nil, nil, nil
     end
     db.version = SETTINGS_VERSION
 end
@@ -1110,15 +1114,15 @@ end
 -- re-laid out in combat, so the layout can't change per target. Off: square box, and the
 -- build sits next to the level.
 -- Party (no name row, no build) just gets the same taller box beside the name above its bars.
-local BUILD_LINE = 9
+local TALL_LINE = 9
 local TALL_GROUP = {
     player = "player", target = "target", focus = "target",
     party1 = "party", party2 = "party", party3 = "party", party4 = "party",
 }
-local function BuildLine(unit)
+local function TallLine(unit)
     local group = TALL_GROUP[unit]
     if not (group and db.tallPortraits[group]) then return 0 end -- independent of showBuild
-    return BUILD_LINE
+    return TALL_LINE
 end
 
 local function PlaceSquare(sq, hpPos, manaPos)
@@ -1130,7 +1134,7 @@ local function PlaceSquare(sq, hpPos, manaPos)
     local row = hpPos.bapRow or 0 -- the name row sits above the health bar, inside the box
     -- The build line sits above the name row; units with a name row (texts) only get it while
     -- the row is on (no build without one). Party has no name row: its box always grows.
-    local extra = (row > 0 or not UNITS[sq.unit].texts) and BuildLine(sq.unit) or 0
+    local extra = (row > 0 or not UNITS[sq.unit].texts) and TallLine(sq.unit) or 0
     local scale = hpPos:GetEffectiveScale() / box:GetEffectiveScale()
     local size = (top + row - bottom) * scale
     if size <= 0 then return false end
@@ -1577,7 +1581,7 @@ end
 
 -- Talent build on the player, target and focus -------------------------------------
 -- Points per talent tree ("2/8/0") in the square style's name area: on its own line above
--- the name with tall portraits (BuildLine), else just left of the level. Your own build is
+-- the name with tall portraits (TallLine), else just left of the level. Your own build is
 -- read directly (cached until your talents change); other players need an inspect
 -- (server round trip, ~30 yd range, shared throttle), so results are cached per GUID for
 -- the session and requests are spaced out. NPCs and players we can't inspect show
@@ -1681,7 +1685,7 @@ local function UpdateBuildFor(unit)
     if not fs then return end
     -- Own line above the name (left-aligned with it), or next to the level.
     local hpPos = GetBarFrames(unit)
-    local row, extra = hpPos and hpPos.bapRow or 0, BuildLine(unit)
+    local row, extra = hpPos and hpPos.bapRow or 0, TallLine(unit)
     local above = row > 0 and extra > 0
     local mirror = Mirrored(unit)
     local eliteRow = EliteInRow(unit) and true or false -- the inline build steps past the elite icon
