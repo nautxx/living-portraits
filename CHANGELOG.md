@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.0 (2026-10-18)
 
 ### Features
 - **Profiles:** load a whole look, Living Portraits and BetterBlizzFrames settings together, in one click, from the new **Profiles** page (Options → AddOns → Living Portraits → Profiles):

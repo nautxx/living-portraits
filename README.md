@@ -4,7 +4,7 @@ Live 3D animated portraits for World of Warcraft unit frames. Your character bre
 
 > Formerly **BBF Animated Portraits**. Upgrading? Delete the old `BBF_AnimatedPortraits` folder from AddOns (if it's still enabled, Living Portraits offers to disable it for you); settings start fresh under the new name. `/bap` still works as an alias for `/lp`.
 
-> **Status:** v0.8.1, public test release. Tested in game on the **WoW Forever beta**, with and without BetterBlizzFrames. See [CHANGELOG](CHANGELOG.md).
+> **Status:** v0.9.0, public test release. Tested in game on the **WoW Forever beta**, with and without BetterBlizzFrames. See [CHANGELOG](CHANGELOG.md).
 
 ## Best with BetterBlizzFrames
 
