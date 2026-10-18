@@ -1821,7 +1821,7 @@ end
 -- always shown (whatever the Status Text setting or mouseover). Blizzard's bars call
 -- UpdateTextStringWithValues on every value change; our post-hook writes our text and hides
 -- Blizzard's/BBF's text regions on that bar (they re-show them each update, before us).
--- Values can be secret (instances, PvP): they only go to AbbreviateNumbers and
+-- Values can be secret (instances, PvP): they only go to BreakUpLargeNumbers and
 -- SetFormattedText (both take secrets from addon code), never compared or used in math;
 -- percent comes from UnitHealthPercent/UnitPowerPercent with Blizzard's 0-100 curve.
 local BAR_TEXT_MODES = { default = true, max = true, percent = true }
@@ -1848,8 +1848,10 @@ local function EachBlizzardText(bar, keys, fn)
     end
 end
 
+-- Full numbers with thousands separators ("1,300", not "1.3K"), as Jason asked.
+-- BreakUpLargeNumbers is a C function that accepts secret values from addon code.
 local function NumberText(v)
-    if AbbreviateNumbers then return AbbreviateNumbers(v) end
+    if BreakUpLargeNumbers then return BreakUpLargeNumbers(v) end
     return v
 end
 
