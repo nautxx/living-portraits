@@ -1999,24 +1999,55 @@ BuildOptions = function()
     end
 
     Header("Camera")
-    Slider({ "zoom" }, "Zoom", "1 = head and shoulders; lower shows more of the body.", 0, 1, 0.05)
-    Slider({ "sizes", "large", "cam" }, "Distance: large frames", "Player, target and focus. Lower = closer, bigger face.", 0.3, 2, 0.05)
-    Slider({ "sizes", "small", "cam" }, "Distance: small frames", "Target of target and party. Lower = closer, bigger face.", 0.3, 2, 0.05)
-    Slider({ "sizes", "square", "cam" }, "Distance: square style", "Lower = closer, bigger face.", 0.3, 2, 0.05)
+    Slider({ "zoom" }, "Zoom", "1 = head and shoulders; lower shows more of the body. Both styles.", 0, 1, 0.05)
 
     Header("Target bars")
     Check({ "growBars" }, "Grow on new target", "Health and mana grow from empty when you pick a new target or focus.")
     Slider({ "growTime" }, "Grow time", "Seconds the grow takes.", 0.1, 2, 0.05,
         function(v) return ("%.2fs"):format(v) end)
 
-    Header("Square style")
+    Header("BetterBlizzFrames")
+    layout:AddInitializer(CreateSettingsButtonInitializer("Pixel Border mode", "Turn on",
+        function() print(PREFIX .. ApplyBBFSetup()) end,
+        "Turns on BBF's No Portrait + Pixel Border mode on every frame, which the square style needs. Your other BBF settings stay as they are. Reloads the UI.", true))
+    layout:AddInitializer(CreateSettingsButtonInitializer("Undo Pixel Border mode", "Undo",
+        function() print(PREFIX .. UndoBBFSetup()) end,
+        "Puts back the BBF settings you had before turning it on here. Reloads the UI.", true))
+
+    -- Each style's settings on its own page under the main entry (falls back to sections on
+    -- the main page if the client has no subcategories). Each style's camera distance lives
+    -- there: square boxes share one distance, circle portraits use large/small.
+    local main = category
+    local function Page(name)
+        if Settings.RegisterVerticalLayoutSubcategory then
+            category, layout = Settings.RegisterVerticalLayoutSubcategory(main, name)
+            layout = layout or SettingsPanel:GetLayout(category)
+        else
+            Header(name)
+        end
+    end
+
+    Page("Square Style")
+    Header("Camera")
+    Slider({ "sizes", "square", "cam" }, "Distance", "All square portraits. Lower = closer, bigger face.", 0.3, 2, 0.05)
     Slider({ "squareBg" }, "Background", "Dark background behind the model.", 0, 1, 0.05, FormatPercent)
-    Slider({ "stackExtra", "large" }, "Extra height: large frames", "Makes the health + mana stack taller; the box grows with it.", 0, 30, 1)
-    Slider({ "stackExtra", "small" }, "Extra height: small frames", "Makes the health + mana stack taller; the box grows with it.", 0, 30, 1)
+
+    Header("Size and layout")
+    local TALL_TIP = "The portrait grows into a taller rectangle. Player, target and focus: with a line above the name for the talent build (off: square, build next to the level)."
+    Check({ "tallPortraits", "player" }, "Tall portraits: player", TALL_TIP)
+    Check({ "tallPortraits", "target" }, "Tall portraits: target & focus", TALL_TIP)
+    Check({ "tallPortraits", "party" }, "Tall portraits: party", TALL_TIP)
+    Slider({ "stackExtra", "large" }, "Extra height: large frames", "Player, target and focus. Makes the health + mana stack taller; the box grows with it.", 0, 30, 1)
+    Slider({ "stackExtra", "small" }, "Extra height: small frames", "Target of target and party. Makes the health + mana stack taller; the box grows with it.", 0, 30, 1)
     Slider({ "nameRow", "large" }, "Name row: large frames", "Height of the name + level row inside the box (0 = off).", 0, 24, 1)
     Slider({ "nameRow", "tot" }, "Name row: target of target", "Height of the name row inside the box (0 = off).", 0, 24, 1)
     Slider({ "nameRow", "party" }, "Name row: party", "Height of the name row inside the box (0 = off).", 0, 24, 1)
     Slider({ "hpShare" }, "Health share", "Health bar's share of the stack; mana gets the rest.", 0.4, 0.85, 0.01, FormatPercent)
+    Slider({ "squareGap" }, "Gap to bars", "Space between the box and the bars (1 = borders share one line).", 0, 20, 1)
+    Slider({ "barSpacing" }, "Bar spacing", "Space between health and mana (0 = borders share one line).", 0, 10, 1)
+    Check({ "alignMana" }, "Align mana bar", "Line the mana bar up with the health bar next to the box.")
+
+    Header("Borders")
     local colorGet, colorSet, colorDefault = Path({ "borderColor" })
     Settings.CreateColorSwatch(category, Register("borderColor", "Border Color", colorDefault, colorGet, colorSet),
         "Color of the 1px lines around the portrait box and the health and mana bars.")
@@ -2029,8 +2060,12 @@ BuildOptions = function()
         return c:GetData()
     end, "Thickness of the lines around the portrait box and the bars.")
     Slider({ "borderAlpha" }, "Border Opacity", "Opacity of the 1px lines around the portrait box and the bars.", 0, 1, 0.05, FormatPercent)
-    Check({ "alignMana" }, "Align mana bar", "Line the mana bar up with the health bar next to the box.")
+
+    Header("Text")
     Check({ "showBuild" }, "Show Talent Build", "Points per talent tree (like 2/8/0) on the player, target and focus frames. Other players need to be within inspect range (about 30 yards); NPCs show nothing.")
+    Check({ "mirrorTarget" }, "Mirror Target Text", "Target and focus: name and talent build next to the portrait, level on the outer edge, mirroring the player frame.")
+
+    Header("Elite and rare")
     Check({ "eliteBorder" }, "Elite Border", "Target and focus: the portrait and bar borders turn gold for elites and bosses, silver for rares.")
     for _, c in ipairs({ { "eliteColor", "Elite Border Color", "Border color for elite and boss targets." },
                          { "rareColor", "Rare Border Color", "Border color for rare and rare elite targets." } }) do
@@ -2047,28 +2082,18 @@ BuildOptions = function()
         c:Add("hidden", "Hidden")
         return c:GetData()
     end, "Target and focus: where the small elite/rare icon goes. The corners are on the portrait's outer side.")
-    Check({ "mirrorTarget" }, "Mirror Target Text", "Target and focus: name and talent build next to the portrait, level on the outer edge, mirroring the player frame.")
-    local TALL_TIP = "The portrait grows into a taller rectangle. Player, target and focus: with a line above the name for the talent build (off: square, build next to the level)."
-    Check({ "tallPortraits", "player" }, "Tall portraits: player", TALL_TIP)
-    Check({ "tallPortraits", "target" }, "Tall portraits: target & focus", TALL_TIP)
-    Check({ "tallPortraits", "party" }, "Tall portraits: party", TALL_TIP)
-    Slider({ "squareGap" }, "Gap to bars", "Space between the box and the bars (1 = borders share one line).", 0, 20, 1)
-    Slider({ "barSpacing" }, "Bar spacing", "Space between health and mana (0 = borders share one line).", 0, 10, 1)
 
-    Header("Circle style")
+    Page("Circle Style")
+    Header("Camera")
+    Slider({ "sizes", "large", "cam" }, "Distance: large frames", "Player, target and focus. Lower = closer, bigger face.", 0.3, 2, 0.05)
+    Slider({ "sizes", "small", "cam" }, "Distance: small frames", "Target of target and party. Lower = closer, bigger face.", 0.3, 2, 0.05)
+    Header("Portrait")
     Slider({ "circleBg" }, "Background", "Dark background inside the ring (0 = clear).", 0, 1, 0.05, FormatPercent)
     Check({ "vignette" }, "Round edge", "The circle edge that hides the model's square corners.")
     Slider({ "sizes", "large", "inset" }, "Model size: large frames", "Model size relative to the portrait.", 0.3, 1.2, 0.01)
     Slider({ "sizes", "small", "inset" }, "Model size: small frames", "Model size relative to the portrait.", 0.3, 1.2, 0.01)
 
-    Header("BetterBlizzFrames")
-    layout:AddInitializer(CreateSettingsButtonInitializer("Pixel Border mode", "Turn on",
-        function() print(PREFIX .. ApplyBBFSetup()) end,
-        "Turns on BBF's No Portrait + Pixel Border mode on every frame, which the square style needs. Your other BBF settings stay as they are. Reloads the UI.", true))
-    layout:AddInitializer(CreateSettingsButtonInitializer("Undo Pixel Border mode", "Undo",
-        function() print(PREFIX .. UndoBBFSetup()) end,
-        "Puts back the BBF settings you had before turning it on here. Reloads the UI.", true))
-
+    category, layout = main, SettingsPanel:GetLayout(main)
     Settings.RegisterAddOnCategory(category)
     optionsCategory = category
 end

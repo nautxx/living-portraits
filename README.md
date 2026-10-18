@@ -65,10 +65,10 @@ ln -s ~/GitHub/Main/living-portraits \
 Open **Options → AddOns → LivingPortraits** (or type `/lp options`):
 
 - **General:** turn it on/off, hide surnames, square or circle style, and which frames get a living portrait.
-- **Camera:** zoom and distance (face size).
+- **Camera:** zoom (both styles). Face distance is on each style's page.
 - **Target bars:** the grow-from-empty animation (target and focus) and its speed.
-- **Square style:** show talent builds, mirror the target text, tall portraits (player, target & focus, party), border color, thickness and opacity, plus box and bar sizing.
-- **Circle style:** background, round edge and model size.
+- **Square Style** (its own page): distance, talent builds, mirrored target text, tall portraits (player, target & focus, party), border color, thickness and opacity, elite/rare border and icon, plus box and bar sizing.
+- **Circle Style** (its own page): distance for large and small frames, background, round edge and model size.
 
 The square style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. The **Turn on** button under *BetterBlizzFrames* switches it on for every frame (your other BBF settings stay as they are) and reloads the UI; **Undo** puts back what you had.
 
