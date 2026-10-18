@@ -1588,6 +1588,10 @@ end
 -- (server round trip, ~30 yd range, shared throttle), so results are cached per GUID for
 -- the session and requests are spaced out. NPCs and players we can't inspect show
 -- nothing rather than a guess.
+-- Scoped in a do block (Core.lua's main chunk is near Lua's 200-local limit); only these
+-- three are used outside.
+local UpdateBuild, OnTalentsChanged, OnInspectReady
+do
 local BUILD_UNITS = { "player", "target", "focus" }
 local builds = {}         -- GUID -> "2/8/0"
 local ownBuild            -- your build, cleared when your talents change
@@ -1717,22 +1721,23 @@ local function UpdateBuildFor(unit)
     end
 end
 
-local function UpdateBuild()
+function UpdateBuild()
     for _, unit in ipairs(BUILD_UNITS) do UpdateBuildFor(unit) end
 end
 
-local function OnTalentsChanged()
+function OnTalentsChanged()
     ownBuild = nil
     UpdateBuild()
 end
 
-local function OnInspectReady(guid)
+function OnInspectReady(guid)
     if not guid or guid ~= inspectGUID then return end -- someone else's inspect
     inspectGUID = nil
     local build = Constants and Constants.TraitConsts and ReadBuild(Constants.TraitConsts.INSPECT_TRAIT_CONFIG_ID)
     if build then builds[guid] = build end
     UpdateBuild()
 end
+end -- talent build
 
 -- Surnames ------------------------------------------------------------------
 -- Camelot characters have a surname: UnitName returns (name, surname) and Blizzard's
