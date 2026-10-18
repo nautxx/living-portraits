@@ -1870,7 +1870,7 @@ local function SetBarText(unit, bar, isHealth, value, valueMax)
         holder:SetAllPoints(bar)
         bar.bapTextHolder = holder
         fs = holder:CreateFontString(nil, "OVERLAY")
-        fs:SetFontObject(TextStatusBarText)
+        fs:SetFontObject(TextStatusBarText or GameFontHighlightSmall) -- until the ref's font is copied
         -- Centered on the visible bar: BBF's bordered frame, not the fill (1px taller and
         -- offset), same reference CenterBarTexts uses for Blizzard's texts.
         fs:SetPoint("LEFT", bar.BBFPositionFrame or bar, "LEFT", 4, 0)
