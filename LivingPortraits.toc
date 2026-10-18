@@ -2,8 +2,24 @@
 ## Title: Living|cff00c0ffPortraits|r
 ## Notes: Live 3D breathing portraits for Blizzard unit frames. A companion addon for BetterBlizzFrames.
 ## Author: Jason
-## Version: 0.7.1
+## Version: 0.8.0
 ## OptionalDeps: BetterBlizzFrames
 ## SavedVariables: LivingPortraitsDB
 
 Core.lua
+Units.lua
+modules\circle.lua
+modules\bars.lua
+modules\nameRow.lua
+modules\totClearance.lua
+modules\box.lua
+modules\grow.lua
+modules\talentBuild.lua
+modules\barText.lua
+modules\classResource.lua
+modules\editMode.lua
+modules\surnames.lua
+modules\bbfSetup.lua
+Refresh.lua
+Options.lua
+Slash.lua

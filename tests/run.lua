@@ -1,6 +1,6 @@
 -- Offline test harness for Living Portraits.
--- Stubs just enough of the WoW API to load Core.lua and exercise its logic.
--- Run from the repo root:  lua5.1 tests/run.lua
+-- Stubs just enough of the WoW API to load the addon and exercise its logic.
+-- Run from the repo root:  luajit tests/run.lua
 -- Not listed in the .toc, so WoW never loads this file.
 
 local realPrint = print
@@ -20,7 +20,8 @@ end
 
 -- Child keys the addon probes; real WoW returns nil when absent, the stub must too.
 local CHILD_KEYS = { "TargetFrameContent", "PlayerFrameContent", "HealthBarContainer",
-    "HealthBar", "ManaBar", "BBFPositionFrame" }
+    "HealthBar", "ManaBar", "BBFPositionFrame", "BossPortraitFrameTexture", "HighLevelTexture",
+    "Selection" }
 
 local function region(t)
     t = stubIndex(t or {})
@@ -65,7 +66,13 @@ local function newFrame(kind, parent, level)
         list[#list + 1] = t
         return t
     end
-    function f:CreateMaskTexture() return stubIndex({}) end
+    function f:CreateMaskTexture()
+        local m = stubIndex({})
+        function m:SetTexture(t) self.texture = t end
+        self.masks = rawget(self, "masks") or {}
+        table.insert(self.masks, m)
+        return m
+    end
     function f:CreateFontString()
         local fs = region({})
         function fs:SetText(t) self.text = t end
@@ -76,6 +83,8 @@ local function newFrame(kind, parent, level)
         table.insert(self.fontStrings, fs)
         return fs
     end
+    function f:SetScale(s) self.scale = s end
+    function f:GetScale() return rawget(self, "scale") or 1 end
     function f:GetFrameLevel() return self.level end
     function f:SetFrameLevel(l) self.level = l end
     function f:GetFrameStrata() return "MEDIUM" end
@@ -85,7 +94,12 @@ local function newFrame(kind, parent, level)
     function f:GetLeft() return rawget(self, "left") end
     function f:GetRight() return rawget(self, "right") end
     function f:GetPoint() local a = rawget(self, "anchor"); if a then return unpack(a) end end
-    function f:SetPoint(point, rel, relPoint, x, y) self.anchor = { point, rel, relPoint, x, y } end
+    function f:SetPoint(point, rel, relPoint, x, y)
+        self.anchor = { point, rel, relPoint, x, y }
+        self.points = rawget(self, "points") or {}
+        table.insert(self.points, self.anchor)
+    end
+    function f:ClearAllPoints() self.points = {} end
     function f:IsVisible()
         local up = rawget(self, "parent")
         return self.shown and (not up or up:IsVisible())
@@ -144,6 +158,9 @@ function UnitExists(u) return world.exists[u] end
 function UnitGUID(u) return world.guid[u] or ("G-" .. u) end
 function UnitIsVisible(u) return world.visible[u] ~= false end
 function UnitIsConnected(u) return world.connected[u] ~= false end
+function UnitClassification() return "normal" end
+world.class = "ROGUE"
+function UnitClass() return "Class", world.class end
 function issecretvalue() return world.secret end
 -- Players and talents: world.players marks units that are players; talent trees are
 -- 3 groups (11, 12, 13) and configs map to points per group (zero groups left out).
@@ -227,8 +244,12 @@ C_AddOns = {
 BBF = { SetCustomFonts = function() end }
 
 -- Load the addon --------------------------------------------------------------
-local chunk = assert(loadfile("Core.lua"))
-chunk("LivingPortraits", {})
+-- Every file in .toc order, sharing one namespace table like WoW does.
+local ns = {}
+for line in io.lines("LivingPortraits.toc") do
+    local file = line:gsub("\r", ""):gsub("\\", "/")
+    if file:match("%.lua$") then assert(loadfile(file))("LivingPortraits", ns) end
+end
 
 local function fire(event, arg) eventFrame.OnEvent(eventFrame, event, arg) end
 local function slash(msg) SlashCmdList.LIVINGPORTRAITS(msg) end
@@ -252,7 +273,7 @@ fire("ADDON_LOADED", "LivingPortraits")
 local bbfHooked = BBF.SetCustomFonts
 BBF = nil
 check("old saved inset migrated to new default", LivingPortraitsDB.sizes.small.inset == 0.80)
-check("settings version recorded", LivingPortraitsDB.version == 10)
+check("settings version recorded", LivingPortraitsDB.version == ns.SETTINGS_VERSION)
 check("defaults applied", LivingPortraitsDB.enabled == true and LivingPortraitsDB.sizes.large.inset == 0.80)
 
 fire("PLAYER_ENTERING_WORLD")
@@ -285,7 +306,7 @@ check("soft edge hidden too with a clear background (no dark ring)", not vig.sho
 slash("circlebg 1")
 
 -- Centering offset and calibration
-check("measured default offsets applied", LivingPortraitsDB.offsets.tot[1] == -1.3 and LivingPortraitsDB.offsets.tot[2] == 2.2)
+check("measured default offsets applied", LivingPortraitsDB.offsets.tot[1] == -1.3 and LivingPortraitsDB.offsets.tot[2] == 0)
 local defA = modelFor("player").anchor
 check("player portrait uses its measured offset", defA and defA[4] == -0.5 and defA[5] == 0.6)
 slash("offset player 2 -1")
@@ -422,8 +443,13 @@ local function barWithPos(parent, pos, anchor)
     bar.h = pos.h
     bar.anchor = anchor or { "TOPLEFT", parent, "TOPLEFT", 0, 0 }
     bar.baseTop, bar.origY = pos.top, bar.anchor[5]
+    bar.origX = bar.anchor[4]
     local pf = newFrame("Frame", bar, 8)
-    pf.left, pf.right, pf.h = pos.left, pos.right, pos.h
+    pf.h = pos.h
+    -- Left/right follow the bar's x offset; the right edge also follows a width change
+    function pf:GetLeft() return pos.left + (bar.anchor[4] - bar.origX) end
+    function pf:GetWidth() return rawget(self, "w") or (pos.right - pos.left) end
+    function pf:GetRight() return self:GetLeft() + self:GetWidth() end
     function pf:GetTop() return bar.baseTop + (bar.anchor[5] - bar.origY) end
     function pf:GetBottom() return self:GetTop() - self.h end
     function pf:GetCenter() return 0, self:GetTop() - self.h / 2 end
@@ -479,10 +505,11 @@ local playerHp = withParent(barWithPos(PlayerFrame, { top = 100, h = 19, left = 
 playerHpHolder.HealthBar = playerHp
 local playerMana = barWithPos(PlayerFrame, { top = 79, h = 8, left = 50, right = 173 })
 playerMana.ManaBarText = barText(80)
+local playerCombatIcon, playerRestIcon = rowText(), rowText()
 PlayerFrame.PlayerFrameContent = { PlayerFrameContentMain = {
     HealthBarsContainer = playerHpHolder,
     ManaBarArea = { ManaBar = playerMana },
-} }
+}, PlayerFrameContentContextual = { AttackIcon = playerCombatIcon, PlayerRestLoop = playerRestIcon } }
 local targetName, targetLevel = rowText(), rowText()
 local targetHpHolder = {}
 local targetHp = withParent(barWithPos(TargetFrame, { top = 100, h = 19, left = 50, right = 173 }), targetHpHolder)
@@ -507,6 +534,10 @@ totContainer.bbfName = rowText()
 -- BBF's No Portrait mode moves the player's portrait container into a hidden frame
 playerContainer.shown = false
 BBF = { HasNoPortrait = function(u) return u == "player" or u == "target" or u == "targettarget" end }
+-- Target text mirrors the player's by default; the layout checks below start unmirrored
+-- (the mirror block under the talent build turns it back on)
+check("target text mirrored by default", LivingPortraitsDB.mirrorTarget == true)
+slash("mirror")
 slash("style square")
 local function squareModel(unit, root)
     for _, m in ipairs(models) do
@@ -548,8 +579,140 @@ check("name box shrinks to its text, so a centered justify can't indent it", bn.
 bn:SetWidth(120) -- BBF re-sets its fixed width on SetText
 check("name box stays shrunk after BBF resets its width", bn.w == 25)
 bn:SetText(string.rep("x", 40))
-check("long name stops short of the level", bn.w == math.ceil(123 - 2 - (12 + 4)) + 1)
+check("long name stops short of the level and the status icon room", bn.w == math.ceil(123 - 2 - (12 + 4) - 18) + 1)
 check("player box sits left of the health bar", box and box.anchor[1] == "TOPRIGHT" and box.anchor[3] == "TOPLEFT")
+
+-- Resting Zzz: after the name by default, or on the portrait box's top-right corner
+local rp = playerRestIcon.points[1]
+check("rest icon after the name by default", LivingPortraitsDB.restIcon == "name" and rp[1] == "LEFT" and rp[2] == bn and rp[3] == "RIGHT")
+slash("resticon corner")
+rp = playerRestIcon.points[1]
+check("/lp resticon corner: centered on the box's top-right corner", #playerRestIcon.points == 1
+    and rp[1] == "CENTER" and rp[2] == box and rp[3] == "TOPRIGHT")
+check("combat icon stays after the name", playerCombatIcon.points[1][2] == bn)
+playerRestIcon:SetPoint("CENTER", PlayerFrame, "TOPLEFT", 40, -30) -- Blizzard/BBF re-place it
+check("rest icon stays on the corner", #playerRestIcon.points == 1 and playerRestIcon.points[1][2] == box)
+slash("resticon top")
+check("unknown rest icon spot is ignored", LivingPortraitsDB.restIcon == "corner")
+slash("resticon name")
+check("/lp resticon name puts it back after the name", playerRestIcon.points[1][2] == bn)
+
+-- Edit Mode: BBF anchors the selection art around the health bar (and hooks it to stay); the
+-- Selection frame itself (snapping, guide lines, clicks) is sized to the bars + our box
+do
+    local hpPos = playerHp.BBFPositionFrame
+    PlayerFrame.healthbar = hpPos
+    PlayerFrame.left, PlayerFrame.right, PlayerFrame.top, PlayerFrame.bottom = 0, 232, 120, 40
+    box.left, box.right, box.top, box.bottom = 10, 48, 109, 71
+    local sel = newFrame("Frame", PlayerFrame, 9)
+    sel.bbfRepositioned = true
+    function sel:SetAllPoints(rel) self.points = { { "ALL", rel } } end
+    local BBF_SPOT = { TopLeftCorner = { "TOPLEFT", -16, 21 }, TopRightCorner = { "TOPRIGHT", 15, 21 },
+        BottomLeftCorner = { "BOTTOMLEFT", -16, -25 }, BottomRightCorner = { "BOTTOMRIGHT", 15, -25 } }
+    for key, spot in pairs(BBF_SPOT) do
+        local c = rowText()
+        hooksecurefunc(c, "SetPoint", function(self) -- BBF's FixSelectionHighlight hook
+            if self.changing then return end
+            self.changing = true
+            self:ClearAllPoints()
+            self:SetPoint(spot[1], hpPos, spot[1], spot[2], spot[3])
+            self.changing = false
+        end)
+        sel[key] = c
+    end
+    PlayerFrame.Selection = sel
+    slash("refresh")
+    local p1, p2 = sel.points[1], sel.points[2]
+    check("edit mode: Selection's TOPLEFT on the unit frame, 16 left of the box, 15 over it",
+        p1[1] == "TOPLEFT" and p1[2] == PlayerFrame and p1[4] == 10 - 16 - 0 and p1[5] == 109 + 15 - 120)
+    check("edit mode: Selection's BOTTOMRIGHT 15 right of / 25 under the health bar",
+        p2[1] == "BOTTOMRIGHT" and p2[4] == hpPos:GetRight() + 15 - 232 and p2[5] == hpPos:GetBottom() - 25 - 40)
+    local tl = sel.TopLeftCorner.points
+    check("edit mode: outline corners pinned to the Selection", #tl == 1 and tl[1][2] == sel and tl[1][4] == 0
+        and sel.BottomRightCorner.points[1][2] == sel)
+    sel.TopLeftCorner:SetPoint("TOPLEFT", hpPos, "TOPLEFT", -16, 21) -- BBF re-anchors it
+    check("edit mode: our anchor wins over BBF's re-anchor", sel.TopLeftCorner.points[1][2] == sel)
+    slash("style circle")
+    check("edit mode: circle style gives the Selection back its full frame", sel.points[1][1] == "ALL")
+    check("edit mode: circle style hands the corners back to BBF", sel.TopLeftCorner.points[1][2] == hpPos
+        and sel.BottomRightCorner.points[1][2] == hpPos)
+    slash("style square")
+    check("edit mode: box style again", sel.points[1][1] == "TOPLEFT" and sel.TopLeftCorner.points[1][2] == sel)
+    PlayerFrame.Selection = false
+    PlayerFrame.healthbar = nil
+end
+
+-- Edit Mode, party: one Selection around all members (BBF's margins around the party frame:
+-- 27 in on the left, 12 out right, 15 up, 5 down), grown to include each member's box
+do
+    PartyFrame.left, PartyFrame.right, PartyFrame.top, PartyFrame.bottom = 0, 200, 300, 100
+    local sel = newFrame("Frame", PartyFrame, 9)
+    sel.bbfRepositioned = true
+    function sel:SetAllPoints(rel) self.points = { { "ALL", rel } } end
+    for _, key in ipairs({ "TopLeftCorner", "TopRightCorner", "BottomLeftCorner", "BottomRightCorner" }) do
+        local c = rowText()
+        hooksecurefunc(c, "SetPoint", function(self) -- BBF's hook: back on the party frame
+            if self.changing then return end
+            self.changing = true
+            self:ClearAllPoints()
+            self:SetPoint("TOPLEFT", PartyFrame, "TOPLEFT", 27, 15)
+            self.changing = false
+        end)
+        sel[key] = c
+    end
+    PartyFrame.Selection = sel
+    local squaresBefore = { ns.squares.party1, ns.squares.party2 }
+    local function partyBox(i, l, r, t, b)
+        local bx = newFrame("Frame", PartyFrame["MemberFrame" .. i], 8)
+        bx.left, bx.right, bx.top, bx.bottom = l, r, t, b
+        ns.squares["party" .. i] = { box = bx }
+        return bx
+    end
+    local b1 = partyBox(1, 5, 40, 310, 270)
+    local b2 = partyBox(2, 5, 40, 250, 210)
+    ns.UpdateEditMode()
+    local p1, p2 = sel.points[1], sel.points[2]
+    check("edit mode party: left edge 16 past the member boxes, top 15 over the first box",
+        p1[1] == "TOPLEFT" and p1[2] == PartyFrame and p1[4] == 5 - 16 and p1[5] == 310 + 15 - 300)
+    check("edit mode party: right and bottom keep BBF's party margins", p2[4] == 12 and p2[5] == -5)
+    check("edit mode party: corners pinned to the Selection", sel.TopLeftCorner.points[1][2] == sel)
+    b1:Hide()
+    ns.UpdateEditMode() -- the box's OnHide hook does this in game
+    check("edit mode party: first member leaves, top follows the second box", sel.points[1][5] == 15
+        and sel.points[1][4] == 5 - 16)
+    b2:Hide()
+    ns.UpdateEditMode() -- the box's OnHide hook does this in game
+    check("edit mode party: no boxes, Selection and corners back to Blizzard/BBF",
+        sel.points[1][1] == "ALL" and sel.TopLeftCorner.points[1][2] == PartyFrame)
+    ns.squares.party1, ns.squares.party2 = squaresBefore[1], squaresBefore[2]
+    PartyFrame.Selection = false
+end
+
+-- Edit Mode's "Party Frames" option shows party frames solo: they get the box layout with an
+-- empty box (BBF's party bars leave a 2px gap between health and mana; ours share a line)
+do
+    local member = PartyFrame.MemberFrame3
+    local hp = barWithPos(member, { top = 200, h = 12, left = 60, right = 140 })
+    local mana = barWithPos(member, { top = 186, h = 6, left = 60, right = 140 })
+    member.HealthBarContainer, member.ManaBar = { HealthBar = hp }, mana
+    member.PartyMemberOverlay = false
+    local oldHas = BBF.HasNoPortrait
+    BBF.HasNoPortrait = function(u) return oldHas(u) or u == "party3" end
+    local forced = true
+    EditModeManagerFrame = { ArePartyFramesForcedShown = function() return forced end }
+    world.exists.party3 = false
+    slash("refresh")
+    local sq = ns.squares.party3
+    check("edit mode sample party frame: empty box shows", sq and sq.box.shown and not sq.model.shown)
+    check("edit mode sample party frame: bars laid out, health and mana share a line",
+        hp.h == 16 and mana.BBFPositionFrame:GetTop() == hp.BBFPositionFrame:GetBottom() - 1)
+    forced = false
+    slash("refresh")
+    check("edit mode sample party frame: box hides when the sample frames go", not sq.box.shown)
+    BBF.HasNoPortrait = oldHas
+    EditModeManagerFrame = nil
+    member.HealthBarContainer, member.ManaBar = false, false
+end
 
 local function centered(fs, pos) local _, a = fs:GetCenter(); local _, b = pos:GetCenter(); return math.abs(a - b) < 0.5 end
 check("health text vertically centered in its bar", centered(playerHpHolder.LeftText, playerHp.BBFPositionFrame))
@@ -623,6 +786,147 @@ check("/lp alignmana turns alignment off", LivingPortraitsDB.alignMana == false)
 check("mana bar back at its original x offset", targetMana.anchor[4] == -8)
 slash("alignmana")
 check("re-aligning is stable", targetMana.anchor[4] == 0)
+
+-- Class resource, rogue: BBF's combo point bar ("Move Combo Points under PlayerFrame") goes under the player's bars
+do
+    local comboBar = newFrame("Frame", PlayerFrame, 3)
+    comboBar.topPadding = 10
+    comboBar.classResourceButtonTable = {}
+    for i = 1, 5 do comboBar.classResourceButtonTable[i] = newFrame("Frame", comboBar, 4) end
+    function comboBar:UpdatePower() end
+    comboBar.bbfTooltipMouse = true -- BBF gives its player bar a tooltip
+    function comboBar:EnableMouse(v) self.mouse = v end
+    local reanchored = 0
+    BBF.ComboPointBar = comboBar
+    BBF.ReanchorComboPointBar = function() reanchored = reanchored + 1 end
+    local combo = 2
+    function GetComboPoints() return combo end
+    local manaPos = playerMana.BBFPositionFrame
+
+    slash("refresh")
+    check("class resource defaults to pixel circles", LivingPortraitsDB.resource == "pixel")
+    local row = comboBar.anchor[2]
+    check("pixel row sits under the mana bar's border", row and row.anchor and row.anchor[1] == "TOP"
+        and row.anchor[2] == manaPos and row.anchor[3] == "BOTTOM" and row.anchor[5] == -(1 + 3))
+    check("BBF's bar sits on our row, raised by its top padding", comboBar.anchor[3] == "TOP" and comboBar.anchor[5] == 10)
+    check("BBF's bar is see-through", comboBar:GetAlpha() == 0)
+    local dots = {}
+    for _, f in ipairs(frames) do if f.parent == row then dots[#dots + 1] = f end end
+    check("one circle per combo point", #dots == 5)
+    local size = (6 + 1) * 2
+    check("circles: radius 6 + 1px border, 3px apart", dots[2].w == size and dots[2].h == size and dots[2].anchor[4] == size + 3)
+    local fill2, fill3 = dots[2].textures[2], dots[3].textures[2]
+    check("combo points are circles", dots[1].masks[1].texture:find("TempPortraitAlphaMask$") ~= nil)
+    check("filled point takes the combo color", fill2.color[1] > 0.8 and fill2.color[2] < 0.3)
+    check("empty point is dark", fill3.color[1] < 0.1)
+    check("ring takes the border color", dots[1].textures[1].color[1] == 0 and dots[1].textures[1].color[4] == 1)
+
+    comboBar:SetPoint("TOP", PlayerFrame, "TOP", 2, 8) -- BBF re-anchors it
+    check("BBF re-anchoring keeps it on our row", comboBar.anchor[2] == row)
+    comboBar:SetAlpha(1) -- BBF resets its alpha
+    check("BBF's bar stays see-through", comboBar:GetAlpha() == 0)
+    combo = 3
+    comboBar.classResourceButtonTable[5].alpha = 0 -- BBF's "only show filled" fades a point
+    comboBar:UpdatePower()
+    check("combo change fills the next circle", dots[3].textures[2].color[1] > 0.8)
+    check("a point BBF faded hides its circle", not dots[5].shown and dots[4].shown)
+    comboBar.classResourceButtonTable[5].alpha = nil
+
+    slash("resourcealign left")
+    check("/lp resourcealign left: row's left edge on the bar border's outer edge", row.anchor[1] == "TOPLEFT"
+        and row.anchor[3] == "BOTTOMLEFT" and row.anchor[4] == -1 and comboBar.anchor[1] == "TOPLEFT")
+    slash("resourcealign right")
+    check("/lp resourcealign right", row.anchor[1] == "TOPRIGHT" and row.anchor[3] == "BOTTOMRIGHT" and row.anchor[4] == 1)
+    slash("resourcealign middle")
+    check("unknown alignment is ignored", LivingPortraitsDB.resourceAlign == "right")
+    slash("resourcealign center")
+    check("/lp resourcealign center", row.anchor[1] == "TOP" and row.anchor[4] == 0)
+    slash("resourcesize 8")
+    slash("resourcecolor 00ff00")
+    check("/lp resourcesize resizes the circles", dots[1].w == (8 + 1) * 2)
+    check("/lp resourcecolor (no resource: your class's) recolors filled points", dots[1].textures[2].color[2] == 1 and dots[1].textures[2].color[1] == 0)
+
+    LivingPortraitsDB.resource = "moved" -- saved while testing an earlier build
+    slash("refresh")
+    check("a saved \"moved\" becomes the BBF option", LivingPortraitsDB.resource == "bbf")
+    slash("resourcesize 6")
+    slash("resource bbf")
+    check("bbf: BBF's own art shows", comboBar:GetAlpha() == 1 and not row.shown)
+    check("bbf: BBF's bar under the mana bar too", comboBar.anchor[2] == manaPos
+        and math.abs(comboBar.anchor[5] - (-(1 + 3) / 0.7 + 10)) < 0.01)
+    check("bbf: size setting scales BBF's points to a circle's width (14 / 20)", math.abs(comboBar.scale - 0.7) < 1e-9)
+    comboBar:SetScale(0.9) -- BBF applies its Class Resource Scale, then re-anchors
+    comboBar:SetPoint("TOP", PlayerFrame, "TOP", 2, 8)
+    check("bbf: our scale wins over BBF's re-scale", math.abs(comboBar.scale - 0.7) < 1e-9)
+    slash("resourcesize 9")
+    check("bbf: /lp resourcesize rescales BBF's points", math.abs(comboBar.scale - 1) < 1e-9)
+    slash("resourcesize 6")
+    slash("resourcealign right")
+    check("bbf: alignment applies to BBF's bar", comboBar.anchor[1] == "TOPRIGHT" and math.abs(comboBar.anchor[4] - 1 / 0.7) < 0.01)
+    slash("resourcealign center")
+    slash("resource none")
+    check("none: nothing shows", comboBar:GetAlpha() == 0 and not row.shown)
+    check("none: BBF's invisible bar can't pop its tooltip", comboBar.mouse == false)
+    comboBar:SetAlpha(1) -- BBF resets its alpha
+    check("none: stays hidden", comboBar:GetAlpha() == 0)
+    slash("resource bbf")
+    check("none -> bbf: BBF's art and tooltip back", comboBar:GetAlpha() == 1 and comboBar.mouse == true)
+    slash("resource pixel")
+    comboBar.bbfOnTarget = true -- BBF's "Move Resource to TargetFrame"
+    comboBar:SetPoint("LEFT", TargetFrame, "RIGHT", -43, 1)
+    check("on the target frame: left to BBF", comboBar.anchor[2] == TargetFrame and comboBar:GetAlpha() == 1 and not row.shown)
+    comboBar.bbfOnTarget = nil
+    comboBar:SetPoint("TOP", PlayerFrame, "TOP", 2, 8) -- BBF puts it back under the player frame
+    check("back from the target frame: on our row again", comboBar.anchor[2] == row)
+    slash("refresh")
+    check("back from the target frame: see-through again", comboBar:GetAlpha() == 0 and row.shown)
+    slash("style circle")
+    check("circle style: handed back to BBF", comboBar:GetAlpha() == 1 and reanchored == 1)
+    check("circle style: BBF's own scale back", math.abs(comboBar.scale - 0.9) < 1e-9)
+    slash("style square")
+    slash("resourcesize 6")
+    slash("resourcecolor combo e62e2e")
+    check("rogue's color is the combo color", LivingPortraitsDB.resourceColors.combo == "ffe62e2e")
+    BBF.ComboPointBar = nil
+
+    -- Warlock: no bar in Camelot, so the circles come straight from UnitPower
+    world.class = "WARLOCK"
+    Enum = { PowerType = { SoulShards = 7 } }
+    local shards, maxShards = 2, 5
+    function UnitPower(_, pt) return pt == 7 and shards or 0 end
+    function UnitPowerMax(_, pt) return pt == 7 and maxShards or 0 end
+    slash("refresh")
+    check("warlock: shards under the mana bar", row.shown and row.anchor[2] == manaPos and row.anchor[5] == -(1 + 3))
+    check("warlock: one gem per shard, taller than wide", dots[5].shown and dots[5].w == 14 and dots[5].h == 18)
+    check("warlock: shards use the shard mask (ring and fill)", dots[1].masks[1].texture:find("media\\shard$")
+        and dots[1].masks[2].texture == dots[1].masks[1].texture)
+    check("warlock: filled shards take the shard color", dots[2].textures[2].color[1] > 0.6 and dots[2].textures[2].color[3] == 1)
+    check("warlock: empty shards are dark", dots[3].textures[2].color[1] < 0.1)
+    slash("resourcecolor shards 00ff00")
+    check("/lp resourcecolor shards", LivingPortraitsDB.resourceColors.shards == "ff00ff00" and dots[1].textures[2].color[2] == 1)
+    slash("resourcecolor 112233")
+    check("/lp resourcecolor without a resource sets your own class's", LivingPortraitsDB.resourceColors.shards == "ff112233")
+    slash("resourcecolor shards a15cff")
+    BetterBlizzFramesDB = { comboVisibilityUnitFrames = true, onlyActiveComboPoints = true }
+    ns.UpdateClassResource()
+    check("warlock: BBF's \"only show filled\" applies", dots[2].shown and not dots[3].shown)
+    BetterBlizzFramesDB.onlyActiveComboPoints, BetterBlizzFramesDB.hideEmptyComboPoints = nil, true
+    shards = 0
+    ns.UpdateClassResource()
+    check("warlock: BBF's \"hide when empty\" applies", not dots[1].shown)
+    BetterBlizzFramesDB = nil
+    slash("resource bbf")
+    check("warlock: the BBF option shows nothing (BBF has no shard bar here)", not row.shown)
+    slash("resource pixel")
+    slash("resource none")
+    check("warlock: none hides the shards", not row.shown)
+    slash("resource pixel")
+    maxShards = 0
+    slash("refresh")
+    check("warlock with no shards in this game: nothing shows", not row.shown)
+    world.class = "ROGUE"
+    Enum, UnitPower, UnitPowerMax = nil, nil, nil
+end
 -- In combat the bars are left alone
 inCombat = true
 slash("extend 8 large")
@@ -872,14 +1176,12 @@ do
     BBF, BetterBlizzFramesDB = nil, nil
 end
 
--- Hide surnames on our frames
+-- Hide surnames on our frames (on by default)
 do
     PlayerName:SetText("Naut Sfw")
     PlayerFrame.bbfName:SetText("|cffffffffNaut Sfw|r")
     tick() -- hooks the name texts
-    check("surnames show by default", PlayerName.text == "Naut Sfw")
-    slash("surname")
-    check("/lp surname strips the surname", PlayerName.text == "Naut")
+    check("surnames hidden by default", LivingPortraitsDB.hideSurname == true and PlayerName.text == "Naut")
     check("only the surname goes; BBF's color codes stay", PlayerFrame.bbfName.text == "|cffffffffNaut|r")
     PlayerName:SetText("Naut Sfw") -- Blizzard updates the name
     check("later name updates are stripped too", PlayerName.text == "Naut")
@@ -888,6 +1190,9 @@ do
     slash("surname")
     check("turning it off puts the full name back", PlayerName.text == "Naut Sfw"
         and PlayerFrame.bbfName.text == "|cffffffffNaut Sfw|r")
+    slash("surname")
+    check("/lp surname strips the surname", PlayerName.text == "Naut")
+    proxies.LivingPortraits_hideSurname.set(false)
     proxies.LivingPortraits_hideSurname.set(true)
     check("the panel checkbox applies right away, not on the next tick", PlayerName.text == "Naut")
     world.names.target = { "Creeg", "Head" }

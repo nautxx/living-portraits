@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.8.0 (2026-10-18)
+
+### Features
+- **Class resource under the bars:** in box style, BetterBlizzFrames' combo points ("Move Combo Points under PlayerFrame") no longer cover the mana bar. They sit under the player's bars as pixel-bordered circles in the border color and thickness, or as BetterBlizzFrames' own art, or hidden. Choose the alignment (left, center or right of the mana bar), the size (it scales BetterBlizzFrames' art too) and a color per resource. BetterBlizzFrames' "hide when empty" and "only show filled" still apply. Warlock soul shards (as gems), mage arcane charges and paladin holy charges are supported if WoW Forever ever gives those classes the resource. Settings → Box Style → Class resource, or `/lp resource pixel|bbf|none`, `/lp resourcealign`, `/lp resourcesize`, `/lp resourcecolor`.
+- **Resting icon placement:** the Zzz can sit after your name (default) or over the portrait box's top-right corner. `/lp resticon name|corner`.
+
+### Fixes
+- **Edit Mode:** the player, target, focus and party selection boxes now include the portrait boxes. The red snap guide lines, snapping and clicking follow that outline too.
+- **Edit Mode party frames:** the sample party frames shown while solo get empty portrait boxes of the right size, and their health and mana bars no longer have a gap.
+
+### Changes
+- README: class resource section with a screenshot, plus the new commands and Edit Mode behavior.
+
 ## 0.7.1 (2026-10-18)
 
 ### Changes
