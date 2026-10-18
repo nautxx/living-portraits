@@ -26,13 +26,13 @@ local CORNERS  = "Interface\\AddOns\\" .. ADDON_NAME .. "\\media\\corners"
 -- would show as a square, so they fade out with it.
 
 -- Bump when a default changes in a way saved settings should pick up (see MigrateSettings).
-local SETTINGS_VERSION = 10
+local SETTINGS_VERSION = 12
 
 local defaults = {
     enabled  = true,
     style    = "square", -- "square" (needs BBF No Portrait / Pixel Border) or "circle"
     zoom     = 1,     -- 0..1, 1 = head & shoulders
-    circleBg    = 1,  -- circle: opacity of the dark background inside the ring (0 = clear)
+    circleBg    = 0,  -- circle: opacity of the dark background inside the ring (0 = clear)
     squareBg    = 0,  -- square: opacity of the dark background behind the model (0 = none)
     squareGap   = 1,  -- px between the box and the bars (1 = their borders share one line)
     barSpacing  = 0,  -- px between health and mana (0 = their borders share one line)
@@ -47,9 +47,22 @@ local defaults = {
     growBars    = true, -- new target: health and mana grow from empty to their value
     growTime    = 0.35, -- seconds the grow takes (/lp growtime)
     showBuild   = true, -- square: talent build ("2/8/0") on the player, target and focus (/lp build)
-    tallPortraits = true, -- square: player/target/focus box grows upward by a line for the build (/lp tall)
-    hideSurname = false, -- first names only on our frames (/lp surname)
-    mirrorTarget = false, -- square: target/focus text mirrors the player's (/lp mirror)
+    eliteBorder = true, -- square: target/focus box border gold for elite/boss, silver for rare (/lp eliteborder)
+    eliteColor  = "ffffc71a", -- square: elite/boss border color, ARGB hex like the settings swatch (/lp elitecolor)
+    rareColor   = "ffc7ccdb", -- square: rare/rare elite border color (/lp rarecolor)
+    -- Square: where the target/focus elite icon goes: "top"/"bottom" (outer corner of the
+    -- portrait box), "center" (bottom center of the box), "level" (beside the level), "hidden".
+    eliteIcon   = "center",
+    -- Square: the box grows upward by a line (the talent build's, above the name), per group:
+    -- player, target (target + focus), party. ToT stays square (/lp tall [group]).
+    tallPortraits = { player = true, target = true, party = true },
+    hideSurname = true, -- first names only on our frames (/lp surname)
+    mirrorTarget = true, -- square: target/focus text mirrors the player's (/lp mirror)
+    -- Health/mana text on player, target, focus and party bars, left-aligned and always shown:
+    -- "default" (Blizzard/BBF's text), "max" = "350 (462)", "percent" = "350 (76%)" (/lp bartext).
+    barText     = "default",
+    -- Its look: "outline_shadow" (default), "outline", "shadow", "thick", "thick_shadow" (/lp bartextstyle).
+    barTextStyle = "outline_shadow",
     borderColor = "ff000000", -- square: box + bar border color, ARGB hex like the settings swatch (/lp bordercolor)
     borderAlpha = 1,      -- square: border opacity (/lp borderalpha)
     borderSize  = 1,      -- square: border thickness: 1 thin, 2 medium, 3 heavy (/lp bordersize)
@@ -61,7 +74,7 @@ local defaults = {
         player = { -0.5, 0.6 },
         target = { 0.6, 0.3 },
         focus  = { 0.6, 0.3 }, -- same frame design as target
-        tot    = { -1.3, 2.2 },
+        tot    = { -1.3, 0 },
         party  = { 0, 0 },     -- not measured yet
     },
     bgR = 0.05, bgG = 0.05, bgB = 0.07,
@@ -71,7 +84,7 @@ local defaults = {
     sizes = {
         large  = { inset = 0.80, cam = 0.85 },
         small  = { inset = 0.80, cam = 0.85 },
-        square = { inset = 1,    cam = 0.9 },
+        square = { inset = 1,    cam = 0.85 },
     },
     units = {
         player = true,
@@ -120,6 +133,14 @@ local function TargetUnit(frameName, offset)
             local m = TargetMain(f)
             return AsText(m and m.Name), AsText(m and m.LevelText), AsText(f.bbfName)
         end,
+        -- Elite/rare marker: BBF's No Portrait mode turns Blizzard's portrait dragon into a
+        -- 15px icon (nameplate elite atlas).
+        elite    = function(f) local c = f.TargetFrameContainer; return c and c.BossPortraitFrameTexture end,
+        -- "??" level skull: shown instead of the level text for units far above you.
+        skull    = function(f)
+            local c = f.TargetFrameContent and f.TargetFrameContent.TargetFrameContentContextual
+            return c and c.HighLevelTexture
+        end,
     }
 end
 
@@ -142,6 +163,12 @@ local function PartyUnit(i)
         portrait = function(f) return f.Portrait end,
         ring     = function(f) return RingTex(f.Texture) end,
         bars     = function(f) return f.HealthBarContainer and f.HealthBarContainer.HealthBar, f.ManaBar end,
+        icons    = function(f)
+            local o = f.PartyMemberOverlay
+            if o then return o.RoleIcon, o.LeaderIcon, o.GuideIcon, o.Disconnect end
+        end,
+        -- Not `texts`: party has no name row, and LayoutNameRow would hand those back to BBF.
+        partyName = function(f) return AsText(f.bbfName), AsText(f.Name) end,
     }
 end
 
@@ -221,6 +248,13 @@ local function Safe(v)
     return v
 end
 
+local function AnySecret(...)
+    for i = 1, select("#", ...) do
+        if IsSecret((select(i, ...))) then return true end
+    end
+    return false
+end
+
 local function BBFHidesPortrait(unit)
     return BBF and BBF.HasNoPortrait and BBF.HasNoPortrait(unit)
 end
@@ -229,12 +263,18 @@ local function Clamp(v, lo, hi) return math.max(lo, math.min(hi, v)) end
 
 -- GUID ("none" without a unit) and a visibility/connection code. Two plain values, so the
 -- ticker can compare them without building a string per unit every tick.
+-- The code includes the unit frame's own visibility: a refresh while the frame was hidden
+-- (party frames during a dungeon's loading screen or as the group forms) only hides the
+-- square box, and nothing else re-runs it when the frame shows (the circle style has a
+-- container OnShow hook, the square style doesn't).
 local function UnitState(unit)
     if not UnitExists(unit) then return "none", 0 end
     local guid = Safe(UnitGUID(unit)) or "?"
     local hidden = Safe(UnitIsVisible(unit)) == false and 1 or 0
     local offline = Safe(UnitIsConnected(unit)) == false and 2 or 0
-    return guid, hidden + offline
+    local uf = UnitFrameOf(unit)
+    local frameHidden = not (uf and uf:IsVisible()) and 4 or 0
+    return guid, hidden + offline + frameHidden
 end
 
 local function MarkState(unit)
@@ -273,6 +313,16 @@ local function MigrateSettings()
     end
     if version < 10 then
         db.offsets = nil                -- v10: measured centering offsets
+    end
+    if version < 11 and type(db.tallPortraits) == "boolean" then
+        -- v11: tall per group. Keep the old switch for player/target/focus; party is new (off).
+        -- Only for the old boolean: a fresh install (no saved value) gets the defaults.
+        local on = db.tallPortraits ~= false
+        db.tallPortraits = { player = on, target = on, party = false }
+    end
+    if version < 12 then
+        -- v12: drop keys from removed experiments (model facing/shift, mirror angle, build row).
+        db.shift, db.facing, db.mirrorAngle, db.mirrorShift, db.buildRow = nil, nil, nil, nil, nil
     end
     db.version = SETTINGS_VERSION
 end
@@ -552,10 +602,11 @@ local function LayoutBars(unit, hpPos, manaPos, manaBar, hpBar)
     local toMana = hpPos:GetEffectiveScale() / manaBar:GetEffectiveScale()
     if db.alignMana then
         -- Same width as the health bar's border, edges lined up on the box side.
-        if manaPos ~= manaBar then manaPos:SetWidth(hpPos:GetWidth() * toMana) end
+        local hpW = Safe(hpPos:GetWidth())
+        if manaPos ~= manaBar and hpW then manaPos:SetWidth(hpW * toMana) end
         local a, b
-        if UNITS[unit].side == "RIGHT" then a, b = hpPos:GetRight(), manaPos:GetRight()
-        else a, b = hpPos:GetLeft(), manaPos:GetLeft() end
+        if UNITS[unit].side == "RIGHT" then a, b = Safe(hpPos:GetRight()), Safe(manaPos:GetRight())
+        else a, b = Safe(hpPos:GetLeft()), Safe(manaPos:GetLeft()) end
         if a and b and math.abs(a - b) >= 0.25 then
             manaBar.bapDX = manaBar.bapDX + (a - b) * toMana
         end
@@ -567,7 +618,7 @@ local function LayoutBars(unit, hpPos, manaPos, manaBar, hpBar)
 
     -- Put mana directly under health, measured after layout so it's exact whatever offsets
     -- BBF uses: the borders share one line (barSpacing 0). BBF's ToT leaves a gap otherwise.
-    local hpBottom, manaTop = hpPos:GetBottom(), manaPos:GetTop()
+    local hpBottom, manaTop = Safe(hpPos:GetBottom()), Safe(manaPos:GetTop())
     if hpBottom and manaTop then
         local shift = ((hpBottom - SharedLine() - db.barSpacing) - manaTop) * toMana
         if math.abs(shift) >= 0.25 then
@@ -700,18 +751,130 @@ local function PinText(fs, point, rel, relPoint, x, y, justify, maxWidth)
     Apply(fs)
 end
 
+-- Every region we pin, per unit, so handing a frame back restores all of them (no
+-- hand-kept restore lists to forget one in). Pin() = PinText() + record.
+local pinned = {} -- unit -> { [region] = true }
+local function Pin(unit, fs, ...)
+    if not fs then return end
+    pinned[unit] = pinned[unit] or {}
+    pinned[unit][fs] = true
+    PinText(fs, ...)
+end
+
 -- Mirrored text (target/focus, box on the right): name and build hug the portrait and
 -- the level goes to the outer edge, so the frame mirrors the player's.
 local function Mirrored(unit)
     return db.mirrorTarget and UNITS[unit].side == "RIGHT"
 end
 
+-- The player's status icons: combat (crossed swords) and the resting Zzz. BBF's No Portrait
+-- mode puts them where the portrait used to be, which is now our box: right on the face.
+-- Blizzard shows only one at a time (PlayerFrame_UpdateStatus), so both share one slot
+-- just after the name.
+local function StatusIcons(unit)
+    if unit ~= "player" then return end
+    local f = PlayerFrame and PlayerFrame.PlayerFrameContent
+    local c = f and f.PlayerFrameContentContextual
+    if c then return c.AttackIcon, c.PlayerRestLoop end
+end
+local STATUS_ICON_ROOM = 18 -- icon (~15 px) + gaps, kept free after the name
+-- The Zzz frame is scaled 0.5 by BBF (offsets are in its scale) and its art overhangs the
+-- frame by 5 units per side. Tuned in game: 3 px closer to the name and 3 px up (the
+-- small "z" sat below the name's baseline).
+local REST_X, REST_Y = 2, 6
+
+-- Target/focus elite icon. BBF centers it on the health bar's top-right corner, which is now
+-- where the name ends and our box begins (on the name and the model). It goes beside the
+-- level instead, on the side facing the name ("14 [elite] ... Name"), like classic's elite
+-- level. Room is kept free whether or not it shows (it changes per target).
+local function EliteIcon(unit)
+    return UNITS[unit].elite and Lookup(unit, "elite")
+end
+local function SkullIcon(unit)
+    return UNITS[unit].skull and Lookup(unit, "skull")
+end
+local ELITE_ROOM = 17 -- icon (15) + gap
+local ELITE_MODES = { top = true, bottom = true, center = true, level = true, hidden = true }
+-- The name row only keeps room for the icon when it sits beside the level.
+local function EliteInRow(unit)
+    return EliteIcon(unit) and db.eliteIcon == "level"
+end
+
+-- "hidden" only fades the icon (alpha), and only while we hide it; BBF/Blizzard still
+-- show/hide and re-atlas it per target as usual.
+local function SetEliteHidden(elite, hide)
+    if hide and not elite.bapHidden then
+        elite.bapHidden = true
+        elite:SetAlpha(0)
+    elseif not hide and elite.bapHidden then
+        elite.bapHidden = nil
+        elite:SetAlpha(1)
+    end
+end
+-- Tint the icon with the elite border color (gold/silver or the user's picks): desaturate
+-- the atlas, then color it. The atlas is bronze, which clashed with the gold border. nil r
+-- = untint (only if we tinted). BBF re-sets the atlas per target; SetAtlas keeps the tint.
+local function TintElite(elite, r, g, b)
+    if r then
+        elite.bapTinted = true
+        elite:SetDesaturated(true)
+        elite:SetVertexColor(r, g, b)
+    elseif elite.bapTinted then
+        elite.bapTinted = nil
+        elite:SetDesaturated(false)
+        elite:SetVertexColor(1, 1, 1)
+    end
+end
+
+-- Hand back everything pinned on this unit, and undo the elite icon's fade and tint.
+local function RestorePins(unit)
+    local elite = EliteIcon(unit)
+    if elite then
+        SetEliteHidden(elite, false)
+        TintElite(elite, nil)
+    end
+    local set = pinned[unit]
+    if not set then return end
+    for fs in pairs(set) do RestorePoints(fs) end
+    wipe(set)
+end
+local SKULL_WIDTH = 11 -- BBF sizes the "??" skull 11x15
+
+-- The "??" skull replaces the level text (Blizzard hides one and shows the other per target),
+-- so the elite icon sits beside whichever is shown. Re-run when the skull shows or hides.
+local function PlaceElite(unit)
+    local elite = EliteIcon(unit)
+    local _, level = Lookup(unit, "texts")
+    local skull = SkullIcon(unit)
+    local hpPos = GetBarFrames(unit)
+    if not (elite and level and hpPos and (hpPos.bapRow or 0) > 0) then return end -- name row active only
+    local mode = ELITE_MODES[db.eliteIcon] and db.eliteIcon or "center"
+    SetEliteHidden(elite, mode == "hidden")
+    local sq = squares[unit]
+    if (mode == "top" or mode == "bottom" or mode == "center") and sq then
+        -- Centered on the box's outer corner (or bottom middle), straddling the border.
+        local outer = UNITS[unit].side == "RIGHT" and "RIGHT" or "LEFT"
+        local spot = mode == "center" and "BOTTOM" or (mode == "top" and "TOP" or "BOTTOM") .. outer
+        Pin(unit, elite, "CENTER", sq.box, spot, 0, 0)
+        return
+    end
+    local anchor = skull and skull:IsShown() and skull or level
+    if Mirrored(unit) then
+        Pin(unit, elite, "LEFT", anchor, "RIGHT", 2, 0)
+    else
+        Pin(unit, elite, "RIGHT", anchor, "LEFT", -2, 0)
+    end
+end
+
 local function LayoutNameRow(unit, hpPos)
     local name, level, bbfName = Lookup(unit, "texts")
     if not (name or level or bbfName) then return end
     local row = hpPos.bapRow or 0
+    local combat, rest = StatusIcons(unit)
+    local elite = EliteIcon(unit)
+    local skull = SkullIcon(unit)
     if row <= 0 then
-        RestorePoints(name); RestorePoints(level); RestorePoints(bbfName)
+        RestorePins(unit) -- player/target/focus/ToT: only name-row regions are pinned on them
         return
     end
     local y = row / 2
@@ -720,18 +883,43 @@ local function LayoutNameRow(unit, hpPos)
         local w = Safe(hpPos:GetWidth())
         if type(w) ~= "number" then return end
         local lw = level and level:IsShown() and TextWidth(level)
+            or skull and skull:IsShown() and SKULL_WIDTH
         local bt = buildTexts[unit]
         local bw = bt and bt.bapInline and bt:IsShown() and TextWidth(bt)
-        return math.max(w - 2 - (lw and lw + 4 or 0) - (bw and bw + 6 or 0), 10)
+        return math.max(w - 2 - (lw and lw + 4 or 0) - (bw and bw + 6 or 0) - (combat and STATUS_ICON_ROOM or 0)
+            - (EliteInRow(unit) and ELITE_ROOM or 0), 10)
     end
     if Mirrored(unit) then
-        PinText(name,    "RIGHT", hpPos, "TOPRIGHT", -1, y, "RIGHT", nameMax)
-        PinText(bbfName, "RIGHT", hpPos, "TOPRIGHT", -1, y, "RIGHT", nameMax)
-        PinText(level,   "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT")
+        Pin(unit, name,    "RIGHT", hpPos, "TOPRIGHT", -1, y, "RIGHT", nameMax)
+        Pin(unit, bbfName, "RIGHT", hpPos, "TOPRIGHT", -1, y, "RIGHT", nameMax)
+        Pin(unit, level,   "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT")
     else
-        PinText(name,    "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT", nameMax)
-        PinText(bbfName, "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT", nameMax)
-        PinText(level,   "RIGHT", hpPos, "TOPRIGHT", -1, y, "RIGHT")
+        Pin(unit, name,    "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT", nameMax)
+        Pin(unit, bbfName, "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT", nameMax)
+        Pin(unit, level,   "RIGHT", hpPos, "TOPRIGHT", -1, y, "RIGHT")
+    end
+    -- BBF puts the skull where the portrait was (now our box's corner): it goes in the level's spot.
+    if skull then
+        if Mirrored(unit) then
+            Pin(unit, skull, "LEFT", hpPos, "TOPLEFT", 1, y)
+        else
+            Pin(unit, skull, "RIGHT", hpPos, "TOPRIGHT", -1, y)
+        end
+    end
+    if elite and level then
+        PlaceElite(unit)
+        if skull and not skull.bapEliteHook then
+            skull.bapEliteHook = true
+            hooksecurefunc(skull, "Show", function() PlaceElite(unit) end)
+            hooksecurefunc(skull, "Hide", function() PlaceElite(unit) end)
+            hooksecurefunc(skull, "SetShown", function() PlaceElite(unit) end)
+        end
+    end
+    -- Status icons just after the name (whichever name text BBF shows), room reserved in nameMax.
+    local shown = bbfName and bbfName:IsShown() and bbfName or name
+    if shown then
+        Pin(unit, combat, "LEFT", shown, "RIGHT", 3, 0)
+        Pin(unit, rest, "LEFT", shown, "RIGHT", REST_X, REST_Y)
     end
 end
 
@@ -744,11 +932,16 @@ end
 -- line would draw twice and show darker, so the duplicate edge is hidden.
 local EDGE_RIGHT, EDGE_LEFT, EDGE_TOP = 2, 4, 1
 
-local function BorderRGBA()
-    local hex = db.borderColor
-    if type(hex) ~= "string" or #hex ~= 8 then hex = "ff000000" end
+-- ARGB hex (the settings color swatch's format) -> r, g, b.
+local function HexRGB(hex, fallback)
+    if type(hex) ~= "string" or #hex ~= 8 then hex = fallback end
     local function c(i) return (tonumber(hex:sub(i, i + 1), 16) or 0) / 255 end
-    return c(3), c(5), c(7), db.borderAlpha or 1
+    return c(3), c(5), c(7)
+end
+
+local function BorderRGBA()
+    local r, g, b = HexRGB(db.borderColor, "ff000000")
+    return r, g, b, db.borderAlpha or 1
 end
 
 local function ColorEdges(edges, r, g, b, a, hideA, hideB)
@@ -761,8 +954,22 @@ local function ColorEdges(edges, r, g, b, a, hideA, hideB)
     end
 end
 
+-- Elite/rare on target and focus: the box and bar borders turn gold (elite, boss) or silver (rare,
+-- rare elite), like classic's dragon around the portrait. The small elite icon alone was too
+-- easy to miss. Both colors are settings. nil for normal units, other frames, or a secret
+-- classification.
+local ELITE_COLOR_KEY = { elite = "eliteColor", worldboss = "eliteColor", rare = "rareColor", rareelite = "rareColor" }
+-- The icon always takes it; the borders only with Elite Border on.
+local function EliteColor(unit)
+    if not (UNITS[unit].elite and UnitExists(unit)) then return end
+    local key = ELITE_COLOR_KEY[Safe(UnitClassification(unit)) or ""]
+    if key then return HexRGB(db[key], defaults[key]) end
+end
+
 local function ApplyBorders(unit, manaBar, hpBar)
     local r, g, b, a = BorderRGBA()
+    local er, eg, eb = EliteColor(unit) -- elite/rare: box and bars all get its color
+    if er and db.eliteBorder then r, g, b = er, eg, eb end
     local size = BorderSize()
     local sq = squares[unit]
     if sq then
@@ -776,6 +983,10 @@ local function ApplyBorders(unit, manaBar, hpBar)
     ColorEdges(hpBar and hpBar.BBFBlackBorder, r, g, b, a, boxSide)
     -- Mana's top edge is the same line as health's bottom edge (spacing 0).
     ColorEdges(manaBar and manaBar.BBFBlackBorder, r, g, b, a, boxSide, db.barSpacing == 0 and EDGE_TOP or nil)
+    -- The elite icon takes the elite/rare color even with Elite Border off (here, not in the
+    -- name row: this also runs in combat).
+    local elite = EliteIcon(unit)
+    if elite then TintElite(elite, er, eg, eb) end
 end
 
 -- BBF's look: black, 1px, every edge shown.
@@ -867,8 +1078,39 @@ local function RestoreBars(unit)
     RestoreTexts(hpBar:GetParent(), HP_TEXT_KEYS)
     RestoreTexts(manaBar, MANA_TEXT_KEYS)
     hpPos.bapRow = nil
-    local name, level, bbfName = Lookup(unit, "texts")
-    RestorePoints(name); RestorePoints(level); RestorePoints(bbfName)
+    RestorePins(unit) -- names, level, skull, elite, status and party icons
+end
+
+-- Party icons (square style). BBF's No Portrait mode put the role icon on our box's top-right
+-- corner (over the box/bar border) and the disconnect icon over box and bar. Role, then
+-- leader/guide, go just left of the name ("[role][crown] Name"); the disconnect icon goes in
+-- the middle of the box, which is empty for an offline member. BBF centers the name in a
+-- fixed-width box, so its box is fitted to the text first (kept at BBF's anchor and width
+-- cap), or "left of the name" would be the box's edge. Pinned, so BBF re-anchoring them
+-- (its party updates) doesn't move them back.
+local function PartyNameText(unit)
+    local bbfName, name = Lookup(unit, "partyName")
+    if bbfName and bbfName:IsShown() then return bbfName end
+    return name
+end
+
+local function LayoutPartyIcons(unit)
+    local sq = squares[unit]
+    if not (UNITS[unit].icons and sq) or InCombatLockdown() then return end
+    local role, leader, guide, disconnect = Lookup(unit, "icons")
+    Pin(unit, disconnect, "CENTER", sq.box, "CENTER", 0, 0)
+    local name = PartyNameText(unit)
+    if not name then return end
+    if not name.bapLayout then -- fit the name's box to its text, in place
+        local point, rel, relPoint, x, y = name:GetPoint(1)
+        if not point or AnySecret(x, y) then return end
+        Pin(unit, name, point, rel, relPoint, x, y, nil, function() return name.bapWidth end)
+    end
+    if role then
+        Pin(unit, role, "RIGHT", name, "LEFT", -2, 0)
+        Pin(unit, leader, "RIGHT", role, "LEFT", -1, 0)
+        Pin(unit, guide, "RIGHT", role, "LEFT", -1, 0)
+    end
 end
 
 -- Anchor the box beside the bars; height spans the health bar top to the mana bar bottom.
@@ -878,20 +1120,28 @@ end
 -- their size and spot. Reserved even with no build to show (NPC targets): bars can't be
 -- re-laid out in combat, so the layout can't change per target. Off: square box, and the
 -- build sits next to the level.
-local BUILD_LINE = 9
-local TALL_UNITS = { player = true, target = true, focus = true }
-local function BuildLine(unit)
-    if not (TALL_UNITS[unit] and db.tallPortraits) then return 0 end -- independent of showBuild
-    return BUILD_LINE
+-- Party (no name row, no build) just gets the same taller box beside the name above its bars.
+local TALL_LINE = 9
+local TALL_GROUP = {
+    player = "player", target = "target", focus = "target",
+    party1 = "party", party2 = "party", party3 = "party", party4 = "party",
+}
+local function TallLine(unit)
+    local group = TALL_GROUP[unit]
+    if not (group and db.tallPortraits[group]) then return 0 end -- independent of showBuild
+    return TALL_LINE
 end
 
 local function PlaceSquare(sq, hpPos, manaPos)
     local box = sq.box
     local bottomRef = manaPos or hpPos
-    local top, bottom = hpPos:GetTop(), bottomRef:GetBottom()
+    -- Positions can read back as secret (PvP, tainted): skip until they're readable again.
+    local top, bottom = Safe(hpPos:GetTop()), Safe(bottomRef:GetBottom())
     if not top or not bottom then return false end
     local row = hpPos.bapRow or 0 -- the name row sits above the health bar, inside the box
-    local extra = row > 0 and BuildLine(sq.unit) or 0 -- the build line sits above the name row
+    -- The build line sits above the name row; units with a name row (texts) only get it while
+    -- the row is on (no build without one). Party has no name row: its box always grows.
+    local extra = (row > 0 or not UNITS[sq.unit].texts) and TallLine(sq.unit) or 0
     local scale = hpPos:GetEffectiveScale() / box:GetEffectiveScale()
     local size = (top + row - bottom) * scale
     if size <= 0 then return false end
@@ -912,7 +1162,9 @@ local function DeactivateSquare(unit)
     if squares[unit] then squares[unit].box:Hide() end
 end
 
-local function ActivateSquare(unit, unitFrame, hpPos, manaPos)
+-- empty: the unit is out of view range (not zoned in yet) or offline, so there's no model to
+-- load. The box still shows (border and backing, no model) so its bars line up with the rest.
+local function ActivateSquare(unit, unitFrame, hpPos, manaPos, empty)
     local sq = squares[unit] or CreateSquare(unit, unitFrame)
     if not PlaceSquare(sq, hpPos, manaPos) then
         sq.box:Hide()
@@ -922,6 +1174,8 @@ local function ActivateSquare(unit, unitFrame, hpPos, manaPos)
     sq.bg:SetShown(db.squareBg > 0)
     sq.box:Show() -- show first, then load (see circle Refresh)
     sq.model:ClearModel()
+    sq.model:SetShown(not empty)
+    if empty then return true end
     sq.model:SetUnit(unit)
     ApplyCamera(sq.model, "square")
     return true
@@ -1003,9 +1257,26 @@ local function CreateLayers(unit)
     return p
 end
 
+-- One pending retry per unit: each Refresh that failed used to start its own retry chain,
+-- and the ticker kept starting more while positions stayed secret (PvP), piling up into
+-- hundreds of refreshes per tick (mouse lag).
+-- Retries back off (0.5s, 1s, 2s, then every 4s) while positions stay secret, since each
+-- one re-lays out the bars and names; a successful placement resets the delay.
+local retryPending, retryDelay = {}, {}
+local function RetryRefresh(unit)
+    if retryPending[unit] then return end
+    retryPending[unit] = true
+    local delay = retryDelay[unit] or 0.5
+    retryDelay[unit] = math.min(delay * 2, 4)
+    C_Timer.After(delay, function()
+        retryPending[unit] = nil
+        Refresh(unit)
+    end)
+end
+
 -- Square style, where BBF has removed the round portrait. Returns false when the bars
 -- haven't been laid out yet (retries shortly; the ticker keeps trying meanwhile).
-local function RefreshSquare(unit, unitFrame)
+local function RefreshSquare(unit, unitFrame, empty)
     local hpPos, manaPos, manaBar, hpBar = GetBarFrames(unit)
     if db.style ~= "square" or not hpPos then
         DeactivateSquare(unit)
@@ -1014,11 +1285,13 @@ local function RefreshSquare(unit, unitFrame)
     end
     LayoutBars(unit, hpPos, manaPos, manaBar, hpBar)
     if not InCombatLockdown() then LayoutNameRow(unit, hpPos) end
-    if not ActivateSquare(unit, unitFrame, hpPos, manaPos) then
-        C_Timer.After(0.5, function() Refresh(unit) end) -- bars not laid out yet
+    if not ActivateSquare(unit, unitFrame, hpPos, manaPos, empty) then
+        RetryRefresh(unit) -- bars not laid out yet, or their positions are secret
         return false
     end
+    retryDelay[unit] = nil
     ApplyBorders(unit, manaBar, hpBar)
+    LayoutPartyIcons(unit)
     -- Once the resized bars have been laid out: re-measure the box, center the texts.
     C_Timer.After(0, function()
         PlaceSquare(squares[unit], hpPos, manaPos)
@@ -1068,6 +1341,7 @@ local function HideAll(p, unit)
 end
 
 Refresh = function(unit)
+    if StateChanged(unit) then retryDelay[unit] = nil end -- new unit: retry quickly again
     lastGuid[unit] = nil
     if not db then return end
     local p = layers[unit]
@@ -1080,14 +1354,18 @@ Refresh = function(unit)
         -- Turned off by the user: hand the bars, texts and names back to BBF.
         HideAll(p, unit)
         RestoreBars(unit)
-    elseif not unitFrame or not unitFrame:IsVisible() or not UnitExists(unit)
-       or Safe(UnitIsVisible(unit)) == false or Safe(UnitIsConnected(unit)) == false then
-        -- Transient (no target yet, frame hidden, out of range): just hide the portrait and
-        -- keep our bar/name layout pinned, so a target switch can't leave BBF's layout behind.
+    elseif not unitFrame or not unitFrame:IsVisible() or not UnitExists(unit) then
+        -- Transient (no target yet, frame hidden): just hide the portrait and keep our
+        -- bar/name layout pinned, so a target switch can't leave BBF's layout behind.
         HideAll(p, unit)
     elseif BBFHidesPortrait(unit) then
         if p then Deactivate(p) end
-        if not RefreshSquare(unit, unitFrame) then return end
+        -- Out of view range (not zoned in yet) or offline: no model, but the same layout as
+        -- everyone else, or this frame's bars wouldn't line up with the others.
+        local away = Safe(UnitIsVisible(unit)) == false or Safe(UnitIsConnected(unit)) == false
+        RefreshSquare(unit, unitFrame, away) -- on failure it schedules its own retry; the ticker leaves it alone
+    elseif Safe(UnitIsVisible(unit)) == false or Safe(UnitIsConnected(unit)) == false then
+        HideAll(p, unit) -- circle: Blizzard's 2D portrait stands in until they're in range
     else
         DeactivateSquare(unit)
         RestoreBars(unit)
@@ -1163,12 +1441,31 @@ local function EndGrow(bar)
     GrowTrace("done", bar.bapGrowName)
 end
 
+-- The grow compares and does math on what the bar and its fill report (orientation, reverse
+-- fill, texture, draw layer, masks). In instances and PvP any of these can come back secret,
+-- and comparing a secret errors (tainted code). The grow is cosmetic: skip or end it then.
+-- The bar's own values are checked once at the start; the fill's in CopyBarStyle, which
+-- reads them every frame anyway.
+local function BarReadable(bar)
+    return not AnySecret(bar:GetWidth(), bar.GetOrientation and bar:GetOrientation(),
+        bar.GetReverseFill and bar:GetReverseFill())
+end
+
 -- Copy the fill's current look (BBF/Blizzard texture, class color, desaturation) onto
 -- the overlay. BBF class colors are a desaturated fill with a tint, sometimes set on the
 -- fill texture itself, so read the fill rather than the bar. Re-run every frame: BBF can
 -- recolor or retexture right after Blizzard's update.
+-- Returns false (copying nothing) when any of the fill's values is secret.
 local function CopyBarStyle(ov, fill)
-    local asset = fill:GetAtlas() or fill:GetTexture() or "Interface\\Buttons\\WHITE8X8"
+    local atlas, tex = fill:GetAtlas(), fill:GetTexture()
+    local layer, sub = fill:GetDrawLayer()
+    local desat, blend = fill:GetDesaturation(), fill:GetBlendMode()
+    local n = fill.GetNumMaskTextures and fill:GetNumMaskTextures() or 0
+    if AnySecret(atlas, tex, layer, sub, desat, blend, n) then return false end
+    for i = 1, n do
+        if IsSecret(fill:GetMaskTexture(i)) then return false end
+    end
+    local asset = atlas or tex or "Interface\\Buttons\\WHITE8X8"
     local ovFill = ov:GetStatusBarTexture()
     if ov.bapAsset ~= asset or not ovFill then
         ov:SetStatusBarTexture(asset)
@@ -1176,23 +1473,21 @@ local function CopyBarStyle(ov, fill)
         if ov:GetStatusBarTexture() ~= ovFill then ov.bapMasks = nil end -- new texture, no masks yet
         ovFill = ov:GetStatusBarTexture()
     end
-    local layer, sub = fill:GetDrawLayer()
     ovFill:SetDrawLayer(layer, math.min(7, (sub or 0) + 1))
-    ovFill:SetDesaturation(fill:GetDesaturation() or 0)
-    ovFill:SetBlendMode(fill:GetBlendMode() or "BLEND")
+    ovFill:SetDesaturation(desat or 0)
+    ovFill:SetBlendMode(blend or "BLEND")
     -- RGB only: the fill's alpha is 0 while we hide it, and copying that hid the overlay.
     local r, g, b = fill:GetVertexColor()
     pcall(ovFill.SetVertexColor, ovFill, r, g, b)
     -- Same masks as the fill (Blizzard's bar shape, BBF's no-portrait mask). Unmasked, the
     -- overlay reached past the fill's clipped end. This runs every frame, so only rebuild
     -- (and allocate) when the fill's masks actually changed.
-    local n = fill.GetNumMaskTextures and fill:GetNumMaskTextures() or 0
     local have = ov.bapMasks -- array of the fill's masks (false for empty slots)
     local same = have and #have == n
     for i = 1, same and n or 0 do
         if (fill:GetMaskTexture(i) or false) ~= have[i] then same = false; break end
     end
-    if same then return end
+    if same then return true end
     if have then
         for _, m in ipairs(have) do if m then ovFill:RemoveMaskTexture(m) end end
     end
@@ -1203,6 +1498,7 @@ local function CopyBarStyle(ov, fill)
         have[i] = m
     end
     ov.bapMasks = have
+    return true
 end
 
 local function GrowStep(_, elapsed)
@@ -1210,15 +1506,15 @@ local function GrowStep(_, elapsed)
     for bar, g in pairs(grows) do
         g.t = g.t + elapsed
         local p = math.min(1, g.t / duration)
-        if p >= 1 or not bar:IsVisible() then
+        local w = Safe(bar:GetWidth()) -- secret in PvP: stop and show Blizzard's fill
+        if p >= 1 or not w or not bar:IsVisible() or not CopyBarStyle(g.ov, g.fill) then
             EndGrow(bar)
         else
             local e = 1 - (1 - p) ^ 3 -- ease-out cubic
             -- Follow the live bar: health/power changing mid-grow shows up right away.
             g.ov:SetMinMaxValues(bar:GetMinMaxValues())
             g.ov:SetValue(bar:GetValue())
-            g.ov:SetWidth(math.max(0.01, bar:GetWidth() * e))
-            CopyBarStyle(g.ov, g.fill)
+            g.ov:SetWidth(math.max(0.01, w * e))
         end
     end
     if not next(grows) then growDriver:SetScript("OnUpdate", nil) end
@@ -1226,7 +1522,8 @@ end
 
 local function StartGrow(bar, name)
     local fill = bar.GetStatusBarTexture and bar:GetStatusBarTexture()
-    if not (fill and bar:IsVisible()) or (bar.GetOrientation and bar:GetOrientation() == "VERTICAL") then
+    if not (fill and bar:IsVisible()) or not BarReadable(bar)
+        or (bar.GetOrientation and bar:GetOrientation() == "VERTICAL") then
         GrowTrace(name, "skip: fill", not not fill, "visible", bar:IsVisible())
         return
     end
@@ -1245,7 +1542,11 @@ local function StartGrow(bar, name)
     -- Same frame level and draw layer as Blizzard's fill, so the bar texts stay on top.
     ov:SetFrameStrata(bar:GetFrameStrata())
     ov:SetFrameLevel(bar:GetFrameLevel())
-    CopyBarStyle(ov, fill)
+    if not CopyBarStyle(ov, fill) then
+        EndGrow(bar) -- secret fill (instance/PvP): leave Blizzard's bar alone
+        GrowTrace(name, "skip: secret fill")
+        return
+    end
     ov:SetAlpha(g.alpha)
     local reverse = bar.GetReverseFill and bar:GetReverseFill()
     ov:SetReverseFill(reverse and true or false)
@@ -1287,11 +1588,15 @@ end
 
 -- Talent build on the player, target and focus -------------------------------------
 -- Points per talent tree ("2/8/0") in the square style's name area: on its own line above
--- the name with tall portraits (BuildLine), else just left of the level. Your own build is
+-- the name with tall portraits (TallLine), else just left of the level. Your own build is
 -- read directly (cached until your talents change); other players need an inspect
 -- (server round trip, ~30 yd range, shared throttle), so results are cached per GUID for
 -- the session and requests are spaced out. NPCs and players we can't inspect show
 -- nothing rather than a guess.
+-- Scoped in a do block (Core.lua's main chunk is near Lua's 200-local limit); only these
+-- three are used outside.
+local UpdateBuild, OnTalentsChanged, OnInspectReady
+do
 local BUILD_UNITS = { "player", "target", "focus" }
 local builds = {}         -- GUID -> "2/8/0"
 local ownBuild            -- your build, cleared when your talents change
@@ -1391,12 +1696,14 @@ local function UpdateBuildFor(unit)
     if not fs then return end
     -- Own line above the name (left-aligned with it), or next to the level.
     local hpPos = GetBarFrames(unit)
-    local row, extra = hpPos and hpPos.bapRow or 0, BuildLine(unit)
+    local row, extra = hpPos and hpPos.bapRow or 0, TallLine(unit)
     local above = row > 0 and extra > 0
     local mirror = Mirrored(unit)
+    local eliteRow = EliteInRow(unit) and true or false -- the inline build steps past the elite icon
     if fs.bapText == text and fs.bapInline == not above and fs.bapRow == row and fs.bapExtra == extra
-        and fs.bapMirror == mirror then return end
+        and fs.bapMirror == mirror and fs.bapEliteRow == eliteRow then return end
     fs.bapText, fs.bapInline, fs.bapRow, fs.bapExtra, fs.bapMirror = text, not above, row, extra, mirror
+    fs.bapEliteRow = eliteRow
     fs:ClearAllPoints()
     if above and mirror then -- above the name, on the portrait side
         fs:SetPoint("RIGHT", hpPos, "TOPRIGHT", -1, row + extra / 2)
@@ -1404,11 +1711,11 @@ local function UpdateBuildFor(unit)
     elseif above then
         fs:SetPoint("LEFT", hpPos, "TOPLEFT", 1, row + extra / 2)
         fs:SetJustifyH("LEFT")
-    elseif mirror then -- between the level (outer edge) and the name
-        fs:SetPoint("LEFT", level, "RIGHT", 4, 0)
+    elseif mirror then -- between the level (outer edge) and the name, past the elite icon
+        fs:SetPoint("LEFT", level, "RIGHT", 4 + (eliteRow and ELITE_ROOM or 0), 0)
         fs:SetJustifyH("LEFT")
     else
-        fs:SetPoint("RIGHT", level, "LEFT", -4, 0)
+        fs:SetPoint("RIGHT", level, "LEFT", -4 - (eliteRow and ELITE_ROOM or 0), 0)
         fs:SetJustifyH("RIGHT")
     end
     fs:SetText(text or "")
@@ -1419,22 +1726,23 @@ local function UpdateBuildFor(unit)
     end
 end
 
-local function UpdateBuild()
+function UpdateBuild()
     for _, unit in ipairs(BUILD_UNITS) do UpdateBuildFor(unit) end
 end
 
-local function OnTalentsChanged()
+function OnTalentsChanged()
     ownBuild = nil
     UpdateBuild()
 end
 
-local function OnInspectReady(guid)
+function OnInspectReady(guid)
     if not guid or guid ~= inspectGUID then return end -- someone else's inspect
     inspectGUID = nil
     local build = Constants and Constants.TraitConsts and ReadBuild(Constants.TraitConsts.INSPECT_TRAIT_CONFIG_ID)
     if build then builds[guid] = build end
     UpdateBuild()
 end
+end -- talent build
 
 -- Surnames ------------------------------------------------------------------
 -- Camelot characters have a surname: UnitName returns (name, surname) and Blizzard's
@@ -1508,8 +1816,134 @@ local function UpdateSurnames(apply)
     end
 end
 
+-- Bar text ------------------------------------------------------------------
+-- Our own left-aligned "current (max)" / "current (percent)" text on health and mana bars,
+-- always shown (whatever the Status Text setting or mouseover). Blizzard's bars call
+-- UpdateTextStringWithValues on every value change; our post-hook writes our text and hides
+-- Blizzard's/BBF's text regions on that bar (they re-show them each update, before us).
+-- Values can be secret (instances, PvP): they only go to AbbreviateNumbers and
+-- SetFormattedText (both take secrets from addon code), never compared or used in math;
+-- percent comes from UnitHealthPercent/UnitPowerPercent with Blizzard's 0-100 curve.
+local BAR_TEXT_MODES = { default = true, max = true, percent = true }
+-- Text style -> font outline flag, drop shadow. The font face and size follow BBF.
+local BAR_TEXT_STYLES = {
+    outline_shadow = { "OUTLINE", true }, outline = { "OUTLINE", false }, shadow = { "", true },
+    thick = { "THICKOUTLINE", false }, thick_shadow = { "THICKOUTLINE", true },
+}
+local UpdateBarTexts
+do -- scoped: Core.lua's main chunk is near Lua's 200-local limit
+local BAR_TEXT_UNITS = { "player", "target", "focus", "party1", "party2", "party3", "party4" }
+
+local function BarTextOn(unit)
+    return db and db.enabled and db.units[unit] and db.barText ~= "default" and BAR_TEXT_MODES[db.barText]
+end
+
+-- Blizzard's/BBF's text regions on a bar (center, left, right, dead...), on the bar or its parent.
+local function EachBlizzardText(bar, keys, fn)
+    for _, holder in ipairs({ bar, bar:GetParent() }) do
+        for _, key in ipairs(keys) do
+            local t = holder and holder[key]
+            if type(t) == "table" and t.Hide and t ~= bar.bapText then fn(t) end
+        end
+    end
+end
+
+local function NumberText(v)
+    if AbbreviateNumbers then return AbbreviateNumbers(v) end
+    return v
+end
+
+local function SetBarText(unit, bar, isHealth, value, valueMax)
+    local keys = isHealth and HP_TEXT_KEYS or MANA_TEXT_KEYS
+    local fs = bar.bapText
+    if not BarTextOn(unit) then
+        if fs then fs:Hide() end
+        return
+    end
+    if not fs then
+        local ref
+        EachBlizzardText(bar, keys, function(t) ref = ref or (t.GetFont and t) end)
+        -- Own holder frame, a few levels above the bar. Copying the Blizzard text's parent put
+        -- ours under the bars on the target (that parent is TargetFrame itself, below its
+        -- bars; BBF only gives the player a text frame above them).
+        local holder = CreateFrame("Frame", nil, bar)
+        holder:SetAllPoints(bar)
+        bar.bapTextHolder = holder
+        fs = holder:CreateFontString(nil, "OVERLAY")
+        fs:SetFontObject(TextStatusBarText or GameFontHighlightSmall) -- until the ref's font is copied
+        -- Centered on the visible bar: BBF's bordered frame, not the fill (1px taller and
+        -- offset), same reference CenterBarTexts uses for Blizzard's texts.
+        fs:SetPoint("LEFT", bar.BBFPositionFrame or bar, "LEFT", 4, 0)
+        fs:SetJustifyH("LEFT")
+        bar.bapText, bar.bapTextRef = fs, ref
+    end
+    -- Follow Blizzard's/BBF's number font face, size and color live (BBF: "Change unit frame
+    -- number font"), so changing it there changes ours too; only re-set when it differs.
+    -- Outline and shadow are ours (db.barTextStyle): BBF's thin outline alone got lost on light
+    -- bars (white priest health).
+    local ref = bar.bapTextRef
+    if ref then
+        local font, size = ref:GetFont()
+        local style = BAR_TEXT_STYLES[db.barTextStyle] and db.barTextStyle or "outline_shadow"
+        if font and (font ~= fs.bapFont or size ~= fs.bapSize or style ~= fs.bapStyle) then
+            local look = BAR_TEXT_STYLES[style]
+            fs:SetFont(font, size, look[1])
+            fs:SetShadowColor(0, 0, 0, look[2] and 1 or 0)
+            fs:SetShadowOffset(look[2] and 1 or 0, look[2] and -1 or 0)
+            fs.bapFont, fs.bapSize, fs.bapStyle = font, size, style
+        end
+        fs:SetTextColor(ref:GetTextColor())
+    end
+    local holder = bar.bapTextHolder
+    local level = bar:GetFrameLevel() + 5 -- above the fill and BBF's border/background frames
+    if holder:GetFrameLevel() ~= level then holder:SetFrameLevel(level) end
+    local cur = NumberText(value)
+    if db.barText == "percent" then
+        local curve = CurveConstants and CurveConstants.ScaleTo100
+        local pct
+        if isHealth and UnitHealthPercent then pct = UnitHealthPercent(unit, true, curve)
+        elseif not isHealth and UnitPowerPercent then pct = UnitPowerPercent(unit, nil, false, curve) end
+        if pct then fs:SetFormattedText("%s (%.0f%%)", cur, pct) else fs:SetFormattedText("%s", cur) end
+    else
+        fs:SetFormattedText("%s (%s)", cur, NumberText(valueMax))
+    end
+    fs:Show()
+    EachBlizzardText(bar, keys, function(t) t:Hide() end)
+end
+
+-- Hook each bar once; then (re)draw from the bar's current values, so a setting change shows
+-- right away. Turning it off hides ours; Blizzard's text comes back on its next update, and
+-- toggling the statusText CVar (as BBF does) makes Blizzard redraw it now.
+function UpdateBarTexts(fromSetting)
+    if not db then return end
+    for _, unit in ipairs(BAR_TEXT_UNITS) do
+        local hpBar, manaBar = Lookup(unit, "bars")
+        for _, info in ipairs({ { hpBar, true }, { manaBar, false } }) do
+            local bar, isHealth = info[1], info[2]
+            if bar and bar.UpdateTextStringWithValues then
+                if not bar.bapTextHook and BarTextOn(unit) then
+                    bar.bapTextHook = true
+                    hooksecurefunc(bar, "UpdateTextStringWithValues", function(self, _, value, _, valueMax)
+                        SetBarText(unit, self, isHealth, value, valueMax)
+                    end)
+                end
+                if bar.bapTextHook then
+                    local _, valueMax = bar:GetMinMaxValues()
+                    SetBarText(unit, bar, isHealth, bar:GetValue(), valueMax)
+                end
+            end
+        end
+    end
+    if fromSetting and db.barText == "default" and C_CVar and C_CVar.GetCVar("statusText") == "1" then
+        C_CVar.SetCVar("statusText", "0")
+        C_CVar.SetCVar("statusText", "1")
+    end
+end
+end -- bar text
+
 AfterRefreshAll = function()
     UpdateBuild()
+    UpdateBarTexts()
     UpdateSurnames(true)
 end
 
@@ -1728,10 +2162,10 @@ BuildOptions = function()
     local styleGet, styleSet, styleDefault = Path({ "style" })
     Settings.CreateDropdown(category, Register("style", "Style", styleDefault, styleGet, styleSet), function()
         local c = Settings.CreateControlTextContainer()
-        c:Add("square", "Square")
+        c:Add("square", "Box")
         c:Add("circle", "Circle")
         return c:GetData()
-    end, "Square: a box beside the bars (needs BBF's Pixel Border mode, below). Circle: inside the round portrait. Frames where BBF still shows portraits always use the circle.")
+    end, "Box: the portrait in a bordered box beside the bars (needs BBF's Pixel Border mode, below). Circle: inside the round portrait. Frames where BBF still shows portraits always use the circle.")
     for _, g in ipairs({ { "player", "Player Portrait", "player frame" },
                          { "target", "Target Portrait", "target frame" },
                          { "focus", "Focus Portrait", "focus frame" },
@@ -1745,24 +2179,81 @@ BuildOptions = function()
     end
 
     Header("Camera")
-    Slider({ "zoom" }, "Zoom", "1 = head and shoulders; lower shows more of the body.", 0, 1, 0.05)
-    Slider({ "sizes", "large", "cam" }, "Distance: large frames", "Player, target and focus. Lower = closer, bigger face.", 0.3, 2, 0.05)
-    Slider({ "sizes", "small", "cam" }, "Distance: small frames", "Target of target and party. Lower = closer, bigger face.", 0.3, 2, 0.05)
-    Slider({ "sizes", "square", "cam" }, "Distance: square style", "Lower = closer, bigger face.", 0.3, 2, 0.05)
+    Slider({ "zoom" }, "Zoom", "1 = head and shoulders; lower shows more of the body. Both styles.", 0, 1, 0.05)
+
+    Header("Bar text")
+    local barGet, barSet, barDefault = Path({ "barText" })
+    Settings.CreateDropdown(category, Register("barText", "Bar Text", barDefault, barGet, function(v)
+        barSet(v)
+        UpdateBarTexts(true)
+    end), function()
+        local c = Settings.CreateControlTextContainer()
+        c:Add("default", "Default (Blizzard / BBF)")
+        c:Add("max", "Current (max), left")
+        c:Add("percent", "Current (percent), left")
+        return c:GetData()
+    end, "Health and mana text on the player, target, focus and party bars. The left-aligned formats are always shown, whatever the Status Text setting.")
+    local styleTextGet, styleTextSet, styleTextDefault = Path({ "barTextStyle" })
+    Settings.CreateDropdown(category, Register("barTextStyle", "Bar Text Style", styleTextDefault, styleTextGet, function(v)
+        styleTextSet(v)
+        UpdateBarTexts()
+    end), function()
+        local c = Settings.CreateControlTextContainer()
+        c:Add("outline_shadow", "Outline + shadow")
+        c:Add("outline", "Outline")
+        c:Add("shadow", "Shadow")
+        c:Add("thick", "Thick outline")
+        c:Add("thick_shadow", "Thick outline + shadow")
+        return c:GetData()
+    end, "Outline and shadow of the left-aligned bar text. The font itself follows BetterBlizzFrames' unit frame number font.")
 
     Header("Target bars")
     Check({ "growBars" }, "Grow on new target", "Health and mana grow from empty when you pick a new target or focus.")
     Slider({ "growTime" }, "Grow time", "Seconds the grow takes.", 0.1, 2, 0.05,
         function(v) return ("%.2fs"):format(v) end)
 
-    Header("Square style")
+    Header("BetterBlizzFrames")
+    layout:AddInitializer(CreateSettingsButtonInitializer("Pixel Border mode", "Turn on",
+        function() print(PREFIX .. ApplyBBFSetup()) end,
+        "Turns on BBF's No Portrait + Pixel Border mode on every frame, which the box style needs. Your other BBF settings stay as they are. Reloads the UI.", true))
+    layout:AddInitializer(CreateSettingsButtonInitializer("Undo Pixel Border mode", "Undo",
+        function() print(PREFIX .. UndoBBFSetup()) end,
+        "Puts back the BBF settings you had before turning it on here. Reloads the UI.", true))
+
+    -- Each style's settings on its own page under the main entry (falls back to sections on
+    -- the main page if the client has no subcategories). Each style's camera distance lives
+    -- there: square boxes share one distance, circle portraits use large/small.
+    local main = category
+    local function Page(name)
+        if Settings.RegisterVerticalLayoutSubcategory then
+            category, layout = Settings.RegisterVerticalLayoutSubcategory(main, name)
+            layout = layout or SettingsPanel:GetLayout(category)
+        else
+            Header(name)
+        end
+    end
+
+    Page("Box Style")
+    Header("Camera")
+    Slider({ "sizes", "square", "cam" }, "Distance", "All box portraits. Lower = closer, bigger face.", 0.3, 2, 0.05)
     Slider({ "squareBg" }, "Background", "Dark background behind the model.", 0, 1, 0.05, FormatPercent)
-    Slider({ "stackExtra", "large" }, "Extra height: large frames", "Makes the health + mana stack taller; the box grows with it.", 0, 30, 1)
-    Slider({ "stackExtra", "small" }, "Extra height: small frames", "Makes the health + mana stack taller; the box grows with it.", 0, 30, 1)
+
+    Header("Size and layout")
+    local TALL_TIP = "The portrait grows into a taller rectangle. Player, target and focus: with a line above the name for the talent build (off: square, build next to the level)."
+    Check({ "tallPortraits", "player" }, "Tall portraits: player", TALL_TIP)
+    Check({ "tallPortraits", "target" }, "Tall portraits: target & focus", TALL_TIP)
+    Check({ "tallPortraits", "party" }, "Tall portraits: party", TALL_TIP)
+    Slider({ "stackExtra", "large" }, "Extra height: large frames", "Player, target and focus. Makes the health + mana stack taller; the box grows with it.", 0, 30, 1)
+    Slider({ "stackExtra", "small" }, "Extra height: small frames", "Target of target and party. Makes the health + mana stack taller; the box grows with it.", 0, 30, 1)
     Slider({ "nameRow", "large" }, "Name row: large frames", "Height of the name + level row inside the box (0 = off).", 0, 24, 1)
     Slider({ "nameRow", "tot" }, "Name row: target of target", "Height of the name row inside the box (0 = off).", 0, 24, 1)
     Slider({ "nameRow", "party" }, "Name row: party", "Height of the name row inside the box (0 = off).", 0, 24, 1)
     Slider({ "hpShare" }, "Health share", "Health bar's share of the stack; mana gets the rest.", 0.4, 0.85, 0.01, FormatPercent)
+    Slider({ "squareGap" }, "Gap to bars", "Space between the box and the bars (1 = borders share one line).", 0, 20, 1)
+    Slider({ "barSpacing" }, "Bar spacing", "Space between health and mana (0 = borders share one line).", 0, 10, 1)
+    Check({ "alignMana" }, "Align mana bar", "Line the mana bar up with the health bar next to the box.")
+
+    Header("Borders")
     local colorGet, colorSet, colorDefault = Path({ "borderColor" })
     Settings.CreateColorSwatch(category, Register("borderColor", "Border Color", colorDefault, colorGet, colorSet),
         "Color of the 1px lines around the portrait box and the health and mana bars.")
@@ -1775,27 +2266,40 @@ BuildOptions = function()
         return c:GetData()
     end, "Thickness of the lines around the portrait box and the bars.")
     Slider({ "borderAlpha" }, "Border Opacity", "Opacity of the 1px lines around the portrait box and the bars.", 0, 1, 0.05, FormatPercent)
-    Check({ "alignMana" }, "Align mana bar", "Line the mana bar up with the health bar next to the box.")
+
+    Header("Text")
     Check({ "showBuild" }, "Show Talent Build", "Points per talent tree (like 2/8/0) on the player, target and focus frames. Other players need to be within inspect range (about 30 yards); NPCs show nothing.")
     Check({ "mirrorTarget" }, "Mirror Target Text", "Target and focus: name and talent build next to the portrait, level on the outer edge, mirroring the player frame.")
-    Check({ "tallPortraits" }, "Tall portraits", "Player, target and focus: the portrait grows into a taller rectangle, with a line above the name for the talent build. Off: square portraits, build next to the level.")
-    Slider({ "squareGap" }, "Gap to bars", "Space between the box and the bars (1 = borders share one line).", 0, 20, 1)
-    Slider({ "barSpacing" }, "Bar spacing", "Space between health and mana (0 = borders share one line).", 0, 10, 1)
 
-    Header("Circle style")
+    Header("Elite and rare")
+    Check({ "eliteBorder" }, "Elite Border", "Target and focus: the portrait and bar borders turn gold for elites and bosses, silver for rares. The elite icon uses these colors either way.")
+    for _, c in ipairs({ { "eliteColor", "Elite Border Color", "Border color for elite and boss targets." },
+                         { "rareColor", "Rare Border Color", "Border color for rare and rare elite targets." } }) do
+        local get, set, default = Path({ c[1] })
+        Settings.CreateColorSwatch(category, Register(c[1], c[2], default, get, set), c[3])
+    end
+    local eliteGet, eliteSet, eliteDefault = Path({ "eliteIcon" })
+    Settings.CreateDropdown(category, Register("eliteIcon", "Elite Icon", eliteDefault, eliteGet, eliteSet), function()
+        local c = Settings.CreateControlTextContainer()
+        c:Add("top", "Portrait top corner")
+        c:Add("bottom", "Portrait bottom corner")
+        c:Add("center", "Portrait bottom center")
+        c:Add("level", "Next to level")
+        c:Add("hidden", "Hidden")
+        return c:GetData()
+    end, "Target and focus: where the small elite/rare icon goes. The corners are on the portrait's outer side.")
+
+    Page("Circle Style")
+    Header("Camera")
+    Slider({ "sizes", "large", "cam" }, "Distance: large frames", "Player, target and focus. Lower = closer, bigger face.", 0.3, 2, 0.05)
+    Slider({ "sizes", "small", "cam" }, "Distance: small frames", "Target of target and party. Lower = closer, bigger face.", 0.3, 2, 0.05)
+    Header("Portrait")
     Slider({ "circleBg" }, "Background", "Dark background inside the ring (0 = clear).", 0, 1, 0.05, FormatPercent)
     Check({ "vignette" }, "Round edge", "The circle edge that hides the model's square corners.")
     Slider({ "sizes", "large", "inset" }, "Model size: large frames", "Model size relative to the portrait.", 0.3, 1.2, 0.01)
     Slider({ "sizes", "small", "inset" }, "Model size: small frames", "Model size relative to the portrait.", 0.3, 1.2, 0.01)
 
-    Header("BetterBlizzFrames")
-    layout:AddInitializer(CreateSettingsButtonInitializer("Pixel Border mode", "Turn on",
-        function() print(PREFIX .. ApplyBBFSetup()) end,
-        "Turns on BBF's No Portrait + Pixel Border mode on every frame, which the square style needs. Your other BBF settings stay as they are. Reloads the UI.", true))
-    layout:AddInitializer(CreateSettingsButtonInitializer("Undo Pixel Border mode", "Undo",
-        function() print(PREFIX .. UndoBBFSetup()) end,
-        "Puts back the BBF settings you had before turning it on here. Reloads the UI.", true))
-
+    category, layout = main, SettingsPanel:GetLayout(main)
     Settings.RegisterAddOnCategory(category)
     optionsCategory = category
 end
@@ -1849,19 +2353,22 @@ local function PrintStatus()
         .. "  grow=" .. tostring(db.growBars) .. (" (%.2fs)"):format(db.growTime) .. "  units=" .. (#on > 0 and table.concat(on, ",") or "none"))
     local Q = db.sizes.square
     print(("  circle large: inset=%.2f cam=%.2f   small: inset=%.2f cam=%.2f"):format(L.inset, L.cam, S.inset, S.cam))
-    print(("  square: cam=%.2f bg=%.2f gap=%d alignmana=%s split=%.2f  extend: large=%d small=%d"):format(
+    print(("  box: cam=%.2f bg=%.2f gap=%d alignmana=%s split=%.2f  extend: large=%d small=%d"):format(
         Q.cam, db.squareBg, db.squareGap, tostring(db.alignMana), db.hpShare, db.stackExtra.large, db.stackExtra.small))
     print(("  name rows: large=%d tot=%d party=%d   build=%s tall=%s hidesurnames=%s"):format(db.nameRow.large,
-        db.nameRow.tot, db.nameRow.party, tostring(db.showBuild), tostring(db.tallPortraits), tostring(db.hideSurname)))
+        db.nameRow.tot, db.nameRow.party, tostring(db.showBuild), ("player=%s target=%s party=%s"):format(tostring(db.tallPortraits.player),
+        tostring(db.tallPortraits.target), tostring(db.tallPortraits.party)), tostring(db.hideSurname)))
 end
 
 local function PrintHelp()
     print("  /lp options  |  /lp bbfsetup (turn on BBF's Pixel Border mode)  |  /lp bbfundo")
     print("  /lp toggle  |  /lp vignette  |  /lp zoom 0-1  |  /lp grow  |  /lp growtime 0.1-2  |  /lp reset")
-    print("  /lp style square|circle  |  /lp bg 0-1  |  /lp extend 0-30 [large|small]  |  /lp split 0.4-0.85")
-    print("  /lp namerow 0-24 [large|tot|party]  |  /lp gap 0-20  |  /lp barspacing 0-10  |  /lp alignmana  |  /lp build  |  /lp tall  |  /lp surname  |  /lp mirror")
+    print("  /lp style box|circle  |  /lp bg 0-1  |  /lp extend 0-30 [large|small]  |  /lp split 0.4-0.85")
+    print("  /lp namerow 0-24 [large|tot|party]  |  /lp gap 0-20  |  /lp barspacing 0-10  |  /lp alignmana  |  /lp build  |  /lp tall [player|target|party]  |  /lp surname  |  /lp mirror  |  /lp eliteborder  |  /lp eliteicon top|bottom|center|level|hidden")
+    print("  /lp elitecolor RRGGBB  |  /lp rarecolor RRGGBB  |  /lp bartext default|max|percent")
+    print("  /lp bartextstyle outline_shadow|outline|shadow|thick|thick_shadow")
     print("  /lp bordercolor RRGGBB  |  /lp borderalpha 0-1  |  /lp bordersize thin|medium|heavy")
-    print("  /lp inset 0.3-1.2 [large|small]  |  /lp cam 0.3-2 [large|small|square]")
+    print("  /lp inset 0.3-1.2 [large|small]  |  /lp cam 0.3-2 [large|small|box]")
     print("  /lp unit player|target|focus|tot|party  |  /lp refresh  |  /lp debug [unit]")
     print("  circle: /lp circlebg 0-1  |  /lp vignette  |  /lp calibrate  |  /lp offset player|target|focus|tot|party x y")
 end
@@ -1925,6 +2432,16 @@ local function DebugUnit(unit)
         print(("  manaPos top=%s bottom=%s h=%s"):format(Fmt(manaPos:GetTop()), Fmt(manaPos:GetBottom()), Fmt(manaPos:GetHeight())))
         print("  manaBar " .. PointInfo(manaBar))
     else print("  no mana row") end
+    for _, b in ipairs({ { "hp", hpBar }, { "mana", manaBar } }) do
+        local bar, fs = b[2], b[2] and b[2].bapText
+        if bar then
+            local p = fs and fs:GetParent()
+            print(("  bartext %s: method=%s hook=%s fs=%s shown=%s visible=%s alpha=%s text=%s parent=%s(vis=%s)"):format(
+                b[1], T(bar.UpdateTextStringWithValues ~= nil), T(bar.bapTextHook), T(fs ~= nil),
+                T(fs and fs:IsShown()), T(fs and fs:IsVisible()), Fmt(fs and fs:GetAlpha()),
+                T(fs and Safe(fs:GetText())), T(p and (p:GetName() or "anon")), T(p and p:IsVisible())))
+        end
+    end
     local sq = squares[unit]
     if sq then
         print(("  box top=%s bottom=%s size=%s shown=%s"):format(Fmt(sq.box:GetTop()), Fmt(sq.box:GetBottom()), Fmt(sq.box:GetHeight()), tostring(sq.box:IsShown())))
@@ -1941,7 +2458,7 @@ end
 -- On/off settings: command -> db key.
 local SLASH_TOGGLES = {
     toggle = "enabled", vignette = "vignette", grow = "growBars", alignmana = "alignMana",
-    build = "showBuild", tall = "tallPortraits", surname = "hideSurname", mirror = "mirrorTarget",
+    build = "showBuild", surname = "hideSurname", mirror = "mirrorTarget", eliteborder = "eliteBorder",
 }
 -- Number settings: command -> { db key, min, max }.
 local SLASH_NUMBERS = {
@@ -1959,6 +2476,7 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
     for word in (msg or ""):lower():gmatch("%S+") do args[#args + 1] = word end
     local cmd, arg, size = args[1], args[2], args[3]
     local val = tonumber(arg)
+    if size == "box" then size = "square" end -- the box style's camera (stored as "square")
     if size and not db.sizes[size] then size = nil end
 
     if cmd == "options" or cmd == "config" then
@@ -1980,6 +2498,41 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
         growDebug = not growDebug
         print("  grow debug " .. (growDebug and "on: change targets and watch chat." or "off."))
         return
+    elseif cmd == "bartextstyle" then
+        if not BAR_TEXT_STYLES[arg or ""] then
+            print("  /lp bartextstyle outline_shadow|outline|shadow|thick|thick_shadow  (now " .. tostring(db.barTextStyle) .. ")")
+            return
+        end
+        db.barTextStyle = arg
+        UpdateBarTexts()
+    elseif cmd == "bartext" then
+        if not BAR_TEXT_MODES[arg or ""] then
+            print("  /lp bartext default|max|percent  (now " .. tostring(db.barText) .. ")")
+            return
+        end
+        db.barText = arg
+        UpdateBarTexts(true)
+    elseif cmd == "eliteicon" then
+        local modes = { top = "top", bottom = "bottom", center = "center", level = "level", hidden = "hidden", off = "hidden" }
+        if not modes[arg or ""] then
+            print("  /lp eliteicon top|bottom|center|level|hidden  (now " .. tostring(db.eliteIcon) .. ")")
+            return
+        end
+        db.eliteIcon = modes[arg]
+    elseif cmd == "tall" then
+        -- No group: player + target/focus together (party has its own switch).
+        local t = db.tallPortraits
+        local group = arg == "focus" and "target" or arg
+        if group == "player" or group == "target" or group == "party" then
+            t[group] = not t[group]
+        elseif not arg then
+            local on = not (t.player and t.target)
+            t.player, t.target = on, on
+        else
+            print("  /lp tall [player|target|party]")
+            return
+        end
+        print(("  tall: player=%s target=%s party=%s"):format(tostring(t.player), tostring(t.target), tostring(t.party)))
     elseif SLASH_TOGGLES[cmd] then
         local key = SLASH_TOGGLES[cmd]
         db[key] = not db[key]
@@ -1994,7 +2547,8 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
         local x, y = tonumber(args[3]), tonumber(args[4])
         if x and y then db.offsets[arg] = { Clamp(x, -10, 10), Clamp(y, -10, 10) } end
         print(("  offset %s = %s, %s"):format(arg, tostring(db.offsets[arg][1]), tostring(db.offsets[arg][2])))
-    elseif cmd == "style" and (arg == "square" or arg == "circle") then
+    elseif cmd == "style" and (arg == "box" or arg == "square" or arg == "circle") then
+        if arg == "box" then arg = "square" end -- shown as "Box", stored as "square" (older name)
         db.style = arg
     elseif cmd == "extend" and val then
         SetEach(db.stackExtra, size, Clamp(val, 0, 30))
@@ -2004,6 +2558,8 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
         db.borderSize = BORDER_SIZES[arg]
     elseif cmd == "bordercolor" and arg and arg:match("^%x%x%x%x%x%x$") then
         db.borderColor = "ff" .. arg
+    elseif (cmd == "elitecolor" or cmd == "rarecolor") and arg and arg:match("^%x%x%x%x%x%x$") then
+        db[cmd == "elitecolor" and "eliteColor" or "rareColor"] = "ff" .. arg
     elseif cmd == "inset" and val then
         SetEach(db.sizes, size, Clamp(val, 0.3, 1.2), "inset")
     elseif cmd == "cam" and val then

@@ -4,7 +4,7 @@ Live 3D animated portraits for World of Warcraft unit frames. Your character bre
 
 > Formerly **BBF Animated Portraits**. Upgrading? Delete the old `BBF_AnimatedPortraits` folder from AddOns (if it's still enabled, Living Portraits offers to disable it for you); settings start fresh under the new name. `/bap` still works as an alias for `/lp`.
 
-> **Status:** v0.6.0, public test release. Tested in game on the **WoW Forever beta**, with and without BetterBlizzFrames. See [CHANGELOG](CHANGELOG.md).
+> **Status:** v0.7.0, public test release. Tested in game on the **WoW Forever beta**, with and without BetterBlizzFrames. See [CHANGELOG](CHANGELOG.md).
 
 ## Best with BetterBlizzFrames
 
@@ -12,9 +12,9 @@ Living Portraits works on its own, but it's built to be used with [BetterBlizzFr
 
 | | Without BBF | With BBF |
 |---|---|---|
-| Style | Circle: the model inside Blizzard's round portrait | **Square**: a pixel-bordered box beside the bars (shown below), or circle if you keep BBF's portraits |
+| Style | Circle: the model inside Blizzard's round portrait | **Box**: a pixel-bordered box beside the bars (shown below), or circle if you keep BBF's portraits |
 | Bars and names | Blizzard's default layout | Resized so the box and bars line up, name and level in one row |
-| Extras | None | Talent builds, tall portraits and mirrored target text (square style only) |
+| Extras | None | Talent builds, tall portraits and mirrored target text (box style only) |
 | Setup | Nothing to do | One click: **Turn on** in the settings panel (or `/lp bbfsetup`) switches on BBF's Pixel Border mode |
 
 ## Screenshots
@@ -33,7 +33,7 @@ Tall portraits with Mirror Target Text, on BetterBlizzFrames' Pixel Border mode.
 
 Instead of the flat 2D portrait, a live `PlayerModel` of the unit is drawn in one of two styles:
 
-- **Square** (when BBF's No Portrait / Pixel Border mode is on): a box with BBF's 1px border beside the health and mana bars. The model fills it exactly.
+- **Box** (when BBF's No Portrait / Pixel Border mode is on): a box with BBF's 1px border beside the health and mana bars. The model fills it exactly.
 - **Circle** (Blizzard's frames, or BBF with portraits): the model sits behind the frame's border ring, with a soft round edge so its square corners don't show.
 
 If the model can't load (unit out of range or offline), the addon steps aside and the normal portrait shows.
@@ -64,13 +64,14 @@ ln -s ~/GitHub/Main/living-portraits \
 
 Open **Options → AddOns → LivingPortraits** (or type `/lp options`):
 
-- **General:** turn it on/off, hide surnames, square or circle style, and which frames get a living portrait.
-- **Camera:** zoom and distance (face size).
+- **General:** turn it on/off, hide surnames, box or circle style, and which frames get a living portrait.
+- **Camera:** zoom (both styles). Face distance is on each style's page.
+- **Bar text:** Blizzard/BBF's own, or left-aligned `current (max)` / `current (percent)` that's always shown.
 - **Target bars:** the grow-from-empty animation (target and focus) and its speed.
-- **Square style:** show talent builds, mirror the target text, tall portraits, border color, thickness and opacity, plus box and bar sizing.
-- **Circle style:** background, round edge and model size.
+- **Box Style** (its own page): distance, talent builds, mirrored target text, tall portraits (player, target & focus, party), border color, thickness and opacity, elite/rare border and icon, plus box and bar sizing.
+- **Circle Style** (its own page): distance for large and small frames, background, round edge and model size.
 
-The square style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. The **Turn on** button under *BetterBlizzFrames* switches it on for every frame (your other BBF settings stay as they are) and reloads the UI; **Undo** puts back what you had.
+The box style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. The **Turn on** button under *BetterBlizzFrames* switches it on for every frame (your other BBF settings stay as they are) and reloads the UI; **Undo** puts back what you had.
 
 ## Commands
 
@@ -84,22 +85,27 @@ The square style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. T
 | `/lp options` | Open the settings panel |
 | `/lp toggle` | Turn living portraits on/off |
 | `/lp unit <group>` | Toggle a frame group: `player`, `target`, `focus`, `tot`, `party` |
-| `/lp style square\|circle` | Square box beside the bars (needs BBF's No Portrait / Pixel Border) or round portrait |
+| `/lp style box\|circle` | Box beside the bars (needs BBF's No Portrait / Pixel Border) or round portrait |
 | `/lp surname` | First names only (hide surnames) on the player, target, focus, target-of-target and party frames |
 | `/lp zoom 0-1` | Camera zoom (1 = head and shoulders, lower = more body) |
-| `/lp cam 0.3-2 [large\|small\|square]` | Camera distance (lower = closer, bigger face) |
+| `/lp cam 0.3-2 [large\|small\|box]` | Camera distance (lower = closer, bigger face) |
 | `/lp grow` | Toggle the target's and focus's health and mana growing from empty when they change |
 | `/lp growtime 0.1-2` | How long the grow takes, in seconds (default 0.35) |
 | `/lp bbfsetup` / `/lp bbfundo` | Turn on BBF's No Portrait + Pixel Border mode for every frame / put back your previous BBF settings (reload to apply) |
 | `/lp reset` | Restore defaults |
 
-**Square style**
+**Box style**
 
 | Command | Effect |
 |---|---|
 | `/lp build` | Toggle talent builds (points per tree, like `2/8/0`) on the player, target and focus |
-| `/lp tall` | Toggle tall player, target and focus portraits (on by default): a taller rectangle with the build on its own line above the name. Off: square, build next to the level |
+| `/lp tall [player\|target\|party]` | Toggle tall portraits per group: a taller rectangle, with the build on its own line above the name on player, target and focus (off: square, build next to the level). On by default for all three. No group toggles player + target/focus together |
 | `/lp mirror` | Mirror the target and focus text to match the player frame: name and build next to the portrait, level on the outer edge |
+| `/lp bartext default\|max\|percent` | Health and mana text on the player, target, focus and party bars: Blizzard/BBF's own (default), or left-aligned and always shown as `350 (462)` (max) or `350 (76%)` (percent) |
+| `/lp bartextstyle outline_shadow\|outline\|shadow\|thick\|thick_shadow` | Outline and shadow of the left-aligned bar text (default: thin outline + shadow); the font follows BetterBlizzFrames' unit frame number font |
+| `/lp eliteborder` | Toggle the gold (elite, boss) and silver (rare) portrait and bar borders on the target and focus (on by default) |
+| `/lp elitecolor RRGGBB` / `/lp rarecolor RRGGBB` | Border colors for elite/boss (default `ffc71a`, gold) and rare (default `c7ccdb`, silver) targets |
+| `/lp eliteicon top\|bottom\|center\|level\|hidden` | Where the target/focus elite icon goes: the portrait's outer top corner, outer bottom corner, bottom center (default), next to the level, or hidden |
 | `/lp bordercolor RRGGBB` | Color of the 1px lines around the portrait box and the bars (default `000000`, black) |
 | `/lp bordersize thin\|medium\|heavy` | Thickness of those lines: 1, 2 or 3px (default thin) |
 | `/lp borderalpha 0-1` | Opacity of those lines (default 1). Below 1, the box and bars close up so no gap shows where a line was |
@@ -133,7 +139,7 @@ The square style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. T
 
 - **Talent builds** only show for players within inspect range (about 30 yards), and the game may refuse to share enemy players' talents. NPCs never show one.
 - **Target-of-target placement:** when the target or focus layout would run into its target-of-target (for example with Edit Mode's small focus frame), the ToT frame is moved down just enough to clear it, and put back when you switch to circle style or turn the addon off.
-- **No layout changes in combat:** WoW blocks resizing unit-frame bars mid-fight, so square-style layout changes made in combat (settings, BBF re-layouts) are skipped and apply on the next refresh, such as a target change or `/lp refresh`. That's also why the build line stays reserved on NPC targets.
+- **No layout changes in combat:** WoW blocks resizing unit-frame bars mid-fight, so box-style layout changes made in combat (settings, BBF re-layouts) are skipped and apply on the next refresh, such as a target change or `/lp refresh`. That's also why the build line stays reserved on NPC targets.
 - **BBF's spec / healer icon portraits** are covered by the 3D model while it shows.
 
 ## Feedback

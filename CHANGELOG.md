@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.7.0 (2026-10-18)
+
+### Features
+- **Bar text:** health and mana as `350 (462)` (current and max) or `350 (76%)` (current and percent), left-aligned and always shown on the player, target, focus and party bars. Works in dungeons and battlegrounds. Choose its look with *Bar Text Style* (outline, shadow, thick outline, or a mix); the font follows BetterBlizzFrames' unit frame number font. `/lp bartext`, `/lp bartextstyle`.
+- **Elite and rare targets:** the target and focus portrait and bar borders turn gold (elite, boss) or silver (rare), with colors you can pick. The small elite icon takes the same color and can sit on the portrait's corner, bottom center (default), next to the level, or be hidden. `/lp eliteborder`, `/lp elitecolor`, `/lp rarecolor`, `/lp eliteicon`.
+- **Tall portraits per group:** player, target and focus, and party each have their own switch (party is new). `/lp tall [player|target|party]`.
+- **Settings panel:** Box Style and Circle Style now have their own pages, each with its own camera distance.
+- **Square style is now called Box style** (tall portraits made most boxes rectangles). Your settings carry over; `/lp style box` works, and `square` still does.
+- New installs start with mirrored target text, hidden surnames and tall party portraits on.
+
+### Fixes
+- **Icons off the portrait:** the player's combat and resting icons sit after the name, party role, leader and disconnect icons sit by the name and in the box, and the target's "??" skull sits where the level goes.
+- **Dungeons:** no more Lua errors from the target bar animation, party portraits appear as members zone in, and members who aren't loaded in yet keep the same bar layout (empty box).
+- **Battlegrounds:** fewer refresh retries while bar positions are hidden (less lag).
+- Turning the addon off or switching to circle style now puts every moved icon and text back.
+- Old saved settings from earlier test builds are cleaned up.
+
 ## 0.6.0 (2026-10-16)
 
 ### Features
