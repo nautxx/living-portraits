@@ -35,6 +35,9 @@ local defaults = {
     growBars    = true, -- new target: health and mana grow from empty to their value
     growTime    = 0.35, -- seconds the grow takes (/lp growtime)
     showBuild   = true, -- square: talent build ("2/8/0") on the player, target and focus (/lp build)
+    -- Class name in class color on the player, target and focus (players): "off", "build" (in the
+    -- talent build text), "level" (above the level), "name" (after the name) (/lp classtext).
+    classText   = "off",
     eliteBorder = false, -- square: target/focus box border gold for elite/boss, silver for rare (/lp eliteborder)
     eliteColor  = "ffffc71a", -- square: elite/boss border color, ARGB hex like the settings swatch (/lp elitecolor)
     rareColor   = "ffc7ccdb", -- square: rare/rare elite border color (/lp rarecolor)

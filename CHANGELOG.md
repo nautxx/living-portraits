@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Features
+- **Class name:** show players' class in its class color on the player, target and focus frames, for when health bars aren't class colored. Pick where: next to the talent build (`Warrior 2/8/0`), above the level, or after the name. Off by default. Settings → General → *Class Name*, or `/lp classtext off|build|level|name`. In circle style (no build line) it goes after the name.
+
 ## 0.9.0 (2026-10-18)
 
 ### Features

@@ -32,6 +32,7 @@ local AskLoadProfile = ns.AskLoadProfile
 local ShowExport = ns.ShowExport
 local ShowImport = ns.ShowImport
 local REST_MODES = ns.REST_MODES
+local CLASS_TEXT_MODES = ns.CLASS_TEXT_MODES
 
 -- Slash command: /lp --------------------------------------------------------
 
@@ -49,9 +50,9 @@ local function PrintStatus()
     print(("  circle large: inset=%.2f cam=%.2f   small: inset=%.2f cam=%.2f"):format(L.inset, L.cam, S.inset, S.cam))
     print(("  box: cam=%.2f bg=%.2f gap=%d alignmana=%s split=%.2f  extend: large=%d small=%d"):format(
         Q.cam, db.squareBg, db.squareGap, tostring(db.alignMana), db.hpShare, db.stackExtra.large, db.stackExtra.small))
-    print(("  name rows: large=%d tot=%d party=%d   build=%s tall=%s hidesurnames=%s"):format(db.nameRow.large,
+    print(("  name rows: large=%d tot=%d party=%d   build=%s tall=%s hidesurnames=%s class=%s"):format(db.nameRow.large,
         db.nameRow.tot, db.nameRow.party, tostring(db.showBuild), ("player=%s target=%s party=%s"):format(tostring(db.tallPortraits.player),
-        tostring(db.tallPortraits.target), tostring(db.tallPortraits.party)), tostring(db.hideSurname)))
+        tostring(db.tallPortraits.target), tostring(db.tallPortraits.party)), tostring(db.hideSurname), tostring(db.classText)))
 end
 
 local function PrintHelp()
@@ -61,6 +62,7 @@ local function PrintHelp()
     print("  /lp style box|circle  |  /lp bg 0-1  |  /lp extend 0-30 [large|small]  |  /lp split 0.4-0.85")
     print("  /lp namerow 0-24 [large|tot|party]  |  /lp gap 0-20  |  /lp barspacing 0-10  |  /lp alignmana  |  /lp build  |  /lp tall [player|target|party]  |  /lp surname  |  /lp mirror  |  /lp eliteborder  |  /lp eliteicon top|bottom|center|level|hidden")
     print("  /lp elitecolor RRGGBB  |  /lp rarecolor RRGGBB  |  /lp bartext default|max|percent  |  /lp resticon name|corner")
+    print("  /lp classtext off|build|level|name (class name in class color: next to the build, above the level, after the name)")
     print("  /lp bartextstyle outline_shadow|outline|shadow|thick|thick_shadow")
     print("  /lp bordercolor RRGGBB  |  /lp borderalpha 0-1  |  /lp bordersize thin|medium|heavy")
     print("  /lp resource pixel|bbf|none  |  /lp resourcealign left|center|right  |  /lp resourcesize 2-16")
@@ -247,6 +249,12 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
             return
         end
         db.resourceColors[key] = "ff" .. hex
+    elseif cmd == "classtext" then
+        if not CLASS_TEXT_MODES[arg or ""] then
+            print("  /lp classtext off|build|level|name  (now " .. tostring(db.classText) .. ")")
+            return
+        end
+        db.classText = arg
     elseif cmd == "resticon" then
         if not REST_MODES[arg or ""] then
             print("  /lp resticon name|corner  (now " .. tostring(db.restIcon) .. ")")

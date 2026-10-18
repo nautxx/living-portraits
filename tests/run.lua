@@ -1054,6 +1054,46 @@ do
     check("/lp build hides it", LivingPortraitsDB.showBuild == false and not fs.shown)
     check("tall portraits stay tall with the build hidden", tBox.h == tBox.w + 9)
     slash("build")
+
+    -- Class name in class color (players): next to the build, above the level, after the name
+    RAID_CLASS_COLORS = { ROGUE = { colorStr = "fffff468" } }
+    local label = "|cfffff468Class|r"
+    check("class name is off by default", LivingPortraitsDB.classText == "off" and fs.text == "2/8/0")
+    slash("classtext build")
+    check("classtext build: in the build text before the points", fs.shown and fs.text == label .. " 2/8/0")
+    slash("build")
+    check("classtext build: still shown with talent builds off", fs.shown and fs.text == label)
+    slash("build")
+    slash("classtext level")
+    local classFS
+    for _, f in ipairs(rawget(TargetFrame, "fontStrings") or {}) do if f.text == label then classFS = f end end
+    check("classtext level: its own text above the level, the build without it", classFS and classFS.shown
+        and classFS.anchor[1] == "RIGHT" and classFS.anchor[2] == hpPos and classFS.anchor[3] == "TOPRIGHT"
+        and classFS.anchor[5] == 12 + 9 / 2 and fs.text == "2/8/0")
+    slash("tall")
+    check("classtext level without tall portraits: joins the build next to the level", not classFS.shown
+        and fs.text == label .. " 2/8/0")
+    slash("tall")
+    slash("classtext name")
+    targetName:SetText("Binjuice")
+    check("classtext name: after the name, the build plain", targetName.text == "Binjuice " .. label and fs.text == "2/8/0"
+        and not classFS.shown)
+    slash("classtext off")
+    check("classtext off: the name back as Blizzard set it", targetName.text == "Binjuice")
+    slash("classtext name")
+    world.players.target = false
+    targetName:SetText("Kobold")
+    check("NPCs get no class name", targetName.text == "Kobold")
+    world.players.target = true
+    slash("classtext build")
+    slash("style circle")
+    targetName:SetText("Binjuice")
+    check("circle style (no build line): the class goes after the name", targetName.text == "Binjuice " .. label)
+    slash("style square")
+    slash("classtext nope")
+    check("unknown placement is ignored", LivingPortraitsDB.classText == "build")
+    slash("classtext off")
+    targetName:SetText("")
     world.players.target = nil
     world.guid.target = nil
 end

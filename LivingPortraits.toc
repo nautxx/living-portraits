@@ -15,6 +15,7 @@ modules\nameRow.lua
 modules\totClearance.lua
 modules\box.lua
 modules\grow.lua
+modules\classText.lua
 modules\talentBuild.lua
 modules\barText.lua
 modules\classResource.lua

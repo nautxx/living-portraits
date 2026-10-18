@@ -101,7 +101,7 @@ ln -s ~/GitHub/Main/living-portraits \
 Open **Options → AddOns → LivingPortraits** (or type `/lp options`):
 
 - **Profiles** (its own page, first): Starter, Naut and BlizzFrames, Export and Import (see [Profiles](#profiles)), the Pixel Border mode switch and Undo.
-- **General:** turn it on/off, hide surnames, box or circle style, and which frames get a living portrait.
+- **General:** turn it on/off, hide surnames, the class name (in class color, next to the talent build, above the level or after the name), box or circle style, and which frames get a living portrait.
 - **Camera:** zoom (both styles). Face distance is on each style's page.
 - **Bar text:** Blizzard/BBF's own, or left-aligned `current (max)` / `current (percent)` that's always shown.
 - **Target bars:** the grow-from-empty animation (target and focus) and its speed.
@@ -124,6 +124,7 @@ The box style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. Star
 | `/lp unit <group>` | Toggle a frame group: `player`, `target`, `focus`, `tot`, `party` |
 | `/lp style box\|circle` | Box beside the bars (needs BBF's No Portrait / Pixel Border) or round portrait |
 | `/lp surname` | First names only (hide surnames) on the player, target, focus, target-of-target and party frames |
+| `/lp classtext off\|build\|level\|name` | Players' class name in class color on the player, target and focus: next to the talent build (`Warrior 2/8/0`), above the level, or after the name (off by default). Without the box style's build line it goes after the name |
 | `/lp zoom 0-1` | Camera zoom (1 = head and shoulders, lower = more body) |
 | `/lp cam 0.3-2 [large\|small\|box]` | Camera distance (lower = closer, bigger face) |
 | `/lp bartext default\|max\|percent` | Health and mana text on the player, target, focus and party bars: Blizzard/BBF's own, or left-aligned and always shown as `350 (462)` (max, the default) or `350 (76%)` (percent) |
