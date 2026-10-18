@@ -788,9 +788,25 @@ local function SetEliteHidden(elite, hide)
         elite:SetAlpha(1)
     end
 end
+-- Tint the icon with the elite border color (gold/silver or the user's picks): desaturate
+-- the atlas, then color it. The atlas is bronze, which clashed with the gold border. nil r
+-- = untint (only if we tinted). BBF re-sets the atlas per target; SetAtlas keeps the tint.
+local function TintElite(elite, r, g, b)
+    if r then
+        elite.bapTinted = true
+        elite:SetDesaturated(true)
+        elite:SetVertexColor(r, g, b)
+    elseif elite.bapTinted then
+        elite.bapTinted = nil
+        elite:SetDesaturated(false)
+        elite:SetVertexColor(1, 1, 1)
+    end
+end
+
 local function RestoreElite(elite)
     if not elite then return end
     SetEliteHidden(elite, false)
+    TintElite(elite, nil)
     RestorePoints(elite)
 end
 local SKULL_WIDTH = 11 -- BBF sizes the "??" skull 11x15
@@ -938,6 +954,9 @@ local function ApplyBorders(unit, manaBar, hpBar)
     ColorEdges(hpBar and hpBar.BBFBlackBorder, r, g, b, a, boxSide)
     -- Mana's top edge is the same line as health's bottom edge (spacing 0).
     ColorEdges(manaBar and manaBar.BBFBlackBorder, r, g, b, a, boxSide, db.barSpacing == 0 and EDGE_TOP or nil)
+    -- The elite icon matches the border (here, not in the name row: this also runs in combat).
+    local elite = EliteIcon(unit)
+    if elite then TintElite(elite, er, eg, eb) end
 end
 
 -- BBF's look: black, 1px, every edge shown.
