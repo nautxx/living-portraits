@@ -22,21 +22,82 @@ local ShowReloadPopup = ns.ShowReloadPopup
 -- the easy way to add a friend), or lp = our settings that differ from the defaults (the rest are
 -- defaults), bbfBase = one of BBF's built-in profiles to start from (optional), bbf = BBF settings
 -- on top.
+-- Jason's BBF unit frame look, on top of Bodify and Pixel Border mode (BBF_MODE). Picked from a
+-- diff of his saved BBF settings; the fonts and textures named here all ship with BBF (its
+-- LibSharedMedia and media folder), so it looks the same on any install.
+local NAUT_LOOK = {
+    -- Fonts: names/levels, bar numbers, party, action bars and their cooldowns (BBF's Fonts
+    -- section, all on except "One font for all text ingame").
+    changeUnitFrameFont = true, unitFrameFont = "2002", unitFrameFontSize = 8, unitFrameFontOutline = "",
+    unitFrameFontColor = false, unitFrameFontColorLvl = true, unitFrameFontColorRGB = { 0.953, 1, 0.969, 1 },
+    changeUnitFrameValueFont = true, unitFrameValueFont = "Arial Narrow", unitFrameValueFontSize = 7,
+    unitFrameValueFontOutline = "OUTLINE", unitFrameValueFontColor = true,
+    changePartyFrameFont = true, partyFrameFont = "2002",
+    changeActionBarFont = true, actionBarFont = "2002", changeActionBarCDFont = true, actionBarCDFont = "2002",
+    changeAllFontsIngame = false,
+    -- Textures (BBF's UnitFrame Textures section, all on): health, mana, cast bar, the background
+    -- behind the bars, XP/reputation bar; smooth bar changes.
+    changeUnitFrameHealthbarTexture = true, unitFrameHealthbarTexture = "Solid",
+    changeUnitFrameManabarTexture = true, unitFrameManabarTexture = "Blizzard Retail Bar Crop 2",
+    changeUnitFrameManaBarTextureKeepFancy = true, addUnitFrameBgTexture = true,
+    changeUnitFrameCastbarTexture = true, unitFrameCastbarTexture = "Solid",
+    changeXpBarTexture = true, xpBarTexture = "Solid",
+    smoothHealthbars = true, smoothManabars = true,
+    -- Class colors on health bars and target names.
+    classColorFrames = true, classColorTargetNames = true,
+    -- Combo points under the player frame (our class resource moves and restyles that bar).
+    foreverComboPoints = true, instantComboPoints = true, enableLegacyComboPoints = false,
+    -- Target-of-target and focus-target placement that fits the taller box layout.
+    targetToTScale = 0.97, targetToTXPos = -1, targetToTYPos = 17,
+    focusToTScale = 0.97, focusToTXPos = -1, focusToTYPos = 17,
+    -- Clutter that would sit on or around the portrait box and name row.
+    hideTargetReputationColor = true, hideFocusReputationColor = true, hideCombatGlow = true,
+    hideHitIndicator = true, hidePetHitIndicator = true, hidePvpIcon = true, hidePrestigeBadge = true,
+    hideGroupIndicator = true, hidePlayerLeaderIcon = true, hideTargetLeaderIcon = true,
+    hideFocusLeaderIcon = true, hidePlayerGuideIcon = true,
+}
+
+-- Starter's BBF changes on top of BBF's Starter profile and Pixel Border mode, saved from Jason's
+-- in-game setup (2026-10-18): health/mana texture switches on (BBF's own Pixel Border checkbox
+-- turns these on; no texture named = LSM's default bar) and realm names kept.
+local STARTER_LOOK = {
+    changeUnitFrameHealthbarTexture = true, changeUnitFrameManabarTexture = true,
+    removeRealmNames = false,
+}
+
+local function Merge(...)
+    local t = {}
+    for i = 1, select("#", ...) do
+        for k, v in pairs((select(i, ...))) do t[k] = v end
+    end
+    return t
+end
+
 local PROFILES = {
     {
+        name = "Starter",
+        desc = "A clean starting point: square box portraits with the elite border, full names, no talent builds and Blizzard's bar text, on BetterBlizzFrames' own Starter profile with Pixel Border mode.",
+        lp = {
+            eliteBorder = true, tallPortraits = { player = false, target = false, party = false },
+            hideSurname = false, showBuild = false, barText = "default",
+        },
+        bbfBase = "Starter",
+        bbf = Merge(ns.BBF_MODE, STARTER_LOOK),
+    },
+    {
         name = "Naut",
-        desc = "Jason's setup: tall box portraits with bar text, class resource circles, and BetterBlizzFrames' Bodify profile with Pixel Border mode and his unit frame look.",
+        desc = "Jason's setup: tall box portraits with bar text and class resource circles, and BetterBlizzFrames' Bodify profile with Pixel Border mode and his unit frame look (fonts, textures, class colors, combo points, target-of-target placement, less clutter).",
         lp = {
             barText = "max", barTextStyle = "shadow", eliteIcon = "bottom", eliteBorder = false,
             restIcon = "corner", resourceAlign = "right", resourceRadius = 5,
         },
         bbfBase = "Bodify",
-        bbf = ns.BBF_SETUP,
+        bbf = Merge(ns.BBF_MODE, NAUT_LOOK),
     },
 }
 
 local STRING_PREFIX = "!LP1!" -- format 1
-local LP_SKIP = { bbfBackup = true, bbfBackupFull = true, lpBackup = true } -- never exported or imported
+local LP_SKIP = { bbfBackup = true, bbfBackupFull = true, lpBackup = true, welcomed = true } -- never exported or imported
 
 local function FindProfile(name)
     name = name and name:lower()
@@ -80,7 +141,7 @@ end
 -- Replace our settings with `lp` (backup first, once), then migrate and fill in defaults.
 local function ApplyLP(lp)
     if not db.lpBackup then db.lpBackup = LPSettings() end
-    local keep = { bbfBackup = db.bbfBackup, bbfBackupFull = db.bbfBackupFull, lpBackup = db.lpBackup }
+    local keep = { bbfBackup = db.bbfBackup, bbfBackupFull = db.bbfBackupFull, lpBackup = db.lpBackup, welcomed = db.welcomed }
     local version = type(lp.version) == "number" and lp.version or SETTINGS_VERSION
     local clean = Sanitize(lp, defaults)
     for k in pairs(db) do db[k] = nil end

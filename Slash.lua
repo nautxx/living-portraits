@@ -55,7 +55,7 @@ local function PrintStatus()
 end
 
 local function PrintHelp()
-    print("  /lp options  |  /lp bbfsetup (set up BetterBlizzFrames for Living Portraits)  |  /lp bbfundo (undo setup / profile)")
+    print("  /lp options  |  /lp bbfsetup (turn on BetterBlizzFrames' Pixel Border mode)  |  /lp bbfundo (undo setup / profile)")
     print("  /lp profile [name] (load a built-in profile: Living Portraits + BetterBlizzFrames)  |  /lp export  |  /lp import")
     print("  /lp toggle  |  /lp vignette  |  /lp zoom 0-1  |  /lp grow  |  /lp growtime 0.1-2  |  /lp reset")
     print("  /lp style box|circle  |  /lp bg 0-1  |  /lp extend 0-30 [large|small]  |  /lp split 0.4-0.85")
@@ -308,9 +308,9 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
         local newValue = not db.units[list[1]]
         for _, unit in ipairs(list) do db.units[unit] = newValue end
     elseif cmd == "reset" then
-        local backup, full, lp = db.bbfBackup, db.bbfBackupFull, db.lpBackup -- keep Undo
+        local backup, full, lp, welcomed = db.bbfBackup, db.bbfBackupFull, db.lpBackup, db.welcomed -- keep Undo, no welcome again
         wipe(db); CopyDefaults(defaults, db); db.version = SETTINGS_VERSION
-        db.bbfBackup, db.bbfBackupFull, db.lpBackup = backup, full, lp
+        db.bbfBackup, db.bbfBackupFull, db.lpBackup, db.welcomed = backup, full, lp, welcomed
     else
         PrintStatus()
         PrintHelp()

@@ -137,7 +137,7 @@ local function BuildOptions()
         c:Add("square", "Box")
         c:Add("circle", "Circle")
         return c:GetData()
-    end, "Box: the portrait in a bordered box beside the bars (needs BBF's Pixel Border mode: Profiles page, Set up BetterBlizzFrames or the Naut profile). Circle: inside the round portrait. Frames where BBF still shows portraits always use the circle.")
+    end, "Box: the portrait in a bordered box beside the bars (needs BBF's Pixel Border mode: Profiles page). Circle: inside the round portrait. Frames where BBF still shows portraits always use the circle.")
     for _, g in ipairs({ { "player", "Player Portrait", "player frame" },
                          { "target", "Target Portrait", "target frame" },
                          { "focus", "Focus Portrait", "focus frame" },
@@ -214,14 +214,14 @@ local function BuildOptions()
         "Paste a profile string. Replaces your Living Portraits and BetterBlizzFrames settings; Undo puts them back. Reloads the UI.", true))
 
     Header("BetterBlizzFrames")
-    layout:AddInitializer(CreateSettingsButtonInitializer("Set up BetterBlizzFrames", "Set up",
+    layout:AddInitializer(CreateSettingsButtonInitializer("Pixel Border mode", "Turn on",
         function() print(PREFIX .. ApplyBBFSetup()) end,
-        "Sets BBF up the way Living Portraits is designed for: loads BBF's Bodify profile (replacing your BBF settings), then No Portrait + Pixel Border mode on every frame (the box style needs it), unit frame fonts, bar textures, class colors, combo points under the player frame, target-of-target placement, and hides clutter around the portrait. Undo puts all of your previous BBF settings back. Reloads the UI.", true))
+        "Turns on BBF's No Portrait + Pixel Border mode on every frame (and Classic Frames off), which the box style needs, and keeps the rest of your BBF settings. For a whole look, load a profile above. Reloads the UI.", true))
 
     Header("Undo")
     layout:AddInitializer(CreateSettingsButtonInitializer("Undo setup / profile", "Undo",
         function() print(PREFIX .. UndoBBFSetup()) end,
-        "Puts back the Living Portraits and BBF settings you had before loading or importing a profile, or setting up BetterBlizzFrames. Reloads the UI.", true))
+        "Puts back the Living Portraits and BBF settings you had before loading or importing a profile, or turning on Pixel Border mode here. Reloads the UI.", true))
 
     Page("Box Style")
     Header("Camera")

@@ -4,54 +4,19 @@ ns.OnLoad(function(saved) db = saved end)
 local PREFIX = ns.PREFIX
 
 -- BBF setup -----------------------------------------------------------------
--- One click sets BBF up the way Living Portraits is designed and tested (Jason's own BBF):
--- BBF's built-in Bodify profile first (BBF's author's setup, which Jason's builds on: dark mode,
--- auras, cast bars and the rest), then BBF_SETUP on top: the No Portrait + Pixel Border mode the
--- box style needs and Jason's unit frame look. Same result as loading Bodify in BBF's profile
--- menu and then changing those settings, in one reload. We write BBF's saved settings (never its
--- files) after a full backup for Undo; BBF reads them when it loads, hence the UI reload.
--- BBF.ApplyProfile can't be used: it reloads right away, before we could add ours. Its decoder
--- (BBF.OldImportProfile) is what it uses too. Without the profile (renamed, older BBF), only
--- BBF_SETUP is applied and the rest of BBF stays as it is.
--- The fonts and textures named here all ship with BBF (its LibSharedMedia and media folder).
-local BASE_PROFILE = "Bodify"
-local BBF_SETUP = {
-    -- Mode: no portraits, pixel borders, on every frame (BBF.HasNoPortrait checks these).
+-- The box style needs BBF's No Portrait + Pixel Border mode on every frame. "Turn on Pixel
+-- Border mode" writes just those switches (BBF_MODE) into BBF's saved settings (never its files),
+-- on top of the user's own BBF look, after a full backup for Undo; BBF reads them when it loads,
+-- hence the UI reload. A whole look (a BBF base profile plus more settings) is a profile instead
+-- (modules/profiles.lua: Starter, Naut), which uses WriteBBF and BaseProfile from here.
+local BBF_MODE = {
+    -- No portraits, pixel borders, on every frame (BBF.HasNoPortrait checks these).
     noPortraitModes = true, noPortraitPixelBorder = true,
     noPortraitPartyOnly = false, -- otherwise only the party frames lose their portraits
     noPortraitSkipPlayer = false, noPortraitSkipTarget = false, noPortraitSkipFocus = false,
     -- Classic Frames wins over No Portrait (BBF builds it first, and its own No Portrait / Pixel
     -- Border checkboxes turn it off), so it must go: left on, the frames stay classic.
     classicFrames = false,
-    -- Fonts: names/levels, bar numbers, party, action bars and their cooldowns (BBF's Fonts
-    -- section, all on except "One font for all text ingame").
-    changeUnitFrameFont = true, unitFrameFont = "2002", unitFrameFontSize = 8, unitFrameFontOutline = "",
-    unitFrameFontColor = false, unitFrameFontColorLvl = true, unitFrameFontColorRGB = { 0.953, 1, 0.969, 1 },
-    changeUnitFrameValueFont = true, unitFrameValueFont = "Arial Narrow", unitFrameValueFontSize = 7,
-    unitFrameValueFontOutline = "OUTLINE", unitFrameValueFontColor = true,
-    changePartyFrameFont = true, partyFrameFont = "2002",
-    changeActionBarFont = true, actionBarFont = "2002", changeActionBarCDFont = true, actionBarCDFont = "2002",
-    changeAllFontsIngame = false,
-    -- Textures (BBF's UnitFrame Textures section, all on): health, mana, cast bar, the background
-    -- behind the bars, XP/reputation bar; smooth bar changes.
-    changeUnitFrameHealthbarTexture = true, unitFrameHealthbarTexture = "Solid",
-    changeUnitFrameManabarTexture = true, unitFrameManabarTexture = "Blizzard Retail Bar Crop 2",
-    changeUnitFrameManaBarTextureKeepFancy = true, addUnitFrameBgTexture = true,
-    changeUnitFrameCastbarTexture = true, unitFrameCastbarTexture = "Solid",
-    changeXpBarTexture = true, xpBarTexture = "Solid",
-    smoothHealthbars = true, smoothManabars = true,
-    -- Class colors on health bars and target names.
-    classColorFrames = true, classColorTargetNames = true,
-    -- Combo points under the player frame (our class resource moves and restyles that bar).
-    foreverComboPoints = true, instantComboPoints = true, enableLegacyComboPoints = false,
-    -- Target-of-target and focus-target placement that fits the taller box layout.
-    targetToTScale = 0.97, targetToTXPos = -1, targetToTYPos = 17,
-    focusToTScale = 0.97, focusToTXPos = -1, focusToTYPos = 17,
-    -- Clutter that would sit on or around the portrait box and name row.
-    hideTargetReputationColor = true, hideFocusReputationColor = true, hideCombatGlow = true,
-    hideHitIndicator = true, hidePetHitIndicator = true, hidePvpIcon = true, hidePrestigeBadge = true,
-    hideGroupIndicator = true, hidePlayerLeaderIcon = true, hideTargetLeaderIcon = true,
-    hideFocusLeaderIcon = true, hidePlayerGuideIcon = true,
 }
 local NO_VALUE = "<nil>" -- marker in v0.8.0/0.8.1 backups (db.bbfBackup): BBF had never saved this key
 
@@ -114,18 +79,12 @@ end
 -- Both return a line for chat.
 local function ApplyBBFSetup()
     if not BBFLoaded() then return "BetterBlizzFrames isn't loaded." end
-    local base = BaseProfile(BASE_PROFILE)
-    WriteBBF(base, BBF_SETUP)
+    WriteBBF(nil, BBF_MODE)
     ShowReloadPopup()
-    if base then
-        return "Set up BetterBlizzFrames: loaded its " .. BASE_PROFILE .. " profile, then Pixel Border mode and "
-            .. "the Living Portraits unit frame look. Reload the UI to apply it."
-    end
-    return "Set up BetterBlizzFrames (" .. BASE_PROFILE .. " profile not found: only Pixel Border mode and the "
-        .. "Living Portraits unit frame look). Reload the UI to apply it."
+    return "Turned on BetterBlizzFrames' Pixel Border mode for every frame. Reload the UI to apply it."
 end
 
--- Undo the BBF setup and/or a loaded profile (modules/profiles.lua): BBF's settings and our own
+-- Undo Pixel Border mode and/or a loaded profile (modules/profiles.lua): BBF's settings and our own
 -- go back to how they were before the first one.
 local function UndoBBFSetup()
     local bdb, full, keys, lp = BetterBlizzFramesDB, db.bbfBackupFull, db.bbfBackup, db.lpBackup
@@ -140,8 +99,10 @@ local function UndoBBFSetup()
     end
     db.bbfBackupFull, db.bbfBackup, db.lpBackup = nil, nil, nil
     if lp then
+        local welcomed = db.welcomed
         for k in pairs(db) do db[k] = nil end
         for k, v in pairs(lp) do db[k] = Copy(v) end
+        db.welcomed = welcomed
         ns.LoadSettings() -- migrate and fill in defaults; every file keeps the same table
     end
     if full or keys then ShowReloadPopup() else ns.RefreshAll() end
@@ -176,7 +137,7 @@ local function CheckOldAddon()
     StaticPopup_Show("LIVING_PORTRAITS_OLD_ADDON")
 end
 
-ns.BBF_SETUP = BBF_SETUP
+ns.BBF_MODE = BBF_MODE
 ns.DeepCopy = Copy
 ns.BaseProfile = BaseProfile
 ns.BBFLoaded = BBFLoaded
@@ -184,4 +145,42 @@ ns.WriteBBF = WriteBBF
 ns.ShowReloadPopup = ShowReloadPopup
 ns.ApplyBBFSetup = ApplyBBFSetup
 ns.UndoBBFSetup = UndoBBFSetup
+-- First run --------------------------------------------------------------------
+-- A good starting point on a fresh install: BBF isn't set up, so the box style can't show (circle
+-- portraits). Once per account, offer a profile (modules/profiles.lua, loaded after this file):
+-- Starter (BBF's own Starter + Pixel Border mode) or Naut (Jason's look); without BBF, recommend
+-- it. Not shown when Pixel Border mode is already on. db.welcomed is set when shown, whatever
+-- the answer.
+local function CheckFirstRun()
+    if not db or db.welcomed then return end
+    if BBFLoaded() and ns.BBFHidesPortrait("player") then
+        db.welcomed = true -- already set up
+        return
+    end
+    db.welcomed = true
+    if not BBFLoaded() then
+        print(PREFIX .. "works best with BetterBlizzFrames: with its Pixel Border mode the portraits sit in a box "
+            .. "beside the bars. Without it they go in the round portrait.")
+        return
+    end
+    if not (StaticPopupDialogs and StaticPopup_Show) then
+        print(PREFIX .. "Load a profile for the box portraits: /lp profile starter (or naut).")
+        return
+    end
+    StaticPopupDialogs.LIVING_PORTRAITS_WELCOME = StaticPopupDialogs.LIVING_PORTRAITS_WELCOME or {
+        text = "Welcome to Living Portraits!\n\nThe box portraits need BetterBlizzFrames set up. Pick a starting "
+            .. "point (it replaces your BetterBlizzFrames settings and reloads the UI):\n\n"
+            .. "Starter: BetterBlizzFrames' Starter profile with Pixel Border mode.\n"
+            .. "Naut: the author's full look.\n\nUndo: Options > AddOns > Living Portraits > Profiles.",
+        button1 = "Starter",
+        button2 = LATER or "Not now",
+        button3 = "Naut",
+        OnAccept = function() print(PREFIX .. ns.LoadProfile("Starter")) end,
+        OnAlt = function() print(PREFIX .. ns.LoadProfile("Naut")) end,
+        timeout = 0, whileDead = true, hideOnEscape = true,
+    }
+    StaticPopup_Show("LIVING_PORTRAITS_WELCOME")
+end
+
 ns.CheckOldAddon = CheckOldAddon
+ns.CheckFirstRun = CheckFirstRun
