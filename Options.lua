@@ -8,6 +8,10 @@ local QueueRefreshAll = ns.QueueRefreshAll
 local UpdateBarTexts = ns.UpdateBarTexts
 local ApplyBBFSetup = ns.ApplyBBFSetup
 local UndoBBFSetup = ns.UndoBBFSetup
+local PROFILES = ns.PROFILES
+local AskLoadProfile = ns.AskLoadProfile
+local ShowExport = ns.ShowExport
+local ShowImport = ns.ShowImport
 
 -- Settings panel ------------------------------------------------------------
 -- Options > AddOns > Living Portraits. Proxy settings read and write db directly,
@@ -35,6 +39,58 @@ local function Path(keys)
     local d = defaults
     for _, k in ipairs(keys) do d = d[k] end
     return function() return Parent()[last] end, function(v) Parent()[last] = v end, d
+end
+
+-- The built-in profiles as one row of buttons, each with the profile's name, starting where row
+-- labels start (no label: more buttons get added over time). Blizzard's button row with an empty
+-- name already does that for its one button (SettingsButtonControlMixin:Init anchors it to the
+-- label spot), so the first profile is that button; the others are buttons of ours to its right.
+-- List rows are recycled for other button rows (Export, Undo...), so ours go on in InitFrame and
+-- come off in Resetter, and the stock button gets its width back. (Blizzard's plain
+-- SettingsListElementTemplate can't be used: it never runs its OnLoad, Init errored in game.)
+-- One row for now: wrap it when there are more profiles than fit.
+local PROFILE_BUTTON_GAP, PROFILE_BUTTON_WIDTH, STOCK_BUTTON_WIDTH = 6, 120, 200
+local PROFILE_NOTE = " Replaces your Living Portraits and BetterBlizzFrames settings; Undo puts them back. Reloads the UI."
+local function ProfileButtonsInitializer(say)
+    local first = PROFILES[1]
+    local initializer = CreateSettingsButtonInitializer("", first.name, function() say(AskLoadProfile(first.name)) end,
+        first.name .. ": " .. first.desc .. PROFILE_NOTE, true)
+    local baseInit, baseReset = initializer.InitFrame, initializer.Resetter
+    function initializer:InitFrame(frame)
+        baseInit(self, frame)
+        if not frame.Button then return end
+        frame.Button:SetWidth(PROFILE_BUTTON_WIDTH)
+        frame.lpProfileButtons = frame.lpProfileButtons or {}
+        local prev = frame.Button
+        for i = 2, #PROFILES do
+            local b = frame.lpProfileButtons[i]
+            if not b then
+                b = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+                b:SetScript("OnEnter", function(btn)
+                    GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
+                    GameTooltip:SetText(btn.lpProfile.name, 1, 1, 1)
+                    GameTooltip:AddLine(btn.lpProfile.desc .. PROFILE_NOTE, nil, nil, nil, true)
+                    GameTooltip:Show()
+                end)
+                b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+                b:SetScript("OnClick", function(btn) say(AskLoadProfile(btn.lpProfile.name)) end)
+                frame.lpProfileButtons[i] = b
+            end
+            b.lpProfile = PROFILES[i]
+            b:SetText(PROFILES[i].name)
+            b:SetSize(PROFILE_BUTTON_WIDTH, frame.Button:GetHeight())
+            b:ClearAllPoints()
+            b:SetPoint("LEFT", prev, "RIGHT", PROFILE_BUTTON_GAP, 0)
+            b:Show()
+            prev = b
+        end
+    end
+    function initializer:Resetter(frame)
+        for _, b in pairs(frame.lpProfileButtons or {}) do b:Hide() end
+        if frame.Button then frame.Button:SetWidth(STOCK_BUTTON_WIDTH) end
+        baseReset(self, frame)
+    end
+    return initializer
 end
 
 local function BuildOptions()
@@ -81,7 +137,7 @@ local function BuildOptions()
         c:Add("square", "Box")
         c:Add("circle", "Circle")
         return c:GetData()
-    end, "Box: the portrait in a bordered box beside the bars (needs BBF's Pixel Border mode: Set up BetterBlizzFrames, below). Circle: inside the round portrait. Frames where BBF still shows portraits always use the circle.")
+    end, "Box: the portrait in a bordered box beside the bars (needs BBF's Pixel Border mode: Profiles page, Set up BetterBlizzFrames or the Naut profile). Circle: inside the round portrait. Frames where BBF still shows portraits always use the circle.")
     for _, g in ipairs({ { "player", "Player Portrait", "player frame" },
                          { "target", "Target Portrait", "target frame" },
                          { "focus", "Focus Portrait", "focus frame" },
@@ -128,17 +184,9 @@ local function BuildOptions()
     Slider({ "growTime" }, "Grow time", "Seconds the grow takes.", 0.1, 2, 0.05,
         function(v) return ("%.2fs"):format(v) end)
 
-    Header("BetterBlizzFrames")
-    layout:AddInitializer(CreateSettingsButtonInitializer("Set up BetterBlizzFrames", "Set up",
-        function() print(PREFIX .. ApplyBBFSetup()) end,
-        "Sets BBF up the way Living Portraits is designed for: No Portrait + Pixel Border mode on every frame (the box style needs it), unit frame fonts, bar textures, class colors, combo points under the player frame, target-of-target placement, and hides clutter around the portrait (reputation color, combat glow, hit text, PvP and leader icons). Auras, cast bars, action bars, chat, minimap and dark mode stay as they are. Reloads the UI.", true))
-    layout:AddInitializer(CreateSettingsButtonInitializer("Undo BetterBlizzFrames setup", "Undo",
-        function() print(PREFIX .. UndoBBFSetup()) end,
-        "Puts back the BBF settings you had before setting it up here. Reloads the UI.", true))
-
-    -- Each style's settings on its own page under the main entry (falls back to sections on
-    -- the main page if the client has no subcategories). Each style's camera distance lives
-    -- there: square boxes share one distance, circle portraits use large/small.
+    -- Profiles and each style's settings on their own pages under the main entry (falls back to
+    -- sections on the main page if the client has no subcategories). Each style's camera distance
+    -- lives there: square boxes share one distance, circle portraits use large/small.
     local main = category
     local function Page(name)
         if Settings.RegisterVerticalLayoutSubcategory then
@@ -148,6 +196,32 @@ local function BuildOptions()
             Header(name)
         end
     end
+
+    -- Profiles page (first under the main entry): a whole look (ours + BBF's) in one click, the
+    -- BBF setup, and the Undo they share. A dialog confirms or shows the string; a returned line
+    -- means it couldn't (no BBF, no dialogs).
+    local function Say(msg) if msg then print(PREFIX .. msg) end end
+    Page("Profiles")
+    Header("Profiles")
+    layout:AddInitializer(ProfileButtonsInitializer(Say))
+
+    Header("Import / Export")
+    layout:AddInitializer(CreateSettingsButtonInitializer("Export profile", "Export",
+        function() Say(ShowExport()) end,
+        "A text string with your Living Portraits and BetterBlizzFrames settings, to share or to copy to another PC.", true))
+    layout:AddInitializer(CreateSettingsButtonInitializer("Import profile", "Import",
+        function() Say(ShowImport()) end,
+        "Paste a profile string. Replaces your Living Portraits and BetterBlizzFrames settings; Undo puts them back. Reloads the UI.", true))
+
+    Header("BetterBlizzFrames")
+    layout:AddInitializer(CreateSettingsButtonInitializer("Set up BetterBlizzFrames", "Set up",
+        function() print(PREFIX .. ApplyBBFSetup()) end,
+        "Sets BBF up the way Living Portraits is designed for: loads BBF's Bodify profile (replacing your BBF settings), then No Portrait + Pixel Border mode on every frame (the box style needs it), unit frame fonts, bar textures, class colors, combo points under the player frame, target-of-target placement, and hides clutter around the portrait. Undo puts all of your previous BBF settings back. Reloads the UI.", true))
+
+    Header("Undo")
+    layout:AddInitializer(CreateSettingsButtonInitializer("Undo setup / profile", "Undo",
+        function() print(PREFIX .. UndoBBFSetup()) end,
+        "Puts back the Living Portraits and BBF settings you had before loading or importing a profile, or setting up BetterBlizzFrames. Reloads the UI.", true))
 
     Page("Box Style")
     Header("Camera")

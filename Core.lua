@@ -130,7 +130,11 @@ local function AnySecret(...)
     return false
 end
 
+-- BBF's No Portrait mode is on for the unit. BBF.HasNoPortrait ignores Classic Frames, but with
+-- that on BBF draws its classic round portrait instead (it builds Classic Frames first).
 local function BBFHidesPortrait(unit)
+    local bdb = BetterBlizzFramesDB
+    if type(bdb) == "table" and bdb.classicFrames then return false end
     return BBF and BBF.HasNoPortrait and BBF.HasNoPortrait(unit)
 end
 

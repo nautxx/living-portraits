@@ -20,6 +20,7 @@ modules\classResource.lua
 modules\editMode.lua
 modules\surnames.lua
 modules\bbfSetup.lua
+modules\profiles.lua
 Refresh.lua
 Options.lua
 Slash.lua
