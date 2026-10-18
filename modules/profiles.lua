@@ -57,6 +57,9 @@ local NAUT_LOOK = {
     hideHitIndicator = true, hidePetHitIndicator = true, hidePvpIcon = true, hidePrestigeBadge = true,
     hideGroupIndicator = true, hidePlayerLeaderIcon = true, hideTargetLeaderIcon = true,
     hideFocusLeaderIcon = true, hidePlayerGuideIcon = true,
+    -- Bodify hides the resting Zzz and its glow; Jason keeps both (our resting icon setting places
+    -- the Zzz on the portrait corner).
+    hidePlayerRestAnimation = false, hidePlayerRestGlow = false,
 }
 
 -- Starter's BBF changes on top of BBF's Starter profile and Pixel Border mode, saved from Jason's
@@ -65,6 +68,8 @@ local NAUT_LOOK = {
 local STARTER_LOOK = {
     changeUnitFrameHealthbarTexture = true, changeUnitFrameManabarTexture = true,
     removeRealmNames = false,
+    -- BBF's Starter hides the resting Zzz and its glow; our resting icon setting needs the Zzz.
+    hidePlayerRestAnimation = false, hidePlayerRestGlow = false,
 }
 
 local function Merge(...)

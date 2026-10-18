@@ -1299,6 +1299,8 @@ do
         and LivingPortraitsDB.zoom == 1 and LivingPortraitsDB.resourceRadius == 5 and LivingPortraitsDB.version == ns.SETTINGS_VERSION)
     check("Naut: BBF gets Bodify, then the setup on top", bdb.darkModeUi == true and bdb.classicFrames == false
         and bdb.noPortraitPixelBorder == true and bdb.unitFrameFont == "2002" and bdb.myOwnSetting == nil)
+    check("Naut: the resting Zzz and glow stay on (Bodify hides them)", bdb.hidePlayerRestAnimation == false
+        and bdb.hidePlayerRestGlow == false)
     check("Naut: Yes reloads right away (no second popup)", reloaded == true)
     reloaded = false
     check("Naut: both addons backed up", LivingPortraitsDB.lpBackup and LivingPortraitsDB.lpBackup.zoom == 0.5
@@ -1318,7 +1320,8 @@ do
     check("Starter: BBF's Starter profile with Pixel Border mode on top", bdb.starterKey == true and bdb.classicFrames == false
         and bdb.noPortraitPixelBorder == true and bdb.unitFrameFont == nil and bdb.myOwnSetting == nil)
     check("Starter: bar texture switches on, realm names kept", bdb.changeUnitFrameHealthbarTexture == true
-        and bdb.changeUnitFrameManabarTexture == true and bdb.removeRealmNames == false and bdb.unitFrameHealthbarTexture == nil)
+        and bdb.changeUnitFrameManabarTexture == true and bdb.removeRealmNames == false and bdb.unitFrameHealthbarTexture == nil
+        and bdb.hidePlayerRestAnimation == false and bdb.hidePlayerRestGlow == false)
     check("Starter: Jason's starter choices", LivingPortraitsDB.eliteBorder == true and LivingPortraitsDB.tallPortraits.player == false
         and LivingPortraitsDB.tallPortraits.target == false and LivingPortraitsDB.tallPortraits.party == false
         and LivingPortraitsDB.hideSurname == false and LivingPortraitsDB.showBuild == false
