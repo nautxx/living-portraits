@@ -309,8 +309,9 @@ local function MigrateSettings()
     if version < 10 then
         db.offsets = nil                -- v10: measured centering offsets
     end
-    if version < 11 and type(db.tallPortraits) ~= "table" then
+    if version < 11 and type(db.tallPortraits) == "boolean" then
         -- v11: tall per group. Keep the old switch for player/target/focus; party is new (off).
+        -- Only for the old boolean: a fresh install (no saved value) gets the defaults.
         local on = db.tallPortraits ~= false
         db.tallPortraits = { player = on, target = on, party = false }
     end
@@ -741,6 +742,16 @@ local function PinText(fs, point, rel, relPoint, x, y, justify, maxWidth)
     Apply(fs)
 end
 
+-- Every region we pin, per unit, so handing a frame back restores all of them (no
+-- hand-kept restore lists to forget one in). Pin() = PinText() + record.
+local pinned = {} -- unit -> { [region] = true }
+local function Pin(unit, fs, ...)
+    if not fs then return end
+    pinned[unit] = pinned[unit] or {}
+    pinned[unit][fs] = true
+    PinText(fs, ...)
+end
+
 -- Mirrored text (target/focus, box on the right): name and build hug the portrait and
 -- the level goes to the outer edge, so the frame mirrors the player's.
 local function Mirrored(unit)
@@ -769,6 +780,9 @@ local REST_X, REST_Y = 2, 6
 -- level. Room is kept free whether or not it shows (it changes per target).
 local function EliteIcon(unit)
     return UNITS[unit].elite and Lookup(unit, "elite")
+end
+local function SkullIcon(unit)
+    return UNITS[unit].skull and Lookup(unit, "skull")
 end
 local ELITE_ROOM = 17 -- icon (15) + gap
 local ELITE_MODES = { top = true, bottom = true, center = true, level = true, hidden = true }
@@ -803,11 +817,17 @@ local function TintElite(elite, r, g, b)
     end
 end
 
-local function RestoreElite(elite)
-    if not elite then return end
-    SetEliteHidden(elite, false)
-    TintElite(elite, nil)
-    RestorePoints(elite)
+-- Hand back everything pinned on this unit, and undo the elite icon's fade and tint.
+local function RestorePins(unit)
+    local elite = EliteIcon(unit)
+    if elite then
+        SetEliteHidden(elite, false)
+        TintElite(elite, nil)
+    end
+    local set = pinned[unit]
+    if not set then return end
+    for fs in pairs(set) do RestorePoints(fs) end
+    wipe(set)
 end
 local SKULL_WIDTH = 11 -- BBF sizes the "??" skull 11x15
 
@@ -816,8 +836,9 @@ local SKULL_WIDTH = 11 -- BBF sizes the "??" skull 11x15
 local function PlaceElite(unit)
     local elite = EliteIcon(unit)
     local _, level = Lookup(unit, "texts")
-    local skull = UNITS[unit].skull and Lookup(unit, "skull")
-    if not (elite and level and elite.bapLayout) then return end -- only once the row is laid out
+    local skull = SkullIcon(unit)
+    local hpPos = GetBarFrames(unit)
+    if not (elite and level and hpPos and (hpPos.bapRow or 0) > 0) then return end -- name row active only
     local mode = ELITE_MODES[db.eliteIcon] and db.eliteIcon or "top"
     SetEliteHidden(elite, mode == "hidden")
     local sq = squares[unit]
@@ -825,14 +846,14 @@ local function PlaceElite(unit)
         -- Centered on the box's outer corner (or bottom middle), straddling the border.
         local outer = UNITS[unit].side == "RIGHT" and "RIGHT" or "LEFT"
         local spot = mode == "center" and "BOTTOM" or (mode == "top" and "TOP" or "BOTTOM") .. outer
-        PinText(elite, "CENTER", sq.box, spot, 0, 0)
+        Pin(unit, elite, "CENTER", sq.box, spot, 0, 0)
         return
     end
     local anchor = skull and skull:IsShown() and skull or level
     if Mirrored(unit) then
-        PinText(elite, "LEFT", anchor, "RIGHT", 2, 0)
+        Pin(unit, elite, "LEFT", anchor, "RIGHT", 2, 0)
     else
-        PinText(elite, "RIGHT", anchor, "LEFT", -2, 0)
+        Pin(unit, elite, "RIGHT", anchor, "LEFT", -2, 0)
     end
 end
 
@@ -842,10 +863,9 @@ local function LayoutNameRow(unit, hpPos)
     local row = hpPos.bapRow or 0
     local combat, rest = StatusIcons(unit)
     local elite = EliteIcon(unit)
-    local skull = UNITS[unit].skull and Lookup(unit, "skull")
+    local skull = SkullIcon(unit)
     if row <= 0 then
-        RestorePoints(name); RestorePoints(level); RestorePoints(bbfName)
-        RestorePoints(combat); RestorePoints(rest); RestoreElite(elite); RestorePoints(skull)
+        RestorePins(unit) -- player/target/focus/ToT: only name-row regions are pinned on them
         return
     end
     local y = row / 2
@@ -861,24 +881,23 @@ local function LayoutNameRow(unit, hpPos)
             - (EliteInRow(unit) and ELITE_ROOM or 0), 10)
     end
     if Mirrored(unit) then
-        PinText(name,    "RIGHT", hpPos, "TOPRIGHT", -1, y, "RIGHT", nameMax)
-        PinText(bbfName, "RIGHT", hpPos, "TOPRIGHT", -1, y, "RIGHT", nameMax)
-        PinText(level,   "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT")
+        Pin(unit, name,    "RIGHT", hpPos, "TOPRIGHT", -1, y, "RIGHT", nameMax)
+        Pin(unit, bbfName, "RIGHT", hpPos, "TOPRIGHT", -1, y, "RIGHT", nameMax)
+        Pin(unit, level,   "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT")
     else
-        PinText(name,    "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT", nameMax)
-        PinText(bbfName, "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT", nameMax)
-        PinText(level,   "RIGHT", hpPos, "TOPRIGHT", -1, y, "RIGHT")
+        Pin(unit, name,    "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT", nameMax)
+        Pin(unit, bbfName, "LEFT",  hpPos, "TOPLEFT",   1, y, "LEFT", nameMax)
+        Pin(unit, level,   "RIGHT", hpPos, "TOPRIGHT", -1, y, "RIGHT")
     end
     -- BBF puts the skull where the portrait was (now our box's corner): it goes in the level's spot.
     if skull then
         if Mirrored(unit) then
-            PinText(skull, "LEFT", hpPos, "TOPLEFT", 1, y)
+            Pin(unit, skull, "LEFT", hpPos, "TOPLEFT", 1, y)
         else
-            PinText(skull, "RIGHT", hpPos, "TOPRIGHT", -1, y)
+            Pin(unit, skull, "RIGHT", hpPos, "TOPRIGHT", -1, y)
         end
     end
     if elite and level then
-        if not elite.bapLayout then PinText(elite, "CENTER", level, "CENTER", 0, 0) end -- placeholder
         PlaceElite(unit)
         if skull and not skull.bapEliteHook then
             skull.bapEliteHook = true
@@ -890,8 +909,8 @@ local function LayoutNameRow(unit, hpPos)
     -- Status icons just after the name (whichever name text BBF shows), room reserved in nameMax.
     local shown = bbfName and bbfName:IsShown() and bbfName or name
     if shown then
-        if combat then PinText(combat, "LEFT", shown, "RIGHT", 3, 0) end
-        if rest then PinText(rest, "LEFT", shown, "RIGHT", REST_X, REST_Y) end
+        Pin(unit, combat, "LEFT", shown, "RIGHT", 3, 0)
+        Pin(unit, rest, "LEFT", shown, "RIGHT", REST_X, REST_Y)
     end
 end
 
@@ -1048,16 +1067,7 @@ local function RestoreBars(unit)
     RestoreTexts(hpBar:GetParent(), HP_TEXT_KEYS)
     RestoreTexts(manaBar, MANA_TEXT_KEYS)
     hpPos.bapRow = nil
-    local name, level, bbfName = Lookup(unit, "texts")
-    RestorePoints(name); RestorePoints(level); RestorePoints(bbfName)
-    if UNITS[unit].elite then RestoreElite(Lookup(unit, "elite")) end
-    if UNITS[unit].skull then RestorePoints(Lookup(unit, "skull")) end
-    if UNITS[unit].icons then
-        local role, leader, guide, disconnect = Lookup(unit, "icons")
-        RestorePoints(role); RestorePoints(leader); RestorePoints(guide); RestorePoints(disconnect)
-        local bbfPartyName, partyName = Lookup(unit, "partyName")
-        RestorePoints(bbfPartyName); RestorePoints(partyName)
-    end
+    RestorePins(unit) -- names, level, skull, elite, status and party icons
 end
 
 -- Party icons (square style). BBF's No Portrait mode put the role icon on our box's top-right
@@ -1077,18 +1087,18 @@ local function LayoutPartyIcons(unit)
     local sq = squares[unit]
     if not (UNITS[unit].icons and sq) or InCombatLockdown() then return end
     local role, leader, guide, disconnect = Lookup(unit, "icons")
-    PinText(disconnect, "CENTER", sq.box, "CENTER", 0, 0)
+    Pin(unit, disconnect, "CENTER", sq.box, "CENTER", 0, 0)
     local name = PartyNameText(unit)
     if not name then return end
     if not name.bapLayout then -- fit the name's box to its text, in place
         local point, rel, relPoint, x, y = name:GetPoint(1)
         if not point or AnySecret(x, y) then return end
-        PinText(name, point, rel, relPoint, x, y, nil, function() return name.bapWidth end)
+        Pin(unit, name, point, rel, relPoint, x, y, nil, function() return name.bapWidth end)
     end
     if role then
-        PinText(role, "RIGHT", name, "LEFT", -2, 0)
-        PinText(leader, "RIGHT", role, "LEFT", -1, 0)
-        PinText(guide, "RIGHT", role, "LEFT", -1, 0)
+        Pin(unit, role, "RIGHT", name, "LEFT", -2, 0)
+        Pin(unit, leader, "RIGHT", role, "LEFT", -1, 0)
+        Pin(unit, guide, "RIGHT", role, "LEFT", -1, 0)
     end
 end
 
@@ -1118,7 +1128,9 @@ local function PlaceSquare(sq, hpPos, manaPos)
     local top, bottom = Safe(hpPos:GetTop()), Safe(bottomRef:GetBottom())
     if not top or not bottom then return false end
     local row = hpPos.bapRow or 0 -- the name row sits above the health bar, inside the box
-    local extra = BuildLine(sq.unit) -- the build line sits above the name row (party: above the bars)
+    -- The build line sits above the name row; units with a name row (texts) only get it while
+    -- the row is on (no build without one). Party has no name row: its box always grows.
+    local extra = (row > 0 or not UNITS[sq.unit].texts) and BuildLine(sq.unit) or 0
     local scale = hpPos:GetEffectiveScale() / box:GetEffectiveScale()
     local size = (top + row - bottom) * scale
     if size <= 0 then return false end
@@ -1421,25 +1433,28 @@ end
 -- The grow compares and does math on what the bar and its fill report (orientation, reverse
 -- fill, texture, draw layer, masks). In instances and PvP any of these can come back secret,
 -- and comparing a secret errors (tainted code). The grow is cosmetic: skip or end it then.
-local function BarReadable(bar, fill)
-    if AnySecret(bar:GetWidth(), bar.GetOrientation and bar:GetOrientation(),
-        bar.GetReverseFill and bar:GetReverseFill()) then return false end
-    if AnySecret(fill:GetAtlas(), fill:GetTexture(), fill:GetDesaturation(), fill:GetBlendMode()) then return false end
-    if AnySecret(fill:GetDrawLayer()) then return false end
-    local n = fill.GetNumMaskTextures and fill:GetNumMaskTextures()
-    if IsSecret(n) then return false end
-    for i = 1, n or 0 do
-        if IsSecret(fill:GetMaskTexture(i)) then return false end
-    end
-    return true
+-- The bar's own values are checked once at the start; the fill's in CopyBarStyle, which
+-- reads them every frame anyway.
+local function BarReadable(bar)
+    return not AnySecret(bar:GetWidth(), bar.GetOrientation and bar:GetOrientation(),
+        bar.GetReverseFill and bar:GetReverseFill())
 end
 
 -- Copy the fill's current look (BBF/Blizzard texture, class color, desaturation) onto
 -- the overlay. BBF class colors are a desaturated fill with a tint, sometimes set on the
 -- fill texture itself, so read the fill rather than the bar. Re-run every frame: BBF can
 -- recolor or retexture right after Blizzard's update.
+-- Returns false (copying nothing) when any of the fill's values is secret.
 local function CopyBarStyle(ov, fill)
-    local asset = fill:GetAtlas() or fill:GetTexture() or "Interface\\Buttons\\WHITE8X8"
+    local atlas, tex = fill:GetAtlas(), fill:GetTexture()
+    local layer, sub = fill:GetDrawLayer()
+    local desat, blend = fill:GetDesaturation(), fill:GetBlendMode()
+    local n = fill.GetNumMaskTextures and fill:GetNumMaskTextures() or 0
+    if AnySecret(atlas, tex, layer, sub, desat, blend, n) then return false end
+    for i = 1, n do
+        if IsSecret(fill:GetMaskTexture(i)) then return false end
+    end
+    local asset = atlas or tex or "Interface\\Buttons\\WHITE8X8"
     local ovFill = ov:GetStatusBarTexture()
     if ov.bapAsset ~= asset or not ovFill then
         ov:SetStatusBarTexture(asset)
@@ -1447,23 +1462,21 @@ local function CopyBarStyle(ov, fill)
         if ov:GetStatusBarTexture() ~= ovFill then ov.bapMasks = nil end -- new texture, no masks yet
         ovFill = ov:GetStatusBarTexture()
     end
-    local layer, sub = fill:GetDrawLayer()
     ovFill:SetDrawLayer(layer, math.min(7, (sub or 0) + 1))
-    ovFill:SetDesaturation(fill:GetDesaturation() or 0)
-    ovFill:SetBlendMode(fill:GetBlendMode() or "BLEND")
+    ovFill:SetDesaturation(desat or 0)
+    ovFill:SetBlendMode(blend or "BLEND")
     -- RGB only: the fill's alpha is 0 while we hide it, and copying that hid the overlay.
     local r, g, b = fill:GetVertexColor()
     pcall(ovFill.SetVertexColor, ovFill, r, g, b)
     -- Same masks as the fill (Blizzard's bar shape, BBF's no-portrait mask). Unmasked, the
     -- overlay reached past the fill's clipped end. This runs every frame, so only rebuild
     -- (and allocate) when the fill's masks actually changed.
-    local n = fill.GetNumMaskTextures and fill:GetNumMaskTextures() or 0
     local have = ov.bapMasks -- array of the fill's masks (false for empty slots)
     local same = have and #have == n
     for i = 1, same and n or 0 do
         if (fill:GetMaskTexture(i) or false) ~= have[i] then same = false; break end
     end
-    if same then return end
+    if same then return true end
     if have then
         for _, m in ipairs(have) do if m then ovFill:RemoveMaskTexture(m) end end
     end
@@ -1474,6 +1487,7 @@ local function CopyBarStyle(ov, fill)
         have[i] = m
     end
     ov.bapMasks = have
+    return true
 end
 
 local function GrowStep(_, elapsed)
@@ -1482,7 +1496,7 @@ local function GrowStep(_, elapsed)
         g.t = g.t + elapsed
         local p = math.min(1, g.t / duration)
         local w = Safe(bar:GetWidth()) -- secret in PvP: stop and show Blizzard's fill
-        if p >= 1 or not w or not bar:IsVisible() or not BarReadable(bar, g.fill) then
+        if p >= 1 or not w or not bar:IsVisible() or not CopyBarStyle(g.ov, g.fill) then
             EndGrow(bar)
         else
             local e = 1 - (1 - p) ^ 3 -- ease-out cubic
@@ -1490,7 +1504,6 @@ local function GrowStep(_, elapsed)
             g.ov:SetMinMaxValues(bar:GetMinMaxValues())
             g.ov:SetValue(bar:GetValue())
             g.ov:SetWidth(math.max(0.01, w * e))
-            CopyBarStyle(g.ov, g.fill)
         end
     end
     if not next(grows) then growDriver:SetScript("OnUpdate", nil) end
@@ -1498,7 +1511,7 @@ end
 
 local function StartGrow(bar, name)
     local fill = bar.GetStatusBarTexture and bar:GetStatusBarTexture()
-    if not (fill and bar:IsVisible()) or IsSecret(fill) or not BarReadable(bar, fill)
+    if not (fill and bar:IsVisible()) or not BarReadable(bar)
         or (bar.GetOrientation and bar:GetOrientation() == "VERTICAL") then
         GrowTrace(name, "skip: fill", not not fill, "visible", bar:IsVisible())
         return
@@ -1518,7 +1531,11 @@ local function StartGrow(bar, name)
     -- Same frame level and draw layer as Blizzard's fill, so the bar texts stay on top.
     ov:SetFrameStrata(bar:GetFrameStrata())
     ov:SetFrameLevel(bar:GetFrameLevel())
-    CopyBarStyle(ov, fill)
+    if not CopyBarStyle(ov, fill) then
+        EndGrow(bar) -- secret fill (instance/PvP): leave Blizzard's bar alone
+        GrowTrace(name, "skip: secret fill")
+        return
+    end
     ov:SetAlpha(g.alpha)
     local reverse = bar.GetReverseFill and bar:GetReverseFill()
     ov:SetReverseFill(reverse and true or false)
@@ -1667,9 +1684,11 @@ local function UpdateBuildFor(unit)
     local row, extra = hpPos and hpPos.bapRow or 0, BuildLine(unit)
     local above = row > 0 and extra > 0
     local mirror = Mirrored(unit)
+    local eliteRow = EliteInRow(unit) and true or false -- the inline build steps past the elite icon
     if fs.bapText == text and fs.bapInline == not above and fs.bapRow == row and fs.bapExtra == extra
-        and fs.bapMirror == mirror then return end
+        and fs.bapMirror == mirror and fs.bapEliteRow == eliteRow then return end
     fs.bapText, fs.bapInline, fs.bapRow, fs.bapExtra, fs.bapMirror = text, not above, row, extra, mirror
+    fs.bapEliteRow = eliteRow
     fs:ClearAllPoints()
     if above and mirror then -- above the name, on the portrait side
         fs:SetPoint("RIGHT", hpPos, "TOPRIGHT", -1, row + extra / 2)
@@ -1678,10 +1697,10 @@ local function UpdateBuildFor(unit)
         fs:SetPoint("LEFT", hpPos, "TOPLEFT", 1, row + extra / 2)
         fs:SetJustifyH("LEFT")
     elseif mirror then -- between the level (outer edge) and the name, past the elite icon
-        fs:SetPoint("LEFT", level, "RIGHT", 4 + (EliteInRow(unit) and ELITE_ROOM or 0), 0)
+        fs:SetPoint("LEFT", level, "RIGHT", 4 + (eliteRow and ELITE_ROOM or 0), 0)
         fs:SetJustifyH("LEFT")
     else
-        fs:SetPoint("RIGHT", level, "LEFT", -4 - (EliteInRow(unit) and ELITE_ROOM or 0), 0)
+        fs:SetPoint("RIGHT", level, "LEFT", -4 - (eliteRow and ELITE_ROOM or 0), 0)
         fs:SetJustifyH("RIGHT")
     end
     fs:SetText(text or "")
