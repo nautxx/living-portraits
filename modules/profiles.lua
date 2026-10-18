@@ -88,7 +88,7 @@ local PROFILES = {
     {
         name = "Naut",
         class = "PALADIN",
-        desc = "Jason's setup: tall box portraits with bar text and class resource circles, and BetterBlizzFrames' Bodify profile with Pixel Border mode and his unit frame look (fonts, textures, class colors, combo points, target-of-target placement, less clutter).",
+        desc = "Naut's BetterBlizzFrames and Living Portraits settings: tall box portraits with bar text and class resource circles, Pixel Border mode, Naut's fonts, textures and class colors, combo points under the player frame, target-of-target placement and less clutter.",
         lp = {
             barText = "max", barTextStyle = "shadow", eliteIcon = "bottom", eliteBorder = false,
             restIcon = "corner", resourceAlign = "right", resourceRadius = 5,
