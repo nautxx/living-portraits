@@ -28,6 +28,8 @@ local OnTalentsChanged = ns.OnTalentsChanged
 local OnInspectReady = ns.OnInspectReady
 local UpdateBarTexts = ns.UpdateBarTexts
 local UpdateSurnames = ns.UpdateSurnames
+local UpdateClassResource = ns.UpdateClassResource
+local CheckResourceBar = ns.CheckResourceBar
 local CheckOldAddon = ns.CheckOldAddon
 
 -- unit -> GUID and visible/connected code at the last refresh, so the ticker only refreshes on change
@@ -103,11 +105,12 @@ local function Refresh(unit)
     MarkState(unit)
 end
 
--- Talent build, bar text and surnames, after every RefreshAll.
+-- Talent build, bar text, surnames and class resource, after every RefreshAll.
 local function AfterRefreshAll()
     UpdateBuild()
     UpdateBarTexts()
     UpdateSurnames(true)
+    UpdateClassResource()
 end
 
 local function RefreshAll()
@@ -149,6 +152,7 @@ local function Tick()
     end
     UpdateBuild() -- retries until there's a build (inspect range and throttle, talents loading)
     UpdateSurnames() -- hooks name texts as they appear (BBF creates its own later)
+    CheckResourceBar() -- BBF's combo point bar, once BBF creates it
 end
 
 -- Events --------------------------------------------------------------------

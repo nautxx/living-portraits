@@ -205,6 +205,30 @@ local function BuildOptions()
         return c:GetData()
     end, "Target and focus: where the small elite/rare icon goes. The corners are on the portrait's outer side.")
 
+    Header("Class resource")
+    local resGet, resSet, resDefault = Path({ "resource" })
+    Settings.CreateDropdown(category, Register("resource", "Class Resource", resDefault, resGet, resSet), function()
+        local c = Settings.CreateControlTextContainer()
+        c:Add("pixel", "Pixel border")
+        c:Add("bbf", "BetterBlizzFrames")
+        return c:GetData()
+    end, "Player frame: rogue and druid combo points (BBF's \"Move Combo Points under PlayerFrame\"), warlock soul shards, mage arcane charges and paladin holy charges. Both go under the mana bar. Pixel border: circles (gems for shards) using the border color and thickness above and BBF's \"hide when empty\" and \"only show filled\" settings. BetterBlizzFrames: BBF's own combo point art (warlock, mage and paladin have no bar of their own here, so nothing shows).")
+    local alignGet, alignSet, alignDefault = Path({ "resourceAlign" })
+    Settings.CreateDropdown(category, Register("resourceAlign", "Alignment", alignDefault, alignGet, alignSet), function()
+        local c = Settings.CreateControlTextContainer()
+        c:Add("left", "Left")
+        c:Add("center", "Center")
+        c:Add("right", "Right")
+        return c:GetData()
+    end, "Line the class resource up with the left edge, the middle or the right edge of the mana bar.")
+    Slider({ "resourceRadius" }, "Size", "Radius of the circles, inside the border. With BetterBlizzFrames, its points are scaled to the same width (instead of its Class Resource Scale).", 2, 16, 1)
+    for _, c in ipairs({ { "combo", "Rogue / Druid: Combo Points" }, { "shards", "Warlock: Soul Shards" },
+                         { "arcane", "Mage: Arcane Charges" }, { "holy", "Paladin: Holy Charges" } }) do
+        local get, set, default = Path({ "resourceColors", c[1] })
+        Settings.CreateColorSwatch(category, Register("resourceColors_" .. c[1], c[2], default, get, set),
+            "Color of a filled circle. Empty ones are dark.")
+    end
+
     Page("Circle Style")
     Header("Camera")
     Slider({ "sizes", "large", "cam" }, "Distance: large frames", "Player, target and focus. Lower = closer, bigger face.", 0.3, 2, 0.05)

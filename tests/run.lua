@@ -65,7 +65,13 @@ local function newFrame(kind, parent, level)
         list[#list + 1] = t
         return t
     end
-    function f:CreateMaskTexture() return stubIndex({}) end
+    function f:CreateMaskTexture()
+        local m = stubIndex({})
+        function m:SetTexture(t) self.texture = t end
+        self.masks = rawget(self, "masks") or {}
+        table.insert(self.masks, m)
+        return m
+    end
     function f:CreateFontString()
         local fs = region({})
         function fs:SetText(t) self.text = t end
@@ -76,6 +82,8 @@ local function newFrame(kind, parent, level)
         table.insert(self.fontStrings, fs)
         return fs
     end
+    function f:SetScale(s) self.scale = s end
+    function f:GetScale() return rawget(self, "scale") or 1 end
     function f:GetFrameLevel() return self.level end
     function f:SetFrameLevel(l) self.level = l end
     function f:GetFrameStrata() return "MEDIUM" end
@@ -145,6 +153,8 @@ function UnitGUID(u) return world.guid[u] or ("G-" .. u) end
 function UnitIsVisible(u) return world.visible[u] ~= false end
 function UnitIsConnected(u) return world.connected[u] ~= false end
 function UnitClassification() return "normal" end
+world.class = "ROGUE"
+function UnitClass() return "Class", world.class end
 function issecretvalue() return world.secret end
 -- Players and talents: world.players marks units that are players; talent trees are
 -- 3 groups (11, 12, 13) and configs map to points per group (zero groups left out).
@@ -637,6 +647,135 @@ check("/lp alignmana turns alignment off", LivingPortraitsDB.alignMana == false)
 check("mana bar back at its original x offset", targetMana.anchor[4] == -8)
 slash("alignmana")
 check("re-aligning is stable", targetMana.anchor[4] == 0)
+
+-- Class resource, rogue: BBF's combo point bar ("Move Combo Points under PlayerFrame") goes under the player's bars
+do
+    local comboBar = newFrame("Frame", PlayerFrame, 3)
+    comboBar.topPadding = 10
+    comboBar.classResourceButtonTable = {}
+    for i = 1, 5 do comboBar.classResourceButtonTable[i] = newFrame("Frame", comboBar, 4) end
+    function comboBar:UpdatePower() end
+    local reanchored = 0
+    BBF.ComboPointBar = comboBar
+    BBF.ReanchorComboPointBar = function() reanchored = reanchored + 1 end
+    local combo = 2
+    function GetComboPoints() return combo end
+    local manaPos = playerMana.BBFPositionFrame
+
+    slash("refresh")
+    check("class resource defaults to pixel circles", LivingPortraitsDB.resource == "pixel")
+    local row = comboBar.anchor[2]
+    check("pixel row sits under the mana bar's border", row and row.anchor and row.anchor[1] == "TOP"
+        and row.anchor[2] == manaPos and row.anchor[3] == "BOTTOM" and row.anchor[5] == -(1 + 3))
+    check("BBF's bar sits on our row, raised by its top padding", comboBar.anchor[3] == "TOP" and comboBar.anchor[5] == 10)
+    check("BBF's bar is see-through", comboBar:GetAlpha() == 0)
+    local dots = {}
+    for _, f in ipairs(frames) do if f.parent == row then dots[#dots + 1] = f end end
+    check("one circle per combo point", #dots == 5)
+    local size = (6 + 1) * 2
+    check("circles: radius 6 + 1px border, 3px apart", dots[2].w == size and dots[2].h == size and dots[2].anchor[4] == size + 3)
+    local fill2, fill3 = dots[2].textures[2], dots[3].textures[2]
+    check("combo points are circles", dots[1].masks[1].texture:find("TempPortraitAlphaMask$") ~= nil)
+    check("filled point takes the combo color", fill2.color[1] > 0.8 and fill2.color[2] < 0.3)
+    check("empty point is dark", fill3.color[1] < 0.1)
+    check("ring takes the border color", dots[1].textures[1].color[1] == 0 and dots[1].textures[1].color[4] == 1)
+
+    comboBar:SetPoint("TOP", PlayerFrame, "TOP", 2, 8) -- BBF re-anchors it
+    check("BBF re-anchoring keeps it on our row", comboBar.anchor[2] == row)
+    comboBar:SetAlpha(1) -- BBF resets its alpha
+    check("BBF's bar stays see-through", comboBar:GetAlpha() == 0)
+    combo = 3
+    comboBar.classResourceButtonTable[5].alpha = 0 -- BBF's "only show filled" fades a point
+    comboBar:UpdatePower()
+    check("combo change fills the next circle", dots[3].textures[2].color[1] > 0.8)
+    check("a point BBF faded hides its circle", not dots[5].shown and dots[4].shown)
+    comboBar.classResourceButtonTable[5].alpha = nil
+
+    slash("resourcealign left")
+    check("/lp resourcealign left: row's left edge on the bar border's outer edge", row.anchor[1] == "TOPLEFT"
+        and row.anchor[3] == "BOTTOMLEFT" and row.anchor[4] == -1 and comboBar.anchor[1] == "TOPLEFT")
+    slash("resourcealign right")
+    check("/lp resourcealign right", row.anchor[1] == "TOPRIGHT" and row.anchor[3] == "BOTTOMRIGHT" and row.anchor[4] == 1)
+    slash("resourcealign middle")
+    check("unknown alignment is ignored", LivingPortraitsDB.resourceAlign == "right")
+    slash("resourcealign center")
+    check("/lp resourcealign center", row.anchor[1] == "TOP" and row.anchor[4] == 0)
+    slash("resourcesize 8")
+    slash("resourcecolor 00ff00")
+    check("/lp resourcesize resizes the circles", dots[1].w == (8 + 1) * 2)
+    check("/lp resourcecolor (no resource: your class's) recolors filled points", dots[1].textures[2].color[2] == 1 and dots[1].textures[2].color[1] == 0)
+
+    LivingPortraitsDB.resource = "moved" -- saved while testing an earlier build
+    slash("refresh")
+    check("a saved \"moved\" becomes the BBF option", LivingPortraitsDB.resource == "bbf")
+    slash("resourcesize 6")
+    slash("resource bbf")
+    check("bbf: BBF's own art shows", comboBar:GetAlpha() == 1 and not row.shown)
+    check("bbf: BBF's bar under the mana bar too", comboBar.anchor[2] == manaPos
+        and math.abs(comboBar.anchor[5] - (-(1 + 3) / 0.7 + 10)) < 0.01)
+    check("bbf: size setting scales BBF's points to a circle's width (14 / 20)", math.abs(comboBar.scale - 0.7) < 1e-9)
+    comboBar:SetScale(0.9) -- BBF applies its Class Resource Scale, then re-anchors
+    comboBar:SetPoint("TOP", PlayerFrame, "TOP", 2, 8)
+    check("bbf: our scale wins over BBF's re-scale", math.abs(comboBar.scale - 0.7) < 1e-9)
+    slash("resourcesize 9")
+    check("bbf: /lp resourcesize rescales BBF's points", math.abs(comboBar.scale - 1) < 1e-9)
+    slash("resourcesize 6")
+    slash("resourcealign right")
+    check("bbf: alignment applies to BBF's bar", comboBar.anchor[1] == "TOPRIGHT" and math.abs(comboBar.anchor[4] - 1 / 0.7) < 0.01)
+    slash("resourcealign center")
+    slash("resource pixel")
+    comboBar.bbfOnTarget = true -- BBF's "Move Resource to TargetFrame"
+    comboBar:SetPoint("LEFT", TargetFrame, "RIGHT", -43, 1)
+    check("on the target frame: left to BBF", comboBar.anchor[2] == TargetFrame and comboBar:GetAlpha() == 1 and not row.shown)
+    comboBar.bbfOnTarget = nil
+    comboBar:SetPoint("TOP", PlayerFrame, "TOP", 2, 8) -- BBF puts it back under the player frame
+    check("back from the target frame: on our row again", comboBar.anchor[2] == row)
+    slash("refresh")
+    check("back from the target frame: see-through again", comboBar:GetAlpha() == 0 and row.shown)
+    slash("style circle")
+    check("circle style: handed back to BBF", comboBar:GetAlpha() == 1 and reanchored == 1)
+    check("circle style: BBF's own scale back", math.abs(comboBar.scale - 0.9) < 1e-9)
+    slash("style square")
+    slash("resourcesize 6")
+    slash("resourcecolor combo e62e2e")
+    check("rogue's color is the combo color", LivingPortraitsDB.resourceColors.combo == "ffe62e2e")
+    BBF.ComboPointBar = nil
+
+    -- Warlock: no bar in Camelot, so the circles come straight from UnitPower
+    world.class = "WARLOCK"
+    Enum = { PowerType = { SoulShards = 7 } }
+    local shards, maxShards = 2, 5
+    function UnitPower(_, pt) return pt == 7 and shards or 0 end
+    function UnitPowerMax(_, pt) return pt == 7 and maxShards or 0 end
+    slash("refresh")
+    check("warlock: shards under the mana bar", row.shown and row.anchor[2] == manaPos and row.anchor[5] == -(1 + 3))
+    check("warlock: one gem per shard, taller than wide", dots[5].shown and dots[5].w == 14 and dots[5].h == 18)
+    check("warlock: shards use the shard mask (ring and fill)", dots[1].masks[1].texture:find("media\\shard$")
+        and dots[1].masks[2].texture == dots[1].masks[1].texture)
+    check("warlock: filled shards take the shard color", dots[2].textures[2].color[1] > 0.6 and dots[2].textures[2].color[3] == 1)
+    check("warlock: empty shards are dark", dots[3].textures[2].color[1] < 0.1)
+    slash("resourcecolor shards 00ff00")
+    check("/lp resourcecolor shards", LivingPortraitsDB.resourceColors.shards == "ff00ff00" and dots[1].textures[2].color[2] == 1)
+    slash("resourcecolor 112233")
+    check("/lp resourcecolor without a resource sets your own class's", LivingPortraitsDB.resourceColors.shards == "ff112233")
+    slash("resourcecolor shards a15cff")
+    BetterBlizzFramesDB = { comboVisibilityUnitFrames = true, onlyActiveComboPoints = true }
+    ns.UpdateClassResource()
+    check("warlock: BBF's \"only show filled\" applies", dots[2].shown and not dots[3].shown)
+    BetterBlizzFramesDB.onlyActiveComboPoints, BetterBlizzFramesDB.hideEmptyComboPoints = nil, true
+    shards = 0
+    ns.UpdateClassResource()
+    check("warlock: BBF's \"hide when empty\" applies", not dots[1].shown)
+    BetterBlizzFramesDB = nil
+    slash("resource bbf")
+    check("warlock: the BBF option shows nothing (BBF has no shard bar here)", not row.shown)
+    slash("resource pixel")
+    maxShards = 0
+    slash("refresh")
+    check("warlock with no shards in this game: nothing shows", not row.shown)
+    world.class = "ROGUE"
+    Enum, UnitPower, UnitPowerMax = nil, nil, nil
+end
 -- In combat the bars are left alone
 inCombat = true
 slash("extend 8 large")

@@ -16,6 +16,7 @@ modules\box.lua
 modules\grow.lua
 modules\talentBuild.lua
 modules\barText.lua
+modules\classResource.lua
 modules\surnames.lua
 modules\bbfSetup.lua
 Refresh.lua

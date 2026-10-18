@@ -19,6 +19,10 @@ local ToggleGrowDebug = ns.ToggleGrowDebug
 local BAR_TEXT_MODES = ns.BAR_TEXT_MODES
 local BAR_TEXT_STYLES = ns.BAR_TEXT_STYLES
 local UpdateBarTexts = ns.UpdateBarTexts
+local RESOURCE_MODES = ns.RESOURCE_MODES
+local RESOURCE_ALIGN = ns.RESOURCE_ALIGN
+local Resource = ns.Resource
+local ResourceDebug = ns.ResourceDebug
 local ApplyBBFSetup = ns.ApplyBBFSetup
 local UndoBBFSetup = ns.UndoBBFSetup
 local OpenOptions = ns.OpenOptions
@@ -53,6 +57,8 @@ local function PrintHelp()
     print("  /lp elitecolor RRGGBB  |  /lp rarecolor RRGGBB  |  /lp bartext default|max|percent")
     print("  /lp bartextstyle outline_shadow|outline|shadow|thick|thick_shadow")
     print("  /lp bordercolor RRGGBB  |  /lp borderalpha 0-1  |  /lp bordersize thin|medium|heavy")
+    print("  /lp resource pixel|bbf  |  /lp resourcealign left|center|right  |  /lp resourcesize 2-16")
+    print("  /lp resourcecolor [combo|shards|arcane|holy] RRGGBB")
     print("  /lp inset 0.3-1.2 [large|small]  |  /lp cam 0.3-2 [large|small|box]")
     print("  /lp unit player|target|focus|tot|party  |  /lp refresh  |  /lp debug [unit]")
     print("  circle: /lp circlebg 0-1  |  /lp vignette  |  /lp calibrate  |  /lp offset player|target|focus|tot|party x y")
@@ -138,6 +144,7 @@ local function DebugUnit(unit)
         print("  level " .. PointInfo(level))
         if level and level.GetTop then print(("  level top=%s  bbfName top=%s"):format(Fmt(level:GetTop()), Fmt(bbfName and bbfName:GetTop()))) end
     end
+    if unit == "player" then print("  " .. ResourceDebug()) end
 end
 
 -- On/off settings: command -> db key.
@@ -150,7 +157,7 @@ local SLASH_NUMBERS = {
     growtime = { "growTime", 0.1, 2 }, split = { "hpShare", 0.4, 0.85 }, zoom = { "zoom", 0, 1 },
     circlebg = { "circleBg", 0, 1 }, bg = { "squareBg", 0, 1 },
     gap = { "squareGap", 0, 20 }, barspacing = { "barSpacing", 0, 10 }, borderalpha = { "borderAlpha", 0, 1 },
-    bordersize = { "borderSize", 1, 3 },
+    bordersize = { "borderSize", 1, 3 }, resourcesize = { "resourceRadius", 2, 16 },
 }
 
 SLASH_LIVINGPORTRAITS1 = "/lp"
@@ -197,6 +204,27 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
         end
         db.barText = arg
         UpdateBarTexts(true)
+    elseif cmd == "resource" then
+        if not RESOURCE_MODES[arg or ""] then
+            print("  /lp resource pixel|bbf  (now " .. tostring(db.resource) .. ")")
+            return
+        end
+        db.resource = RESOURCE_MODES[arg]
+    elseif cmd == "resourcealign" then
+        if not RESOURCE_ALIGN[arg or ""] then
+            print("  /lp resourcealign left|center|right  (now " .. tostring(db.resourceAlign) .. ")")
+            return
+        end
+        db.resourceAlign = arg
+    elseif cmd == "resourcecolor" then
+        -- No resource named: your own class's.
+        local key, hex = arg, args[3]
+        if not db.resourceColors[key or ""] then key, hex = Resource() or "combo", arg end
+        if not (hex and hex:match("^%x%x%x%x%x%x$")) then
+            print("  /lp resourcecolor [combo|shards|arcane|holy] RRGGBB")
+            return
+        end
+        db.resourceColors[key] = "ff" .. hex
     elseif cmd == "eliteicon" then
         local modes = { top = "top", bottom = "bottom", center = "center", level = "level", hidden = "hidden", off = "hidden" }
         if not modes[arg or ""] then
