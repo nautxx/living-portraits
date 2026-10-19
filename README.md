@@ -102,7 +102,7 @@ Open **Options → AddOns → LivingPortraits** (or type `/lp options`):
 
 - **Profiles** (its own page, first): Starter, Naut and BlizzFrames, Export and Import (see [Profiles](#profiles)), the Pixel Border mode switch and Undo.
 - **General:** turn it on/off, hide surnames, the class name (in class color, next to the talent build, above the level or after the name), box or circle style, and which frames get a living portrait.
-- **Camera:** zoom (both styles). Face distance is on each style's page.
+- **Camera:** zoom, and Target Facing to turn target and focus players toward the player frame (both styles; centered per race, see `/lp facing calibrate`). Face distance is on each style's page.
 - **Bar text:** Blizzard/BBF's own, or left-aligned `current (max)` / `current (percent)` that's always shown.
 - **Target bars:** the grow-from-empty animation (target and focus) and its speed.
 - **Box Style** (its own page): distance, talent builds, mirrored target text, tall portraits (player, target & focus, party), border color, thickness and opacity, elite/rare border and icon, the resting icon spot, class resource (combo points under the bars: pixel circles, BetterBlizzFrames' art or none, with alignment, size and colors), plus box and bar sizing.
@@ -127,6 +127,8 @@ The box style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. Star
 | `/lp classtext off\|build\|level\|name` | Players' class name in class color on the player, target and focus: next to the talent build (`Warrior 2/8/0`), above the level, or after the name (off by default). Without the box style's build line it goes after the name |
 | `/lp zoom 0-1` | Camera zoom (1 = head and shoulders, lower = more body) |
 | `/lp cam 0.3-2 [large\|small\|box]` | Camera distance (lower = closer, bigger face) |
+| `/lp facing -90-90` | Turn target and focus players toward the player frame (degrees, 0 = facing out). Only races with a tuned center turn; NPCs face out |
+| `/lp facing calibrate` / `/lp pan -1-1\|clear` | Turn every player to tune / center the face for your target's race and gender (saved per race and gender) |
 | `/lp bartext default\|max\|percent` | Health and mana text on the player, target, focus and party bars: Blizzard/BBF's own, or left-aligned and always shown as `350 (462)` (max, the default) or `350 (76%)` (percent) |
 | `/lp bartextstyle outline_shadow\|outline\|shadow\|thick\|thick_shadow` | Outline and shadow of the left-aligned bar text (default: shadow); the font follows BetterBlizzFrames' unit frame number font |
 | `/lp grow` | Toggle the target's and focus's health and mana growing from empty when they change |

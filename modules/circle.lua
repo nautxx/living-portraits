@@ -130,6 +130,7 @@ local function CreateLayers(unit)
 
     -- The 3D model
     local model = CreateFrame("PlayerModel", nil, root)
+    model.lpUnit = unit -- ApplyCamera: target/focus can turn toward the player frame
     model:SetPoint("CENTER", portrait, "CENTER")
     model:SetScript("OnModelLoaded", function(self) ApplyCamera(self, p.size) end)
     -- Reload the unit whenever the model becomes visible (e.g. its unit frame re-shows).

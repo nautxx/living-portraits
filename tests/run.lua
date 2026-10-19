@@ -208,6 +208,7 @@ local proxies, buttons, notified, openedCategory, popupShown = {}, {}, {}, nil, 
 Settings = {
     RegisterVerticalLayoutCategory = function(name) return { name = name, GetID = function() return 42 end } end,
     RegisterProxySetting = function(_, var, _, name, default, get, set)
+        assert(not proxies[var], "Setting variable '" .. var .. "' was previously registered.") -- like Blizzard's
         local s = { var = var, name = name, default = default, get = get, set = set }
         proxies[var] = s
         return s
@@ -284,7 +285,8 @@ world.exists = { player = true, target = true, targettarget = true, party1 = tru
 world.visible.party2 = false
 
 -- Saved settings from an older version (inset 0.82) must be upgraded
-LivingPortraitsDB = { enabled = true, sizes = { large = { inset = 0.82, cam = 0.85 }, small = { inset = 0.82, cam = 0.85 } } }
+LivingPortraitsDB = { enabled = true, sizes = { large = { inset = 0.82, cam = 0.85 }, small = { inset = 0.82, cam = 0.85 } },
+    devMode = true } -- builds the hidden Developer page too
 fire("ADDON_LOADED", "LivingPortraits")
 local bbfHooked = BBF.SetCustomFonts
 BBF = nil
@@ -1388,6 +1390,8 @@ do
     local str = popupData
     check("export shows a profile string", popupShown == "LIVING_PORTRAITS_EXPORT" and type(str) == "string"
         and str:sub(1, 5) == "!LP1!")
+    check("export leaves out the Developer page switch and the backups", stash[#stash].lp.devMode == nil
+        and stash[#stash].lp.lpBackup == nil and LivingPortraitsDB.devMode == true)
     LivingPortraitsDB.resourceAlign, LivingPortraitsDB.zoom = "center", 1
     BetterBlizzFramesDB = { other = true }
     bdb = BetterBlizzFramesDB
@@ -1557,6 +1561,99 @@ do
     local hit = false
     for _, line in ipairs(traced) do if line:find("skip: grow", 1, true) and line:find("focus", 1, true) then hit = true end end
     check("a new focus runs the bar grow for the focus frame", hit)
+end
+
+-- Target facing: target and focus players turn toward the player frame, re-centered per race
+-- and gender (only tuned races turn); the player's model and NPCs face out
+do
+    local tModel, pModel
+    for _, m in ipairs(models) do
+        if m.lpUnit == "target" then tModel = m elseif m.lpUnit == "player" then pModel = m end
+    end
+    local calls = {}
+    for _, m in ipairs({ tModel, pModel }) do
+        function m:SetFacing(r) self.facing = r; calls[#calls + 1] = "facing" end
+        function m:SetPortraitZoom() calls[#calls + 1] = "zoom" end
+        function m:SetPosition(x, y, z) self.pos = { x, y, z } end
+        function m:UseModelCenterToTransform(on) self.centered = on end
+    end
+    local sex = 2
+    function UnitRace() return "Orc", "Orc" end
+    function UnitSex() return sex end
+    world.players.target = true
+    local function apply() calls = {}; ns.ApplyCamera(tModel, "square"); ns.ApplyCamera(pModel, "large") end
+    slash("facing 30")
+    apply()
+    check("an untuned race faces out", tModel.facing == 0 and tModel.pos[2] == 0)
+    slash("facing calibrate")
+    apply()
+    check("calibrating: every player turns, untuned at pan 0", math.abs(tModel.facing - math.rad(30)) < 1e-9
+        and tModel.pos[2] == 0 and tModel.centered == true)
+    slash("pan 0.2")
+    check("/lp pan saves the center for the target's race and gender, with the angle it was tuned at",
+        LivingPortraitsDB.racePans.OrcM == 0.2 and LivingPortraitsDB.raceFacing.OrcM == 30)
+    apply()
+    check("turned after the portrait camera is set up (same framing as the player's)", calls[1] == "zoom" and calls[2] == "facing")
+    slash("facing calibrate")
+    apply()
+    check("a tuned race turns and re-centers without calibrating", math.abs(tModel.facing - math.rad(30)) < 1e-9
+        and tModel.pos[2] == 0.2 and tModel.centered == true)
+    check("the player's model faces out, around its feet", pModel and pModel.facing == 0 and pModel.pos[2] == 0
+        and pModel.centered == false)
+    slash("facing 45")
+    apply()
+    check("a tuned race keeps the angle its pan was tuned at when Target Facing changes",
+        math.abs(tModel.facing - math.rad(30)) < 1e-9 and tModel.pos[2] == 0.2)
+    slash("pan 0.25")
+    check("re-tuning keeps the race's angle", LivingPortraitsDB.raceFacing.OrcM == 30)
+    slash("facing 30")
+    sex = 3
+    apply()
+    check("the other gender has its own entry (untuned: faces out)", tModel.facing == 0 and tModel.centered == false)
+    sex = 2
+    world.players.target = false
+    apply()
+    check("NPCs face out", tModel.facing == 0)
+    slash("pan 0.3")
+    check("/lp pan without a player target changes nothing", LivingPortraitsDB.racePans.OrcM == 0.25)
+    world.players.target = true
+    slash("pan clear")
+    check("/lp pan clear removes the race's center and angle", LivingPortraitsDB.racePans.OrcM == nil
+        and LivingPortraitsDB.raceFacing.OrcM == nil)
+    -- Developer page: its pan slider edits the target's race and gender
+    local devPan = proxies["LivingPortraits_devTargetPan"]
+    check("Developer page built with devMode on", devPan ~= nil and proxies["LivingPortraits_facingCalibrate"] ~= nil)
+    devPan.set(0.256)
+    check("Developer pan slider saves the target's race and gender (2 decimals)", LivingPortraitsDB.racePans.OrcM == 0.26
+        and devPan.get() == 0.26)
+    buttons["Copy tuned races"]()
+    check("Copy tuned races: a Lua table selected in a popup to copy", popupShown == "LIVING_PORTRAITS_COPY"
+        and popupData == "racePans = { OrcM = 0.26 }, raceFacing = { OrcM = 30 }")
+    world.players.target = false
+    check("Developer pan slider reads 0 without a player target", devPan.get() == 0)
+    world.players.target = true
+    local devFacing = proxies["LivingPortraits_devTargetFacing"]
+    devFacing.set(20)
+    apply()
+    check("Developer angle slider sets the target's race angle", LivingPortraitsDB.raceFacing.OrcM == 20
+        and devFacing.get() == 20 and math.abs(tModel.facing - math.rad(20)) < 1e-9)
+    slash("facing 0")
+    apply()
+    check("Target Facing 0 turns every race off", tModel.facing == 0)
+    slash("facing 30")
+    buttons["Clear your target's race"]()
+    check("Developer page clears the target's race (center and angle)", LivingPortraitsDB.racePans.OrcM == nil
+        and LivingPortraitsDB.raceFacing.OrcM == nil)
+    slash("reset")
+    check("/lp reset keeps the Developer page", LivingPortraitsDB.devMode == true)
+    slash("dev")
+    check("/lp dev turns the Developer page off", LivingPortraitsDB.devMode == nil)
+    slash("dev")
+    check("/lp dev turns it back on", LivingPortraitsDB.devMode == true)
+    slash("facing 0")
+    apply()
+    check("facing 0: the target faces out", tModel.facing == 0 and tModel.pos[2] == 0)
+    world.players.target, UnitRace, UnitSex = nil, nil, nil
 end
 
 -- Secret values must not error

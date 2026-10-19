@@ -4,6 +4,7 @@
 
 ### Features
 - **Class name:** show players' class in its class color on the player, target and focus frames, for when health bars aren't class colored. Pick where: next to the talent build (`Warrior 2/8/0`), above the level, or after the name. Off by default. Settings → General → *Class Name*, or `/lp classtext off|build|level|name`. In circle style (no build line) it goes after the name.
+- **Target Facing:** turn target and focus players toward the player frame (degrees). Where a turned face lands differs per race, so each race and gender gets its own centering and angle: `/lp facing calibrate` turns everyone, `/lp pan` centers your target's race and gender (saved with the angle it was tuned at). A hidden Developer settings page (`/lp dev`) has sliders for both and a copy button. Only tuned races turn; NPCs face out. Off by default. Settings → Camera, or `/lp facing -90-90`.
 
 ## 0.9.0 (2026-10-18)
 

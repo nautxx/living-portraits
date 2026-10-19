@@ -13,6 +13,10 @@ local ShowImport = ns.ShowImport
 local ProfileTitle = ns.ProfileTitle
 local AskBBFSetup = ns.AskBBFSetup
 local AskUndo = ns.AskUndo
+local Safe = ns.Safe
+local RaceKey = ns.RaceKey
+local ShowCopy = ns.ShowCopy
+local SetRacePan = ns.SetRacePan
 
 -- Settings panel ------------------------------------------------------------
 -- Options > AddOns > Living Portraits. Proxy settings read and write db directly,
@@ -162,6 +166,8 @@ local function BuildOptions()
 
     Header("Camera")
     Slider({ "zoom" }, "Zoom", "1 = head and shoulders; lower shows more of the body. Both styles.", 0, 1, 0.05)
+    Slider({ "targetFacing" }, "Target Facing", "Turns target and focus players toward the player frame, in degrees (0 = facing out; negative turns the other way). Only races with a tuned center turn (where the face lands differs per race): tune with /lp facing calibrate and /lp pan. NPCs face out. Both styles.", -90, 90, 5,
+        function(v) return ("%d°"):format(math.floor(v + 0.5)) end)
 
     Header("Bar text")
     local barGet, barSet, barDefault = Path({ "barText" })
@@ -330,6 +336,64 @@ local function BuildOptions()
     Check({ "vignette" }, "Round edge", "The circle edge that hides the model's square corners.")
     Slider({ "sizes", "large", "inset" }, "Model size: large frames", "Model size relative to the portrait.", 0.3, 1.2, 0.01)
     Slider({ "sizes", "small", "inset" }, "Model size: small frames", "Model size relative to the portrait.", 0.3, 1.2, 0.01)
+
+    -- Developer page (hidden): only with db.devMode (/lp dev, then a reload: the panel is built
+    -- once). Calibration tools: target facing per race (Core.lua FacingFor) and the circle edge.
+    if db.devMode then
+        Page("Developer")
+        Header("Target facing", "Tune where a turned face lands, per race and gender: target a player, slide until the face is centered, repeat for each race and gender.")
+        Check({ "facingCalibrate" }, "Calibrate facing", "Every player turns (untuned races at 0), so each race and gender can be tuned. Off: only tuned races turn.")
+        -- The angle itself is Target Facing in the Camera section (a setting can only be registered once).
+        -- Pan for the current target's race and gender (racePans[RaceKey]); 0 without a player target.
+        local function TargetKey() return Safe(UnitIsPlayer("target")) and RaceKey("target") end
+        local panSetting = Register("devTargetPan", "Pan: your target's race", 0,
+            function() local key = TargetKey(); return key and db.racePans[key] or 0 end,
+            function(v)
+                local key = TargetKey()
+                if key then SetRacePan(key, math.floor(v * 100 + 0.5) / 100) end
+            end)
+        local panOptions = Settings.CreateSliderOptions(-1, 1, 0.01)
+        panOptions:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right, FormatDecimal)
+        Settings.CreateSlider(category, panSetting, panOptions,
+            "Sideways shift that centers the turned face, saved for your target's race and gender with its angle (Target Facing the first time). Target a player first.")
+        -- The angle for the target's race and gender (raceFacing); Target Facing until it has one.
+        local facingSetting = Register("devTargetFacing", "Facing: your target's race", 0,
+            function() local key = TargetKey(); return key and (db.raceFacing[key] or db.targetFacing) or 0 end,
+            function(v)
+                local key = TargetKey()
+                if key then db.raceFacing[key] = math.floor(v + 0.5) end
+            end)
+        local facingOptions = Settings.CreateSliderOptions(-90, 90, 5)
+        facingOptions:SetLabelFormatter(MinimalSliderWithSteppersMixin.Label.Right, function(v) return ("%d°"):format(math.floor(v + 0.5)) end)
+        Settings.CreateSlider(category, facingSetting, facingOptions,
+            "The angle your target's race and gender turns at (its pan is tuned for this angle). Target a player first.")
+        layout:AddInitializer(CreateSettingsButtonInitializer("Clear your target's race", "Clear", function()
+            local key = TargetKey()
+            if key then SetRacePan(key, nil); QueueRefreshAll(); NotifyOptions() end
+        end, "Removes the saved center and angle for your target's race and gender (it faces out again).", true))
+        layout:AddInitializer(CreateSettingsButtonInitializer("Copy tuned races", "Copy", function()
+            local keys = {}
+            for key in pairs(db.racePans) do keys[#keys + 1] = key end
+            table.sort(keys)
+            local pans, angles = {}, {}
+            for _, key in ipairs(keys) do
+                pans[#pans + 1] = ("%s = %s"):format(key, tostring(db.racePans[key]))
+                angles[#angles + 1] = ("%s = %s"):format(key, tostring(db.raceFacing[key] or db.targetFacing))
+            end
+            local text = ("racePans = { %s }, raceFacing = { %s }"):format(table.concat(pans, ", "), table.concat(angles, ", "))
+            Say(ShowCopy(#keys .. " tuned races and genders, as Lua.", text))
+        end, "Every race and gender with a saved center and angle, as Lua selected in a popup to copy.", true))
+        -- The pan slider shows the new target's value when you switch targets.
+        local watcher = CreateFrame("Frame")
+        watcher:RegisterEvent("PLAYER_TARGET_CHANGED")
+        watcher:SetScript("OnEvent", function()
+            if not Settings.NotifyUpdate then return end
+            Settings.NotifyUpdate("LivingPortraits_devTargetPan")
+            Settings.NotifyUpdate("LivingPortraits_devTargetFacing")
+        end)
+        Header("Circle style")
+        Check({ "calibrate" }, "Calibrate circle edge", "Tints the round edge red to line it up with the ring (then nudge with /lp offset).")
+    end
 
     category, layout = main, SettingsPanel:GetLayout(main)
     Settings.RegisterAddOnCategory(category)

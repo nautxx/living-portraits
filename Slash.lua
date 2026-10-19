@@ -33,6 +33,8 @@ local ShowExport = ns.ShowExport
 local ShowImport = ns.ShowImport
 local REST_MODES = ns.REST_MODES
 local CLASS_TEXT_MODES = ns.CLASS_TEXT_MODES
+local RaceKey = ns.RaceKey
+local SetRacePan = ns.SetRacePan
 
 -- Slash command: /lp --------------------------------------------------------
 
@@ -48,6 +50,11 @@ local function PrintStatus()
         .. "  grow=" .. tostring(db.growBars) .. (" (%.2fs)"):format(db.growTime) .. "  units=" .. (#on > 0 and table.concat(on, ",") or "none"))
     local Q = db.sizes.square
     print(("  circle large: inset=%.2f cam=%.2f   small: inset=%.2f cam=%.2f"):format(L.inset, L.cam, S.inset, S.cam))
+    local tuned = {}
+    for key, pan in pairs(db.racePans) do tuned[#tuned + 1] = ("%s=%s@%s"):format(key, tostring(pan), tostring(db.raceFacing[key])) end
+    table.sort(tuned)
+    print(("  facing=%d calibrate=%s  races: %s"):format(db.targetFacing or 0, tostring(db.facingCalibrate),
+        #tuned > 0 and table.concat(tuned, " ") or "none tuned"))
     print(("  box: cam=%.2f bg=%.2f gap=%d alignmana=%s split=%.2f  extend: large=%d small=%d"):format(
         Q.cam, db.squareBg, db.squareGap, tostring(db.alignMana), db.hpShare, db.stackExtra.large, db.stackExtra.small))
     print(("  name rows: large=%d tot=%d party=%d   build=%s tall=%s hidesurnames=%s class=%s"):format(db.nameRow.large,
@@ -67,7 +74,8 @@ local function PrintHelp()
     print("  /lp bordercolor RRGGBB  |  /lp borderalpha 0-1  |  /lp bordersize thin|medium|heavy")
     print("  /lp resource pixel|bbf|none  |  /lp resourcealign left|center|right  |  /lp resourcesize 2-16")
     print("  /lp resourcecolor [combo|shards|arcane|holy] RRGGBB")
-    print("  /lp inset 0.3-1.2 [large|small]  |  /lp cam 0.3-2 [large|small|box]")
+    print("  /lp inset 0.3-1.2 [large|small]  |  /lp cam 0.3-2 [large|small|box]  |  /lp facing -90-90 (target/focus turn, degrees)")
+    print("  /lp facing calibrate (turn every player to tune)  |  /lp pan -1-1|clear (re-center your target's race + gender)")
     print("  /lp unit player|target|focus|tot|party  |  /lp refresh  |  /lp debug [unit]")
     print("  circle: /lp circlebg 0-1  |  /lp vignette  |  /lp calibrate  |  /lp offset player|target|focus|tot|party x y")
 end
@@ -165,7 +173,7 @@ local SLASH_NUMBERS = {
     growtime = { "growTime", 0.1, 2 }, split = { "hpShare", 0.4, 0.85 }, zoom = { "zoom", 0, 1 },
     circlebg = { "circleBg", 0, 1 }, bg = { "squareBg", 0, 1 },
     gap = { "squareGap", 0, 20 }, barspacing = { "barSpacing", 0, 10 }, borderalpha = { "borderAlpha", 0, 1 },
-    bordersize = { "borderSize", 1, 3 }, resourcesize = { "resourceRadius", 2, 16 },
+    bordersize = { "borderSize", 1, 3 }, facing = { "targetFacing", -90, 90 }, resourcesize = { "resourceRadius", 2, 16 },
 }
 
 SLASH_LIVINGPORTRAITS1 = "/lp"
@@ -249,6 +257,33 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
             return
         end
         db.resourceColors[key] = "ff" .. hex
+    elseif cmd == "dev" then
+        -- The hidden Developer settings page (calibration tools). Not a setting: kept out of
+        -- profiles and exports, and kept through /lp reset.
+        db.devMode = not db.devMode or nil
+        print(db.devMode and "  Developer page on: /reload, then Options > AddOns > Living Portraits > Developer."
+            or "  Developer page off (gone after a /reload).")
+        return
+    elseif cmd == "facing" and arg == "calibrate" then
+        db.facingCalibrate = not db.facingCalibrate
+        print(db.facingCalibrate and "  Facing calibration on: every player turns. Target one, center the face with /lp pan, repeat per race and gender, then /lp facing calibrate to finish."
+            or "  Facing calibration off: only races with a pan turn.")
+    elseif cmd == "pan" then
+        -- Per race and gender of your target (only players turn).
+        local key = Safe(UnitIsPlayer("target")) and RaceKey("target")
+        if not key then
+            print("  /lp pan: target a player of the race and gender to tune first.")
+            return
+        end
+        local who = ("%s %s"):format(Safe(UnitRace("target")) or key, key:sub(-1) == "F" and "female" or "male")
+        if arg == "clear" then
+            SetRacePan(key, nil)
+        elseif val then
+            SetRacePan(key, Clamp(val, -1, 1))
+        end
+        print(("  %s: pan %s at %s degrees  (/lp pan -1-1 | clear)"):format(who, tostring(db.racePans[key]),
+            tostring(db.raceFacing[key])))
+        if not (arg == "clear" or val) then return end
     elseif cmd == "classtext" then
         if not CLASS_TEXT_MODES[arg or ""] then
             print("  /lp classtext off|build|level|name  (now " .. tostring(db.classText) .. ")")
@@ -318,9 +353,9 @@ SlashCmdList.LIVINGPORTRAITS = function(msg)
         local newValue = not db.units[list[1]]
         for _, unit in ipairs(list) do db.units[unit] = newValue end
     elseif cmd == "reset" then
-        local backup, full, lp, welcomed = db.bbfBackup, db.bbfBackupFull, db.lpBackup, db.welcomed -- keep Undo, no welcome again
+        local backup, full, lp, welcomed, dev = db.bbfBackup, db.bbfBackupFull, db.lpBackup, db.welcomed, db.devMode -- keep Undo, no welcome again, dev page
         wipe(db); CopyDefaults(defaults, db); db.version = SETTINGS_VERSION
-        db.bbfBackup, db.bbfBackupFull, db.lpBackup, db.welcomed = backup, full, lp, welcomed
+        db.bbfBackup, db.bbfBackupFull, db.lpBackup, db.welcomed, db.devMode = backup, full, lp, welcomed, dev
     else
         PrintStatus()
         PrintHelp()
