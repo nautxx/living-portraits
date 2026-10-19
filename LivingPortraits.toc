@@ -3,7 +3,7 @@
 ## Notes: Live 3D breathing portraits for Blizzard unit frames. A companion addon for BetterBlizzFrames.
 ## IconTexture: Interface\ICONS\INV_Misc_NotePicture1b
 ## Author: Jason
-## Version: 0.9.0
+## Version: 0.10.0
 ## OptionalDeps: BetterBlizzFrames
 ## SavedVariables: LivingPortraitsDB
 

@@ -4,7 +4,7 @@ Live 3D animated portraits for World of Warcraft unit frames. Your character bre
 
 > Formerly **BBF Animated Portraits**. Upgrading? Delete the old `BBF_AnimatedPortraits` folder from AddOns (if it's still enabled, Living Portraits offers to disable it for you); settings start fresh under the new name. `/bap` still works as an alias for `/lp`.
 
-> **Status:** v0.9.0, public test release. Tested in game on the **WoW Forever beta**, with and without BetterBlizzFrames. See [CHANGELOG](CHANGELOG.md).
+> **Status:** v0.10.0, public test release. Tested in game on the **WoW Forever beta**, with and without BetterBlizzFrames. See [CHANGELOG](CHANGELOG.md).
 
 ## Best with BetterBlizzFrames
 
@@ -188,6 +188,7 @@ The box style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. Star
 - **Target-of-target placement:** when the target or focus layout would run into its target-of-target (for example with Edit Mode's small focus frame), the ToT frame is moved down just enough to clear it, and put back when you switch to circle style or turn the addon off.
 - **No layout changes in combat:** WoW blocks resizing unit-frame bars mid-fight, so box-style layout changes made in combat (settings, BBF re-layouts) are skipped and apply on the next refresh, such as a target change or `/lp refresh`. That's also why the build line stays reserved on NPC targets.
 - **BBF's spec / healer icon portraits** are covered by the 3D model while it shows.
+- **Mirror Facing (beta)** is tuned for the Horde races so far (Orc, Undead, Skyborne, Tauren, Troll). Other races face out until they're tuned, and NPCs, druid forms and some helmets or mounts can sit off-center.
 - **BBF's Classic Frames** (the BlizzFrames profile): the model draws above the classic ring and dragon art, so a little of its square can show past the ring on some characters.
 - **Class resource:** only rogue and druid combo points exist on WoW Forever as far as we can tell (Blizzard's own displays define nothing else), so warlock, mage and paladin show nothing until the game adds those resources.
 

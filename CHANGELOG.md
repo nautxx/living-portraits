@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.10.0 (2026-10-18)
 
 ### Features
 - **Class name:** show players' class in its class color on the player, target and focus frames, for when health bars aren't class colored. Pick where: next to the talent build (`Warrior 2/8/0`), above the level, or after the name. Off by default. Settings → General → *Class Name*, or `/lp classtext off|build|level|name`. In circle style (no build line) it goes after the name.
@@ -27,6 +27,7 @@
 
 ### Fixes
 - **Pixel Border mode** now turns off BetterBlizzFrames' Classic Frames, which overrides it: with Classic Frames on, the frames stayed classic. Living Portraits also treats Classic Frames as "portraits shown" (circle style) instead of laying out boxes BetterBlizzFrames isn't drawing.
+- The resting Zzz stays visible after loading Naut or Starter (their BetterBlizzFrames base profiles hide it).
 
 ## 0.8.1 (2026-10-18)
 
