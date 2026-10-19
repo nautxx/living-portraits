@@ -1,9 +1,7 @@
 local _, ns = ...
 local db -- LivingPortraitsDB, set when it loads (Core.lua)
 ns.OnLoad(function(saved) db = saved end)
-local UNITS = ns.UNITS
 local Safe = ns.Safe
-local BBFHidesPortrait = ns.BBFHidesPortrait
 local UnitFrameOf = ns.UnitFrameOf
 local Lookup = ns.Lookup
 local buildTexts = ns.buildTexts
@@ -12,6 +10,9 @@ local TallLine = ns.TallLine
 local Mirrored = ns.Mirrored
 local EliteInRow = ns.EliteInRow
 local ELITE_ROOM = ns.ELITE_ROOM
+local BuildLineVisible = ns.BuildLineVisible
+local ClassLabel = ns.ClassLabel
+local ClassTextMode = ns.ClassTextMode
 
 -- Talent build on the player, target and focus -------------------------------------
 -- Points per talent tree ("2/8/0") in the square style's name area: on its own line above
@@ -59,10 +60,39 @@ local function OwnBuild()
     return ownBuild
 end
 
--- The build shows only where the square style draws the unit's name row.
-local function BuildVisible(unit)
-    return db and db.enabled and db.showBuild and db.units[unit] and db.style == "square"
-        and (db.nameRow[UNITS[unit].row] or 0) > 0 and BBFHidesPortrait(unit)
+-- Class name above the level (classText.lua, "level" with tall portraits): on the build line, on
+-- the level's side. FontStrings per unit, created on first use.
+local classTexts = {}
+local function UpdateLevelClass(unit, label, hpPos, row, extra, level)
+    local fs = classTexts[unit]
+    if not label then
+        if fs then fs:Hide() end
+        return
+    end
+    if not fs then
+        local uf = UnitFrameOf(unit)
+        if not uf then return end
+        fs = uf:CreateFontString(nil, "OVERLAY")
+        local font, size, flags = level:GetFont()
+        if font then
+            fs:SetFont(font, math.max((size or 10) - 2, 7), flags)
+        elseif GameFontNormalSmall then
+            fs:SetFontObject(GameFontNormalSmall)
+        end
+        fs:SetTextColor(1, 1, 1) -- the class color comes from the text's color code
+        classTexts[unit] = fs
+    end
+    local mirror = Mirrored(unit)
+    fs:ClearAllPoints()
+    if mirror then -- level on the outer (left) edge
+        fs:SetPoint("LEFT", hpPos, "TOPLEFT", 1, row + extra / 2)
+        fs:SetJustifyH("LEFT")
+    else
+        fs:SetPoint("RIGHT", hpPos, "TOPRIGHT", -1, row + extra / 2)
+        fs:SetJustifyH("RIGHT")
+    end
+    fs:SetText(label)
+    fs:Show()
 end
 
 -- One inspect at a time (target and focus share it): a second request would replace the
@@ -107,10 +137,22 @@ local function CreateBuildText(unit, level)
 end
 
 local function UpdateBuildFor(unit)
-    local text = BuildVisible(unit) and BuildFor(unit) or nil
+    local name, level, bbfName = Lookup(unit, "texts")
+    local lineOn = BuildLineVisible(unit)
+    local hpPos = lineOn and GetBarFrames(unit)
+    local row, extra = hpPos and hpPos.bapRow or 0, TallLine(unit)
+    local above = row > 0 and extra > 0
+    -- The class (classText.lua): in the build text for "build", and for "level" when there's no
+    -- line above the level; on its own above the level otherwise.
+    local mode = lineOn and ClassTextMode(unit)
+    local label = (mode == "build" or mode == "level") and ClassLabel(unit) or nil
+    local inBuild = label and (mode == "build" or not above)
+    if level then UpdateLevelClass(unit, hpPos and not inBuild and label or nil, hpPos, row, extra, level) end
+    local build = lineOn and db.showBuild and BuildFor(unit) or nil
+    local text = build
+    if inBuild then text = build and (label .. " " .. build) or label end
     local fs = buildTexts[unit]
     if not text and not (fs and fs:IsShown()) then return end -- nothing to show or hide
-    local name, level, bbfName = Lookup(unit, "texts")
     if not level then return end
     if text and not fs then
         fs = CreateBuildText(unit, level)
@@ -118,9 +160,7 @@ local function UpdateBuildFor(unit)
     end
     if not fs then return end
     -- Own line above the name (left-aligned with it), or next to the level.
-    local hpPos = GetBarFrames(unit)
-    local row, extra = hpPos and hpPos.bapRow or 0, TallLine(unit)
-    local above = row > 0 and extra > 0
+    hpPos = hpPos or GetBarFrames(unit)
     local mirror = Mirrored(unit)
     local eliteRow = EliteInRow(unit) and true or false -- the inline build steps past the elite icon
     if fs.bapText == text and fs.bapInline == not above and fs.bapRow == row and fs.bapExtra == extra

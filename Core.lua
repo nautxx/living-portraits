@@ -35,6 +35,24 @@ local defaults = {
     growBars    = true, -- new target: health and mana grow from empty to their value
     growTime    = 0.35, -- seconds the grow takes (/lp growtime)
     showBuild   = true, -- square: talent build ("2/8/0") on the player, target and focus (/lp build)
+    -- Class name in class color on the player, target and focus (players): "off", "build" (in the
+    -- talent build text), "level" (above the level), "name" (after the name) (/lp classtext).
+    classText   = "off",
+    mirrorFacing = false, -- target and focus players turn toward the player frame, tuned races only (/lp mirrorfacing)
+    targetFacing = -45, -- calibration angle: untuned races while calibrating, and saved with a race's first pan (/lp facing)
+    -- Sideways shift that re-centers a turned face, per race and gender ("OrcM", "ScourgeF"): the
+    -- face lands differently per model. Only players with an entry turn (/lp facing calibrate, /lp pan).
+    -- Tuned by Jason in game (2026-10-18). Pairs not listed face out until tuned.
+    racePans    = {
+        OrcF = 0.2, OrcM = 0.3, ScourgeF = 0.1, ScourgeM = 0.2, SkyborneF = 0.05, SkyborneM = 0.05,
+        TaurenF = 0.9, TaurenM = 0.9, TrollF = 0.2, TrollM = 0.5,
+    },
+    -- The angle each race's pan was tuned at; overrides targetFacing for it.
+    raceFacing  = {
+        OrcF = -65, OrcM = -45, ScourgeF = -45, ScourgeM = -45, SkyborneF = -60, SkyborneM = -45,
+        TaurenF = -65, TaurenM = -60, TrollF = -70, TrollM = -65,
+    },
+    facingCalibrate = false, -- turn every player, untuned ones at pan 0, to tune them (/lp facing calibrate)
     eliteBorder = false, -- square: target/focus box border gold for elite/boss, silver for rare (/lp eliteborder)
     eliteColor  = "ffffc71a", -- square: elite/boss border color, ARGB hex like the settings swatch (/lp elitecolor)
     rareColor   = "ffc7ccdb", -- square: rare/rare elite border color (/lp rarecolor)
@@ -202,10 +220,62 @@ function ns.LoadSettings()
     for _, fn in ipairs(onLoad) do fn(db) end
 end
 
+-- Target and focus can turn toward the player frame (db.targetFacing, degrees; 0 = facing out).
+-- Their portraits sit on the right (UNITS[unit].side). A model frame can't be mirrored like a
+-- texture, only turned. SetFacing turns the model around its feet while the portrait camera
+-- stays aimed where the head was, so the head swung out of the picture (why the first try was
+-- dropped). Turned models rotate around their center (UseModelCenterToTransform, as Blizzard's
+-- ModelFrames do), and a sideways shift (SetPosition's y) re-centers the face. Where the face lands
+-- depends on the model (Blizzard frames portraits from the front only), so the shift is tuned per
+-- race and gender (db.racePans, "OrcM"); only players with an entry turn, everyone else (NPCs,
+-- untuned races) faces out. db.facingCalibrate turns all players, untuned at 0, to tune them.
+-- A pan only centers the face at the angle it was tuned at, so each race keeps its angle too
+-- (db.raceFacing, saved with the pan). db.mirrorFacing is the switch ("Mirror Facing (beta)");
+-- db.targetFacing is the calibration angle (untuned races while calibrating, and the angle saved
+-- with a race's first pan).
+-- The portrait camera is set up first, then the model turned: turned first, the camera framed it
+-- from farther away (zoomed out next to the player's portrait, seen in game).
+-- model.lpUnit is set where the model is created.
+local function RaceKey(unit)
+    local _, race = UnitRace(unit)
+    race = Safe(race)
+    if type(race) ~= "string" then return end
+    return race .. (Safe(UnitSex(unit)) == 3 and "F" or "M")
+end
+
+-- Degrees to turn and the sideways shift for the unit's model.
+local function FacingFor(unit)
+    local u = unit and ns.UNITS[unit] -- Units.lua loads after this file
+    local degrees = db.targetFacing or 0
+    if not (db.mirrorFacing and u and u.side == "RIGHT") or not Safe(UnitIsPlayer(unit)) then return 0, 0 end
+    local key = RaceKey(unit)
+    local pan = key and db.racePans[key]
+    if pan == nil then
+        if not (key and db.facingCalibrate) then return 0, 0 end
+        pan = 0
+    end
+    return db.raceFacing[key] or degrees, pan
+end
+
+-- Save a race's pan (nil clears its pan and angle). Its angle is kept, or set to the current
+-- Target Facing the first time, so the pan stays matched to the angle it was tuned at.
+local function SetRacePan(key, pan)
+    if pan == nil then
+        db.racePans[key], db.raceFacing[key] = nil, nil
+        return
+    end
+    db.racePans[key] = pan
+    if db.raceFacing[key] == nil then db.raceFacing[key] = db.targetFacing or 0 end
+end
+
 local function ApplyCamera(model, size)
+    local degrees, pan = FacingFor(model.lpUnit)
+    local turned = degrees ~= 0
     model:SetPortraitZoom(db.zoom)
     model:SetCamDistanceScale(db.sizes[size].cam)
-    model:SetPosition(0, 0, 0)
+    if model.UseModelCenterToTransform then model:UseModelCenterToTransform(turned) end
+    model:SetFacing(math.rad(degrees))
+    model:SetPosition(0, pan, 0)
 end
 
 -- Shared state --------------------------------------------------------------
@@ -275,6 +345,8 @@ ns.AnySecret = AnySecret
 ns.BBFHidesPortrait = BBFHidesPortrait
 ns.Clamp = Clamp
 ns.ApplyCamera = ApplyCamera
+ns.RaceKey = RaceKey
+ns.SetRacePan = SetRacePan
 ns.QueueRefresh = QueueRefresh
 ns.QueueRefreshAll = QueueRefreshAll
 ns.RetryRefresh = RetryRefresh

@@ -44,6 +44,7 @@ local function CreateSquare(unit, unitFrame)
     bg:SetAllPoints(box)
     local edges = CreatePixelBorder(box)
     local model = CreateFrame("PlayerModel", nil, box)
+    model.lpUnit = unit -- ApplyCamera: target/focus can turn toward the player frame
     model:SetAllPoints(box)
     model:SetScript("OnModelLoaded", function(self) ApplyCamera(self, "square") end)
     local sq = { unit = unit, box = box, bg = bg, model = model, unitFrame = unitFrame, edges = edges }

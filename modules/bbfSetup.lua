@@ -121,10 +121,10 @@ local function UndoBBFSetup(reload)
     end
     db.bbfBackupFull, db.bbfBackup, db.lpBackup = nil, nil, nil
     if lp then
-        local welcomed = db.welcomed
+        local welcomed, dev = db.welcomed, db.devMode
         for k in pairs(db) do db[k] = nil end
         for k, v in pairs(lp) do db[k] = Copy(v) end
-        db.welcomed = welcomed
+        db.welcomed, db.devMode = welcomed, dev
         ns.LoadSettings() -- migrate and fill in defaults; every file keeps the same table
     end
     if full or keys then FinishBBFChange(reload) else ns.RefreshAll() end

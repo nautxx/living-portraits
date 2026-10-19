@@ -208,6 +208,7 @@ local proxies, buttons, notified, openedCategory, popupShown = {}, {}, {}, nil, 
 Settings = {
     RegisterVerticalLayoutCategory = function(name) return { name = name, GetID = function() return 42 end } end,
     RegisterProxySetting = function(_, var, _, name, default, get, set)
+        assert(not proxies[var], "Setting variable '" .. var .. "' was previously registered.") -- like Blizzard's
         local s = { var = var, name = name, default = default, get = get, set = set }
         proxies[var] = s
         return s
@@ -284,7 +285,8 @@ world.exists = { player = true, target = true, targettarget = true, party1 = tru
 world.visible.party2 = false
 
 -- Saved settings from an older version (inset 0.82) must be upgraded
-LivingPortraitsDB = { enabled = true, sizes = { large = { inset = 0.82, cam = 0.85 }, small = { inset = 0.82, cam = 0.85 } } }
+LivingPortraitsDB = { enabled = true, sizes = { large = { inset = 0.82, cam = 0.85 }, small = { inset = 0.82, cam = 0.85 } },
+    devMode = true } -- builds the hidden Developer page too
 fire("ADDON_LOADED", "LivingPortraits")
 local bbfHooked = BBF.SetCustomFonts
 BBF = nil
@@ -1054,6 +1056,46 @@ do
     check("/lp build hides it", LivingPortraitsDB.showBuild == false and not fs.shown)
     check("tall portraits stay tall with the build hidden", tBox.h == tBox.w + 9)
     slash("build")
+
+    -- Class name in class color (players): next to the build, above the level, after the name
+    RAID_CLASS_COLORS = { ROGUE = { colorStr = "fffff468" } }
+    local label = "|cfffff468Class|r"
+    check("class name is off by default", LivingPortraitsDB.classText == "off" and fs.text == "2/8/0")
+    slash("classtext build")
+    check("classtext build: in the build text before the points", fs.shown and fs.text == label .. " 2/8/0")
+    slash("build")
+    check("classtext build: still shown with talent builds off", fs.shown and fs.text == label)
+    slash("build")
+    slash("classtext level")
+    local classFS
+    for _, f in ipairs(rawget(TargetFrame, "fontStrings") or {}) do if f.text == label then classFS = f end end
+    check("classtext level: its own text above the level, the build without it", classFS and classFS.shown
+        and classFS.anchor[1] == "RIGHT" and classFS.anchor[2] == hpPos and classFS.anchor[3] == "TOPRIGHT"
+        and classFS.anchor[5] == 12 + 9 / 2 and fs.text == "2/8/0")
+    slash("tall")
+    check("classtext level without tall portraits: joins the build next to the level", not classFS.shown
+        and fs.text == label .. " 2/8/0")
+    slash("tall")
+    slash("classtext name")
+    targetName:SetText("Binjuice")
+    check("classtext name: after the name, the build plain", targetName.text == "Binjuice " .. label and fs.text == "2/8/0"
+        and not classFS.shown)
+    slash("classtext off")
+    check("classtext off: the name back as Blizzard set it", targetName.text == "Binjuice")
+    slash("classtext name")
+    world.players.target = false
+    targetName:SetText("Kobold")
+    check("NPCs get no class name", targetName.text == "Kobold")
+    world.players.target = true
+    slash("classtext build")
+    slash("style circle")
+    targetName:SetText("Binjuice")
+    check("circle style (no build line): the class goes after the name", targetName.text == "Binjuice " .. label)
+    slash("style square")
+    slash("classtext nope")
+    check("unknown placement is ignored", LivingPortraitsDB.classText == "build")
+    slash("classtext off")
+    targetName:SetText("")
     world.players.target = nil
     world.guid.target = nil
 end
@@ -1293,6 +1335,7 @@ do
         and LivingPortraitsDB.zoom == 1 and LivingPortraitsDB.resourceRadius == 5 and LivingPortraitsDB.version == ns.SETTINGS_VERSION)
     check("Naut: BBF gets Bodify, then the setup on top", bdb.darkModeUi == true and bdb.classicFrames == false
         and bdb.noPortraitPixelBorder == true and bdb.unitFrameFont == "2002" and bdb.myOwnSetting == nil)
+    check("Naut: Mirror Facing on", LivingPortraitsDB.mirrorFacing == true)
     check("Naut: the resting Zzz and glow stay on (Bodify hides them)", bdb.hidePlayerRestAnimation == false
         and bdb.hidePlayerRestGlow == false)
     check("Naut: Yes reloads right away (no second popup)", reloaded == true)
@@ -1348,6 +1391,8 @@ do
     local str = popupData
     check("export shows a profile string", popupShown == "LIVING_PORTRAITS_EXPORT" and type(str) == "string"
         and str:sub(1, 5) == "!LP1!")
+    check("export leaves out the Developer page switch and the backups", stash[#stash].lp.devMode == nil
+        and stash[#stash].lp.lpBackup == nil and LivingPortraitsDB.devMode == true)
     LivingPortraitsDB.resourceAlign, LivingPortraitsDB.zoom = "center", 1
     BetterBlizzFramesDB = { other = true }
     bdb = BetterBlizzFramesDB
@@ -1370,12 +1415,14 @@ do
 
     -- Imported settings are checked against the defaults' shape
     stash[#stash + 1] = { format = 1, lp = { zoom = "big", barText = "max", units = { player = false, bogus = true },
-        notASetting = 1, sizes = 5, lpBackup = { zoom = 0 } } }
+        notASetting = 1, sizes = 5, lpBackup = { zoom = 0 }, racePans = { HumanM = 0.4, OrcM = "far" } } }
     ns.ImportProfile("!LP1!ZS" .. #stash)
     check("import: wrong types and unknown keys dropped", LivingPortraitsDB.zoom == 1 and LivingPortraitsDB.barText == "max"
         and LivingPortraitsDB.units.player == false and LivingPortraitsDB.units.bogus == nil
         and LivingPortraitsDB.notASetting == nil and type(LivingPortraitsDB.sizes) == "table"
         and LivingPortraitsDB.lpBackup.zoom ~= 0)
+    check("import: race tables keep races the defaults don't have; bad values get the default back",
+        LivingPortraitsDB.racePans.HumanM == 0.4 and LivingPortraitsDB.racePans.OrcM == 0.3)
 
     buttons["Undo setup / profile"](); confirmYes()
 
@@ -1517,6 +1564,109 @@ do
     local hit = false
     for _, line in ipairs(traced) do if line:find("skip: grow", 1, true) and line:find("focus", 1, true) then hit = true end end
     check("a new focus runs the bar grow for the focus frame", hit)
+end
+
+-- Target facing: target and focus players turn toward the player frame, re-centered per race
+-- and gender (only tuned races turn); the player's model and NPCs face out
+do
+    local tModel, pModel
+    for _, m in ipairs(models) do
+        if m.lpUnit == "target" then tModel = m elseif m.lpUnit == "player" then pModel = m end
+    end
+    local calls = {}
+    for _, m in ipairs({ tModel, pModel }) do
+        function m:SetFacing(r) self.facing = r; calls[#calls + 1] = "facing" end
+        function m:SetPortraitZoom() calls[#calls + 1] = "zoom" end
+        function m:SetPosition(x, y, z) self.pos = { x, y, z } end
+        function m:UseModelCenterToTransform(on) self.centered = on end
+    end
+    local sex = 2
+    local race = "Human"
+    function UnitRace() return race, race end
+    function UnitSex() return sex end
+    world.players.target = true
+    local function apply() calls = {}; ns.ApplyCamera(tModel, "square"); ns.ApplyCamera(pModel, "large") end
+    check("Mirror Facing is off by default: nothing turns", LivingPortraitsDB.mirrorFacing == false)
+    slash("facing 30")
+    slash("mirrorfacing")
+    race = "Orc"
+    apply()
+    check("built in: Jason's Orc male turns at -45 degrees, centered at 0.3", math.abs(tModel.facing - math.rad(-45)) < 1e-9
+        and tModel.pos[2] == 0.3)
+    race = "Human"
+    apply()
+    check("an untuned race faces out", tModel.facing == 0 and tModel.pos[2] == 0)
+    slash("facing calibrate")
+    apply()
+    check("calibrating: every player turns, untuned at pan 0", math.abs(tModel.facing - math.rad(30)) < 1e-9
+        and tModel.pos[2] == 0 and tModel.centered == true)
+    slash("pan 0.2")
+    check("/lp pan saves the center for the target's race and gender, with the angle it was tuned at",
+        LivingPortraitsDB.racePans.HumanM == 0.2 and LivingPortraitsDB.raceFacing.HumanM == 30)
+    apply()
+    check("turned after the portrait camera is set up (same framing as the player's)", calls[1] == "zoom" and calls[2] == "facing")
+    slash("facing calibrate")
+    apply()
+    check("a tuned race turns and re-centers without calibrating", math.abs(tModel.facing - math.rad(30)) < 1e-9
+        and tModel.pos[2] == 0.2 and tModel.centered == true)
+    check("the player's model faces out, around its feet", pModel and pModel.facing == 0 and pModel.pos[2] == 0
+        and pModel.centered == false)
+    slash("facing 45")
+    apply()
+    check("a tuned race keeps the angle its pan was tuned at when Target Facing changes",
+        math.abs(tModel.facing - math.rad(30)) < 1e-9 and tModel.pos[2] == 0.2)
+    slash("pan 0.25")
+    check("re-tuning keeps the race's angle", LivingPortraitsDB.raceFacing.HumanM == 30)
+    slash("facing 30")
+    sex = 3
+    apply()
+    check("the other gender has its own entry (untuned: faces out)", tModel.facing == 0 and tModel.centered == false)
+    sex = 2
+    world.players.target = false
+    apply()
+    check("NPCs face out", tModel.facing == 0)
+    slash("pan 0.3")
+    check("/lp pan without a player target changes nothing", LivingPortraitsDB.racePans.HumanM == 0.25)
+    world.players.target = true
+    slash("pan clear")
+    check("/lp pan clear removes the race's center and angle", LivingPortraitsDB.racePans.HumanM == nil
+        and LivingPortraitsDB.raceFacing.HumanM == nil)
+    -- Developer page: its pan slider edits the target's race and gender
+    local devPan = proxies["LivingPortraits_devTargetPan"]
+    check("Developer page built with devMode on", devPan ~= nil and proxies["LivingPortraits_facingCalibrate"] ~= nil)
+    devPan.set(0.256)
+    check("Developer pan slider saves the target's race and gender (2 decimals)", LivingPortraitsDB.racePans.HumanM == 0.26
+        and devPan.get() == 0.26)
+    buttons["Copy tuned races"]()
+    check("Copy tuned races: a Lua table selected in a popup to copy", popupShown == "LIVING_PORTRAITS_COPY"
+        and popupData:find("HumanM = 0.26", 1, true) and popupData:find("TaurenM = 0.9", 1, true)
+        and popupData:find("raceFacing = {", 1, true) and popupData:find("HumanM = 30", 1, true))
+    world.players.target = false
+    check("Developer pan slider reads 0 without a player target", devPan.get() == 0)
+    world.players.target = true
+    local devFacing = proxies["LivingPortraits_devTargetFacing"]
+    devFacing.set(20)
+    apply()
+    check("Developer angle slider sets the target's race angle", LivingPortraitsDB.raceFacing.HumanM == 20
+        and devFacing.get() == 20 and math.abs(tModel.facing - math.rad(20)) < 1e-9)
+    slash("mirrorfacing")
+    apply()
+    check("Mirror Facing off: every race faces out", tModel.facing == 0 and LivingPortraitsDB.mirrorFacing == false)
+    slash("mirrorfacing")
+    buttons["Clear your target's race"]()
+    check("Developer page clears the target's race (center and angle)", LivingPortraitsDB.racePans.HumanM == nil
+        and LivingPortraitsDB.raceFacing.HumanM == nil)
+    slash("reset")
+    check("/lp reset keeps the Developer page", LivingPortraitsDB.devMode == true)
+    slash("dev")
+    check("/lp dev turns the Developer page off", LivingPortraitsDB.devMode == nil)
+    slash("dev")
+    check("/lp dev turns it back on", LivingPortraitsDB.devMode == true)
+    slash("mirrorfacing")
+    apply()
+    check("Mirror Facing off: the target faces out", tModel.facing == 0 and tModel.pos[2] == 0)
+    slash("facing -45")
+    world.players.target, UnitRace, UnitSex = nil, nil, nil
 end
 
 -- Secret values must not error

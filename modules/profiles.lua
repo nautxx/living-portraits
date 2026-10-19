@@ -98,6 +98,7 @@ local PROFILES = {
         lp = {
             barText = "max", barTextStyle = "shadow", eliteIcon = "bottom", eliteBorder = false,
             restIcon = "corner", resourceAlign = "right", resourceRadius = 5,
+            mirrorFacing = true, -- target/focus portraits face the player (tuned races)
         },
         bbfBase = "Bodify",
         bbf = Merge(ns.BBF_MODE, NAUT_LOOK),
@@ -116,7 +117,7 @@ local PROFILES = {
 }
 
 local STRING_PREFIX = "!LP1!" -- format 1
-local LP_SKIP = { bbfBackup = true, bbfBackupFull = true, lpBackup = true, welcomed = true } -- never exported or imported
+local LP_SKIP = { bbfBackup = true, bbfBackupFull = true, lpBackup = true, welcomed = true, devMode = true } -- never exported or imported
 
 -- A profile's name, in its class's color when it has one (like BBF's streamer profiles).
 local function ProfileTitle(p)
@@ -152,13 +153,17 @@ local function LPSettings()
 end
 
 -- Keep only values that match the defaults' shape: known keys, same types, tables checked inside
--- (units and other keyed tables keep their known keys). Anything else in an imported string goes.
-local function Sanitize(src, def)
+-- (units and other keyed tables keep their known keys). OPEN_MAPS are keyed by race and gender,
+-- not by the defaults' keys: any string key with a number value stays. Anything else goes.
+local OPEN_MAPS = { racePans = true, raceFacing = true }
+local function Sanitize(src, def, open)
     local out = {}
     for k, v in pairs(src) do
         local d = def[k]
-        if type(d) == "table" and type(v) == "table" then
-            out[k] = Sanitize(v, d)
+        if open then
+            if type(k) == "string" and type(v) == "number" then out[k] = v end
+        elseif type(d) == "table" and type(v) == "table" then
+            out[k] = Sanitize(v, d, OPEN_MAPS[k])
         elseif d ~= nil and type(v) == type(d) then
             out[k] = v
         end
@@ -169,7 +174,7 @@ end
 -- Replace our settings with `lp` (backup first, once), then migrate and fill in defaults.
 local function ApplyLP(lp)
     if not db.lpBackup then db.lpBackup = LPSettings() end
-    local keep = { bbfBackup = db.bbfBackup, bbfBackupFull = db.bbfBackupFull, lpBackup = db.lpBackup, welcomed = db.welcomed }
+    local keep = { bbfBackup = db.bbfBackup, bbfBackupFull = db.bbfBackupFull, lpBackup = db.lpBackup, welcomed = db.welcomed, devMode = db.devMode }
     local version = type(lp.version) == "number" and lp.version or SETTINGS_VERSION
     local clean = Sanitize(lp, defaults)
     for k in pairs(db) do db[k] = nil end
@@ -253,6 +258,22 @@ local function Dialogs()
         EditBoxOnEscapePressed = function(eb) eb:GetParent():Hide() end,
         timeout = 0, whileDead = true, hideOnEscape = true,
     }
+    -- Any text to copy (addons can't write the clipboard: the text comes pre-selected for Ctrl+C).
+    -- text_arg1 = what it is, data = the text.
+    StaticPopupDialogs.LIVING_PORTRAITS_COPY = StaticPopupDialogs.LIVING_PORTRAITS_COPY or {
+        text = "Living|cff00c0ffPortraits|r:\n\n%s Copy it with Ctrl+C (Cmd+C on a Mac).",
+        hasEditBox = true, editBoxWidth = 350, maxLetters = 0,
+        button1 = CLOSE or "Close",
+        OnShow = function(self, str)
+            local eb = EditBoxOf(self)
+            eb:SetMaxLetters(0)
+            eb:SetText(str or "")
+            eb:HighlightText()
+            eb:SetFocus()
+        end,
+        EditBoxOnEscapePressed = function(eb) eb:GetParent():Hide() end,
+        timeout = 0, whileDead = true, hideOnEscape = true,
+    }
     StaticPopupDialogs.LIVING_PORTRAITS_IMPORT = StaticPopupDialogs.LIVING_PORTRAITS_IMPORT or {
         text = "Living|cff00c0ffPortraits|r:\n\nPaste a profile string. Importing it will overwrite all of your BetterBlizzFrames and Living Portraits settings with the string's and reload the UI (Undo on the Profiles page puts them back).",
         hasEditBox = true, editBoxWidth = 350, maxLetters = 0,
@@ -291,6 +312,13 @@ local function ShowExport()
     StaticPopup_Show("LIVING_PORTRAITS_EXPORT", nil, nil, str)
 end
 
+-- Show `text` selected in a popup to copy; `what` says what it is. Returns the text itself when
+-- there are no dialogs (the caller prints it).
+local function ShowCopy(what, text)
+    if not Dialogs() then return text end
+    StaticPopup_Show("LIVING_PORTRAITS_COPY", what, nil, text)
+end
+
 local function ShowImport()
     if not Libs() then return "Import needs BetterBlizzFrames loaded." end
     if not Dialogs() then return "The import dialog isn't available on this client." end
@@ -305,3 +333,4 @@ ns.ExportString = ExportString
 ns.ImportProfile = Import
 ns.ShowExport = ShowExport
 ns.ShowImport = ShowImport
+ns.ShowCopy = ShowCopy

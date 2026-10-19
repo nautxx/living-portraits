@@ -4,7 +4,7 @@ Live 3D animated portraits for World of Warcraft unit frames. Your character bre
 
 > Formerly **BBF Animated Portraits**. Upgrading? Delete the old `BBF_AnimatedPortraits` folder from AddOns (if it's still enabled, Living Portraits offers to disable it for you); settings start fresh under the new name. `/bap` still works as an alias for `/lp`.
 
-> **Status:** v0.9.0, public test release. Tested in game on the **WoW Forever beta**, with and without BetterBlizzFrames. See [CHANGELOG](CHANGELOG.md).
+> **Status:** v0.10.0, public test release. Tested in game on the **WoW Forever beta**, with and without BetterBlizzFrames. See [CHANGELOG](CHANGELOG.md).
 
 ## Best with BetterBlizzFrames
 
@@ -48,7 +48,7 @@ A profile is a whole look in one click: Living Portraits' settings **and** the B
 | Profile | Look | BetterBlizzFrames base |
 |---|---|---|
 | **Starter** | A clean starting point: square box portraits with the gold/silver elite border, full names, no talent builds, Blizzard's bar text | BBF's own Starter profile, with Pixel Border mode |
-| **Naut** | The author's setup: tall box portraits with talent builds and `350 (462)` bar text, class resource circles, and his fonts, textures, class colors and target-of-target placement (the screenshots above) | BBF's Bodify profile, with Pixel Border mode |
+| **Naut** | The author's setup: tall box portraits with talent builds and `350 (462)` bar text, target and focus turned toward the player, class resource circles, and his fonts, textures, class colors and target-of-target placement (the screenshots above) | BBF's Bodify profile, with Pixel Border mode |
 | **BlizzFrames** | Living portraits in the round portrait, with bigger player, target and focus models | BBF's Forever profile (its Classic Frames look) |
 
 BlizzFrames, the round portraits on BetterBlizzFrames' Classic Frames:
@@ -101,8 +101,8 @@ ln -s ~/GitHub/Main/living-portraits \
 Open **Options → AddOns → LivingPortraits** (or type `/lp options`):
 
 - **Profiles** (its own page, first): Starter, Naut and BlizzFrames, Export and Import (see [Profiles](#profiles)), the Pixel Border mode switch and Undo.
-- **General:** turn it on/off, hide surnames, box or circle style, and which frames get a living portrait.
-- **Camera:** zoom (both styles). Face distance is on each style's page.
+- **General:** turn it on/off, hide surnames, the class name (in class color, next to the talent build, above the level or after the name), box or circle style, and which frames get a living portrait.
+- **Camera:** zoom, and **Mirror Facing (beta)**: target and focus players turn toward the player frame (both styles; tuned for Orc, Undead, Skyborne, Tauren and Troll so far). Face distance is on each style's page.
 - **Bar text:** Blizzard/BBF's own, or left-aligned `current (max)` / `current (percent)` that's always shown.
 - **Target bars:** the grow-from-empty animation (target and focus) and its speed.
 - **Box Style** (its own page): distance, talent builds, mirrored target text, tall portraits (player, target & focus, party), border color, thickness and opacity, elite/rare border and icon, the resting icon spot, class resource (combo points under the bars: pixel circles, BetterBlizzFrames' art or none, with alignment, size and colors), plus box and bar sizing.
@@ -124,8 +124,11 @@ The box style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. Star
 | `/lp unit <group>` | Toggle a frame group: `player`, `target`, `focus`, `tot`, `party` |
 | `/lp style box\|circle` | Box beside the bars (needs BBF's No Portrait / Pixel Border) or round portrait |
 | `/lp surname` | First names only (hide surnames) on the player, target, focus, target-of-target and party frames |
+| `/lp classtext off\|build\|level\|name` | Players' class name in class color on the player, target and focus: next to the talent build (`Warrior 2/8/0`), above the level, or after the name (off by default). Without the box style's build line it goes after the name |
 | `/lp zoom 0-1` | Camera zoom (1 = head and shoulders, lower = more body) |
 | `/lp cam 0.3-2 [large\|small\|box]` | Camera distance (lower = closer, bigger face) |
+| `/lp mirrorfacing` | Toggle Mirror Facing (beta): target and focus players turn toward the player frame. Only tuned races turn; NPCs face out |
+| `/lp facing calibrate` / `/lp facing -90-90` / `/lp pan -1-1\|clear` | Tuning: turn every player / set the calibration angle / center the face for your target's race and gender (saved per race and gender with its angle). Also on the hidden Developer page (`/lp dev`, then reload) |
 | `/lp bartext default\|max\|percent` | Health and mana text on the player, target, focus and party bars: Blizzard/BBF's own, or left-aligned and always shown as `350 (462)` (max, the default) or `350 (76%)` (percent) |
 | `/lp bartextstyle outline_shadow\|outline\|shadow\|thick\|thick_shadow` | Outline and shadow of the left-aligned bar text (default: shadow); the font follows BetterBlizzFrames' unit frame number font |
 | `/lp grow` | Toggle the target's and focus's health and mana growing from empty when they change |
@@ -185,6 +188,7 @@ The box style needs BetterBlizzFrames' **No Portrait + Pixel Border** mode. Star
 - **Target-of-target placement:** when the target or focus layout would run into its target-of-target (for example with Edit Mode's small focus frame), the ToT frame is moved down just enough to clear it, and put back when you switch to circle style or turn the addon off.
 - **No layout changes in combat:** WoW blocks resizing unit-frame bars mid-fight, so box-style layout changes made in combat (settings, BBF re-layouts) are skipped and apply on the next refresh, such as a target change or `/lp refresh`. That's also why the build line stays reserved on NPC targets.
 - **BBF's spec / healer icon portraits** are covered by the 3D model while it shows.
+- **Mirror Facing (beta)** is tuned for the Horde races so far (Orc, Undead, Skyborne, Tauren, Troll). Other races face out until they're tuned, and NPCs, druid forms and some helmets or mounts can sit off-center.
 - **BBF's Classic Frames** (the BlizzFrames profile): the model draws above the classic ring and dragon art, so a little of its square can show past the ring on some characters.
 - **Class resource:** only rogue and druid combo points exist on WoW Forever as far as we can tell (Blizzard's own displays define nothing else), so warlock, mage and paladin show nothing until the game adds those resources.
 
