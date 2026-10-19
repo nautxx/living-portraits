@@ -166,8 +166,7 @@ local function BuildOptions()
 
     Header("Camera")
     Slider({ "zoom" }, "Zoom", "1 = head and shoulders; lower shows more of the body. Both styles.", 0, 1, 0.05)
-    Slider({ "targetFacing" }, "Target Facing", "Turns target and focus players toward the player frame, in degrees (0 = facing out; negative turns the other way). Only races with a tuned center turn (where the face lands differs per race): tune with /lp facing calibrate and /lp pan. NPCs face out. Both styles.", -90, 90, 5,
-        function(v) return ("%d°"):format(math.floor(v + 0.5)) end)
+    Check({ "mirrorFacing" }, "Mirror Facing (beta)", "Turns target and focus players toward the player frame, so the portraits face each other. Only races with a tuned angle turn (Orc, Undead, Skyborne, Tauren and Troll so far); other races and NPCs face out. Both styles.")
 
     Header("Bar text")
     local barGet, barSet, barDefault = Path({ "barText" })
@@ -343,7 +342,8 @@ local function BuildOptions()
         Page("Developer")
         Header("Target facing", "Tune where a turned face lands, per race and gender: target a player, slide until the face is centered, repeat for each race and gender.")
         Check({ "facingCalibrate" }, "Calibrate facing", "Every player turns (untuned races at 0), so each race and gender can be tuned. Off: only tuned races turn.")
-        -- The angle itself is Target Facing in the Camera section (a setting can only be registered once).
+        Slider({ "targetFacing" }, "Calibration angle", "The angle untuned races turn at while calibrating, saved with a race the first time you tune its pan. Mirror Facing (Camera) must be on to see it.", -90, 90, 5,
+            function(v) return ("%d°"):format(math.floor(v + 0.5)) end)
         -- Pan for the current target's race and gender (racePans[RaceKey]); 0 without a player target.
         local function TargetKey() return Safe(UnitIsPlayer("target")) and RaceKey("target") end
         local panSetting = Register("devTargetPan", "Pan: your target's race", 0,

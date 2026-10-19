@@ -1335,7 +1335,7 @@ do
         and LivingPortraitsDB.zoom == 1 and LivingPortraitsDB.resourceRadius == 5 and LivingPortraitsDB.version == ns.SETTINGS_VERSION)
     check("Naut: BBF gets Bodify, then the setup on top", bdb.darkModeUi == true and bdb.classicFrames == false
         and bdb.noPortraitPixelBorder == true and bdb.unitFrameFont == "2002" and bdb.myOwnSetting == nil)
-    check("Naut: turned target/focus portraits on", LivingPortraitsDB.targetFacing == -45)
+    check("Naut: Mirror Facing on", LivingPortraitsDB.mirrorFacing == true)
     check("Naut: the resting Zzz and glow stay on (Bodify hides them)", bdb.hidePlayerRestAnimation == false
         and bdb.hidePlayerRestGlow == false)
     check("Naut: Yes reloads right away (no second popup)", reloaded == true)
@@ -1586,7 +1586,9 @@ do
     function UnitSex() return sex end
     world.players.target = true
     local function apply() calls = {}; ns.ApplyCamera(tModel, "square"); ns.ApplyCamera(pModel, "large") end
+    check("Mirror Facing is off by default: nothing turns", LivingPortraitsDB.mirrorFacing == false)
     slash("facing 30")
+    slash("mirrorfacing")
     race = "Orc"
     apply()
     check("built in: Jason's Orc male turns at -45 degrees, centered at 0.3", math.abs(tModel.facing - math.rad(-45)) < 1e-9
@@ -1647,10 +1649,10 @@ do
     apply()
     check("Developer angle slider sets the target's race angle", LivingPortraitsDB.raceFacing.HumanM == 20
         and devFacing.get() == 20 and math.abs(tModel.facing - math.rad(20)) < 1e-9)
-    slash("facing 0")
+    slash("mirrorfacing")
     apply()
-    check("Target Facing 0 turns every race off", tModel.facing == 0)
-    slash("facing 30")
+    check("Mirror Facing off: every race faces out", tModel.facing == 0 and LivingPortraitsDB.mirrorFacing == false)
+    slash("mirrorfacing")
     buttons["Clear your target's race"]()
     check("Developer page clears the target's race (center and angle)", LivingPortraitsDB.racePans.HumanM == nil
         and LivingPortraitsDB.raceFacing.HumanM == nil)
@@ -1660,9 +1662,10 @@ do
     check("/lp dev turns the Developer page off", LivingPortraitsDB.devMode == nil)
     slash("dev")
     check("/lp dev turns it back on", LivingPortraitsDB.devMode == true)
-    slash("facing 0")
+    slash("mirrorfacing")
     apply()
-    check("facing 0: the target faces out", tModel.facing == 0 and tModel.pos[2] == 0)
+    check("Mirror Facing off: the target faces out", tModel.facing == 0 and tModel.pos[2] == 0)
+    slash("facing -45")
     world.players.target, UnitRace, UnitSex = nil, nil, nil
 end
 

@@ -98,7 +98,7 @@ local PROFILES = {
         lp = {
             barText = "max", barTextStyle = "shadow", eliteIcon = "bottom", eliteBorder = false,
             restIcon = "corner", resourceAlign = "right", resourceRadius = 5,
-            targetFacing = -45, -- turned target/focus portraits on (each race uses its own tuned angle)
+            mirrorFacing = true, -- target/focus portraits face the player (tuned races)
         },
         bbfBase = "Bodify",
         bbf = Merge(ns.BBF_MODE, NAUT_LOOK),

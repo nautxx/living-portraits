@@ -53,7 +53,7 @@ local function PrintStatus()
     local tuned = {}
     for key, pan in pairs(db.racePans) do tuned[#tuned + 1] = ("%s=%s@%s"):format(key, tostring(pan), tostring(db.raceFacing[key])) end
     table.sort(tuned)
-    print(("  facing=%d calibrate=%s  races: %s"):format(db.targetFacing or 0, tostring(db.facingCalibrate),
+    print(("  mirrorfacing=%s angle=%d calibrate=%s  races: %s"):format(tostring(db.mirrorFacing), db.targetFacing or 0, tostring(db.facingCalibrate),
         #tuned > 0 and table.concat(tuned, " ") or "none tuned"))
     print(("  box: cam=%.2f bg=%.2f gap=%d alignmana=%s split=%.2f  extend: large=%d small=%d"):format(
         Q.cam, db.squareBg, db.squareGap, tostring(db.alignMana), db.hpShare, db.stackExtra.large, db.stackExtra.small))
@@ -74,8 +74,8 @@ local function PrintHelp()
     print("  /lp bordercolor RRGGBB  |  /lp borderalpha 0-1  |  /lp bordersize thin|medium|heavy")
     print("  /lp resource pixel|bbf|none  |  /lp resourcealign left|center|right  |  /lp resourcesize 2-16")
     print("  /lp resourcecolor [combo|shards|arcane|holy] RRGGBB")
-    print("  /lp inset 0.3-1.2 [large|small]  |  /lp cam 0.3-2 [large|small|box]  |  /lp facing -90-90 (target/focus turn, degrees)")
-    print("  /lp facing calibrate (turn every player to tune)  |  /lp pan -1-1|clear (re-center your target's race + gender)")
+    print("  /lp inset 0.3-1.2 [large|small]  |  /lp cam 0.3-2 [large|small|box]  |  /lp mirrorfacing (target/focus face the player, beta)")
+    print("  /lp facing calibrate (turn every player to tune)  |  /lp facing -90-90 (calibration angle)  |  /lp pan -1-1|clear (re-center your target's race + gender)")
     print("  /lp unit player|target|focus|tot|party  |  /lp refresh  |  /lp debug [unit]")
     print("  circle: /lp circlebg 0-1  |  /lp vignette  |  /lp calibrate  |  /lp offset player|target|focus|tot|party x y")
 end
@@ -167,6 +167,7 @@ end
 local SLASH_TOGGLES = {
     toggle = "enabled", vignette = "vignette", grow = "growBars", alignmana = "alignMana",
     build = "showBuild", surname = "hideSurname", mirror = "mirrorTarget", eliteborder = "eliteBorder",
+    mirrorfacing = "mirrorFacing",
 }
 -- Number settings: command -> { db key, min, max }.
 local SLASH_NUMBERS = {

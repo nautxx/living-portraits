@@ -38,7 +38,8 @@ local defaults = {
     -- Class name in class color on the player, target and focus (players): "off", "build" (in the
     -- talent build text), "level" (above the level), "name" (after the name) (/lp classtext).
     classText   = "off",
-    targetFacing = 0, -- degrees the target and focus models turn toward the player frame (/lp facing)
+    mirrorFacing = false, -- target and focus players turn toward the player frame, tuned races only (/lp mirrorfacing)
+    targetFacing = -45, -- calibration angle: untuned races while calibrating, and saved with a race's first pan (/lp facing)
     -- Sideways shift that re-centers a turned face, per race and gender ("OrcM", "ScourgeF"): the
     -- face lands differently per model. Only players with an entry turn (/lp facing calibrate, /lp pan).
     -- Tuned by Jason in game (2026-10-18). Pairs not listed face out until tuned.
@@ -229,8 +230,9 @@ end
 -- race and gender (db.racePans, "OrcM"); only players with an entry turn, everyone else (NPCs,
 -- untuned races) faces out. db.facingCalibrate turns all players, untuned at 0, to tune them.
 -- A pan only centers the face at the angle it was tuned at, so each race keeps its angle too
--- (db.raceFacing, saved with the pan); db.targetFacing is the master switch (0 = off for everyone)
--- and the angle for races without one.
+-- (db.raceFacing, saved with the pan). db.mirrorFacing is the switch ("Mirror Facing (beta)");
+-- db.targetFacing is the calibration angle (untuned races while calibrating, and the angle saved
+-- with a race's first pan).
 -- The portrait camera is set up first, then the model turned: turned first, the camera framed it
 -- from farther away (zoomed out next to the player's portrait, seen in game).
 -- model.lpUnit is set where the model is created.
@@ -245,7 +247,7 @@ end
 local function FacingFor(unit)
     local u = unit and ns.UNITS[unit] -- Units.lua loads after this file
     local degrees = db.targetFacing or 0
-    if not (u and u.side == "RIGHT") or degrees == 0 or not Safe(UnitIsPlayer(unit)) then return 0, 0 end
+    if not (db.mirrorFacing and u and u.side == "RIGHT") or not Safe(UnitIsPlayer(unit)) then return 0, 0 end
     local key = RaceKey(unit)
     local pan = key and db.racePans[key]
     if pan == nil then
