@@ -123,6 +123,7 @@ BBF code that touches portraits (read only, for compatibility):
 - [x] Options panel (Settings API) to complement `/lp`, with Box Style / Circle Style pages
 - [x] Profiles: built-in Naut, export/import strings (LP + BBF together)
 - [ ] Saved named profiles in game
+- [ ] Target facing for Alliance races: tune Human, Dwarf, NightElf, Gnome (and any other Alliance race on WoW Forever), male and female, with the Developer page, then add them to the `racePans`/`raceFacing` defaults. Only Horde races (Orc, Scourge, Skyborne, Tauren, Troll) are tuned so far; untuned races face out.
 - [ ] Retail support (`## Interface` list, verify frame paths)
 
 ## Test checklist
