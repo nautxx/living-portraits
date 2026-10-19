@@ -41,8 +41,16 @@ local defaults = {
     targetFacing = 0, -- degrees the target and focus models turn toward the player frame (/lp facing)
     -- Sideways shift that re-centers a turned face, per race and gender ("OrcM", "ScourgeF"): the
     -- face lands differently per model. Only players with an entry turn (/lp facing calibrate, /lp pan).
-    racePans    = {},
-    raceFacing  = {}, -- the angle each race's pan was tuned at ("OrcM" = 30); overrides targetFacing for it
+    -- Tuned by Jason in game (2026-10-18). Pairs not listed face out until tuned.
+    racePans    = {
+        OrcF = 0.2, OrcM = 0.3, ScourgeF = 0.1, ScourgeM = 0.2, SkyborneF = 0.05, SkyborneM = 0.05,
+        TaurenF = 0.9, TaurenM = 0.9, TrollF = 0.2, TrollM = 0.5,
+    },
+    -- The angle each race's pan was tuned at; overrides targetFacing for it.
+    raceFacing  = {
+        OrcF = -65, OrcM = -45, ScourgeF = -45, ScourgeM = -45, SkyborneF = -60, SkyborneM = -45,
+        TaurenF = -65, TaurenM = -60, TrollF = -70, TrollM = -65,
+    },
     facingCalibrate = false, -- turn every player, untuned ones at pan 0, to tune them (/lp facing calibrate)
     eliteBorder = false, -- square: target/focus box border gold for elite/boss, silver for rare (/lp eliteborder)
     eliteColor  = "ffffc71a", -- square: elite/boss border color, ARGB hex like the settings swatch (/lp elitecolor)

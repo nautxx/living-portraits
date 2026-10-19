@@ -48,7 +48,7 @@ A profile is a whole look in one click: Living Portraits' settings **and** the B
 | Profile | Look | BetterBlizzFrames base |
 |---|---|---|
 | **Starter** | A clean starting point: square box portraits with the gold/silver elite border, full names, no talent builds, Blizzard's bar text | BBF's own Starter profile, with Pixel Border mode |
-| **Naut** | The author's setup: tall box portraits with talent builds and `350 (462)` bar text, class resource circles, and his fonts, textures, class colors and target-of-target placement (the screenshots above) | BBF's Bodify profile, with Pixel Border mode |
+| **Naut** | The author's setup: tall box portraits with talent builds and `350 (462)` bar text, target and focus turned toward the player, class resource circles, and his fonts, textures, class colors and target-of-target placement (the screenshots above) | BBF's Bodify profile, with Pixel Border mode |
 | **BlizzFrames** | Living portraits in the round portrait, with bigger player, target and focus models | BBF's Forever profile (its Classic Frames look) |
 
 BlizzFrames, the round portraits on BetterBlizzFrames' Classic Frames:

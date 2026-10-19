@@ -1335,6 +1335,7 @@ do
         and LivingPortraitsDB.zoom == 1 and LivingPortraitsDB.resourceRadius == 5 and LivingPortraitsDB.version == ns.SETTINGS_VERSION)
     check("Naut: BBF gets Bodify, then the setup on top", bdb.darkModeUi == true and bdb.classicFrames == false
         and bdb.noPortraitPixelBorder == true and bdb.unitFrameFont == "2002" and bdb.myOwnSetting == nil)
+    check("Naut: turned target/focus portraits on", LivingPortraitsDB.targetFacing == -45)
     check("Naut: the resting Zzz and glow stay on (Bodify hides them)", bdb.hidePlayerRestAnimation == false
         and bdb.hidePlayerRestGlow == false)
     check("Naut: Yes reloads right away (no second popup)", reloaded == true)
@@ -1414,12 +1415,14 @@ do
 
     -- Imported settings are checked against the defaults' shape
     stash[#stash + 1] = { format = 1, lp = { zoom = "big", barText = "max", units = { player = false, bogus = true },
-        notASetting = 1, sizes = 5, lpBackup = { zoom = 0 } } }
+        notASetting = 1, sizes = 5, lpBackup = { zoom = 0 }, racePans = { HumanM = 0.4, OrcM = "far" } } }
     ns.ImportProfile("!LP1!ZS" .. #stash)
     check("import: wrong types and unknown keys dropped", LivingPortraitsDB.zoom == 1 and LivingPortraitsDB.barText == "max"
         and LivingPortraitsDB.units.player == false and LivingPortraitsDB.units.bogus == nil
         and LivingPortraitsDB.notASetting == nil and type(LivingPortraitsDB.sizes) == "table"
         and LivingPortraitsDB.lpBackup.zoom ~= 0)
+    check("import: race tables keep races the defaults don't have; bad values get the default back",
+        LivingPortraitsDB.racePans.HumanM == 0.4 and LivingPortraitsDB.racePans.OrcM == 0.3)
 
     buttons["Undo setup / profile"](); confirmYes()
 
@@ -1578,11 +1581,17 @@ do
         function m:UseModelCenterToTransform(on) self.centered = on end
     end
     local sex = 2
-    function UnitRace() return "Orc", "Orc" end
+    local race = "Human"
+    function UnitRace() return race, race end
     function UnitSex() return sex end
     world.players.target = true
     local function apply() calls = {}; ns.ApplyCamera(tModel, "square"); ns.ApplyCamera(pModel, "large") end
     slash("facing 30")
+    race = "Orc"
+    apply()
+    check("built in: Jason's Orc male turns at -45 degrees, centered at 0.3", math.abs(tModel.facing - math.rad(-45)) < 1e-9
+        and tModel.pos[2] == 0.3)
+    race = "Human"
     apply()
     check("an untuned race faces out", tModel.facing == 0 and tModel.pos[2] == 0)
     slash("facing calibrate")
@@ -1591,7 +1600,7 @@ do
         and tModel.pos[2] == 0 and tModel.centered == true)
     slash("pan 0.2")
     check("/lp pan saves the center for the target's race and gender, with the angle it was tuned at",
-        LivingPortraitsDB.racePans.OrcM == 0.2 and LivingPortraitsDB.raceFacing.OrcM == 30)
+        LivingPortraitsDB.racePans.HumanM == 0.2 and LivingPortraitsDB.raceFacing.HumanM == 30)
     apply()
     check("turned after the portrait camera is set up (same framing as the player's)", calls[1] == "zoom" and calls[2] == "facing")
     slash("facing calibrate")
@@ -1605,7 +1614,7 @@ do
     check("a tuned race keeps the angle its pan was tuned at when Target Facing changes",
         math.abs(tModel.facing - math.rad(30)) < 1e-9 and tModel.pos[2] == 0.2)
     slash("pan 0.25")
-    check("re-tuning keeps the race's angle", LivingPortraitsDB.raceFacing.OrcM == 30)
+    check("re-tuning keeps the race's angle", LivingPortraitsDB.raceFacing.HumanM == 30)
     slash("facing 30")
     sex = 3
     apply()
@@ -1615,35 +1624,36 @@ do
     apply()
     check("NPCs face out", tModel.facing == 0)
     slash("pan 0.3")
-    check("/lp pan without a player target changes nothing", LivingPortraitsDB.racePans.OrcM == 0.25)
+    check("/lp pan without a player target changes nothing", LivingPortraitsDB.racePans.HumanM == 0.25)
     world.players.target = true
     slash("pan clear")
-    check("/lp pan clear removes the race's center and angle", LivingPortraitsDB.racePans.OrcM == nil
-        and LivingPortraitsDB.raceFacing.OrcM == nil)
+    check("/lp pan clear removes the race's center and angle", LivingPortraitsDB.racePans.HumanM == nil
+        and LivingPortraitsDB.raceFacing.HumanM == nil)
     -- Developer page: its pan slider edits the target's race and gender
     local devPan = proxies["LivingPortraits_devTargetPan"]
     check("Developer page built with devMode on", devPan ~= nil and proxies["LivingPortraits_facingCalibrate"] ~= nil)
     devPan.set(0.256)
-    check("Developer pan slider saves the target's race and gender (2 decimals)", LivingPortraitsDB.racePans.OrcM == 0.26
+    check("Developer pan slider saves the target's race and gender (2 decimals)", LivingPortraitsDB.racePans.HumanM == 0.26
         and devPan.get() == 0.26)
     buttons["Copy tuned races"]()
     check("Copy tuned races: a Lua table selected in a popup to copy", popupShown == "LIVING_PORTRAITS_COPY"
-        and popupData == "racePans = { OrcM = 0.26 }, raceFacing = { OrcM = 30 }")
+        and popupData:find("HumanM = 0.26", 1, true) and popupData:find("TaurenM = 0.9", 1, true)
+        and popupData:find("raceFacing = {", 1, true) and popupData:find("HumanM = 30", 1, true))
     world.players.target = false
     check("Developer pan slider reads 0 without a player target", devPan.get() == 0)
     world.players.target = true
     local devFacing = proxies["LivingPortraits_devTargetFacing"]
     devFacing.set(20)
     apply()
-    check("Developer angle slider sets the target's race angle", LivingPortraitsDB.raceFacing.OrcM == 20
+    check("Developer angle slider sets the target's race angle", LivingPortraitsDB.raceFacing.HumanM == 20
         and devFacing.get() == 20 and math.abs(tModel.facing - math.rad(20)) < 1e-9)
     slash("facing 0")
     apply()
     check("Target Facing 0 turns every race off", tModel.facing == 0)
     slash("facing 30")
     buttons["Clear your target's race"]()
-    check("Developer page clears the target's race (center and angle)", LivingPortraitsDB.racePans.OrcM == nil
-        and LivingPortraitsDB.raceFacing.OrcM == nil)
+    check("Developer page clears the target's race (center and angle)", LivingPortraitsDB.racePans.HumanM == nil
+        and LivingPortraitsDB.raceFacing.HumanM == nil)
     slash("reset")
     check("/lp reset keeps the Developer page", LivingPortraitsDB.devMode == true)
     slash("dev")

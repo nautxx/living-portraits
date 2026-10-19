@@ -98,6 +98,7 @@ local PROFILES = {
         lp = {
             barText = "max", barTextStyle = "shadow", eliteIcon = "bottom", eliteBorder = false,
             restIcon = "corner", resourceAlign = "right", resourceRadius = 5,
+            targetFacing = -45, -- turned target/focus portraits on (each race uses its own tuned angle)
         },
         bbfBase = "Bodify",
         bbf = Merge(ns.BBF_MODE, NAUT_LOOK),
@@ -152,18 +153,17 @@ local function LPSettings()
 end
 
 -- Keep only values that match the defaults' shape: known keys, same types, tables checked inside
--- (units and other keyed tables keep their known keys). An empty default table is an open map
--- (racePans): its string keys with number/string/boolean values stay. Anything else goes.
-local function Sanitize(src, def)
+-- (units and other keyed tables keep their known keys). OPEN_MAPS are keyed by race and gender,
+-- not by the defaults' keys: any string key with a number value stays. Anything else goes.
+local OPEN_MAPS = { racePans = true, raceFacing = true }
+local function Sanitize(src, def, open)
     local out = {}
-    local open = next(def) == nil
     for k, v in pairs(src) do
         local d = def[k]
         if open then
-            local t = type(v)
-            if type(k) == "string" and (t == "number" or t == "string" or t == "boolean") then out[k] = v end
+            if type(k) == "string" and type(v) == "number" then out[k] = v end
         elseif type(d) == "table" and type(v) == "table" then
-            out[k] = Sanitize(v, d)
+            out[k] = Sanitize(v, d, OPEN_MAPS[k])
         elseif d ~= nil and type(v) == type(d) then
             out[k] = v
         end
